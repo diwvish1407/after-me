@@ -1,0 +1,19 @@
+# Code generation (freezed + json_serializable). Outputs (*.g.dart, *.freezed.dart) are not
+# committed: run `dart run build_runner build --delete-conflicting-outputs` (CI does too).
+targets:
+  $default:
+    builders:
+      json_serializable:
+        options:
+          # API JSON is snake_case (API_SPEC.md §1).
+          field_rename: snake
+          # Malformed payloads raise CheckedFromJsonException naming the field, never a
+          # bare TypeError.
+          checked: true
+          explicit_to_json: true
+          include_if_null: false
+        generate_for:
+          - lib/**/models/**.dart
+      freezed:
+        generate_for:
+          - lib/**/models/**.dart

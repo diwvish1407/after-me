@@ -1,0 +1,10 @@
+{% extends "base.html.j2" %}
+{% block title %}Opted out · AfterMe{% endblock %}
+{% block content %}
+<h1>Opted out</h1>
+{% if scope == "everyone" %}
+<p>We won't contact you about AfterMe again, and any invitation to this address has been cancelled. The people who listed you have been told.</p>
+{% else %}
+<p>You won't receive messages about {{ inviter_name }}'s check-ins any more. {{ inviter_name }} has been told. Other people who list this address are not affected.</p>
+{% endif %}
+{% endblock %}

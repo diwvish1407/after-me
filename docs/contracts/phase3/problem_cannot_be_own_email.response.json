@@ -1,0 +1,15 @@
+{
+  "type": "https://afterme.test/problems/cannot-be-own-email",
+  "title": "Use a different email",
+  "status": 422,
+  "code": "cannot_be_own_email",
+  "detail": "A trusted contact needs their own email address, not yours.",
+  "request_id": "req_0123456789abcdef0123456789abcdef",
+  "errors": [
+    {
+      "field": "email",
+      "code": "cannot_be_own_email",
+      "message": "Use the contact's own email address, not yours."
+    }
+  ]
+}

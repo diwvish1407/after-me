@@ -1,0 +1,332 @@
+# AfterMe — Test Plan
+
+| | |
+|---|---|
+| **Status** | Draft v0.1 — awaiting product-owner approval |
+| **Related** | [ESCALATION_ENGINE](ESCALATION_ENGINE.md) · [SECURITY](SECURITY.md) · [API_SPEC](API_SPEC.md) |
+
+---
+
+## 1. Strategy
+
+1. **The escalation engine gets the most testing**, with deterministic time, real PostgreSQL, property-based and concurrency tests. A wrongful alert or release is a **severity-1** defect.
+2. **Real database in tests.** Integration and engine tests run against PostgreSQL. Mocking the DB would hide locking and constraint behaviour, which the engine depends on.
+3. **Deterministic time.** Tests drive a `FrozenClock` ([ARCHITECTURE §4.5](ARCHITECTURE.md#45-time)). There are no `sleep`s.
+4. **Security tests are generated from the route table**, so a new endpoint can't skip authorization tests.
+5. **Fast feedback.** Unit tests run in seconds; the full backend suite runs in minutes. CI gates every merge.
+
+| Level | Backend | Mobile |
+|---|---|---|
+| Unit | Pure functions, services with fakes | Controllers, interceptors, mappers, validators |
+| Integration | API + real Postgres (httpx ASGI client) | Widget tests with fake repositories |
+| Engine | Engine + Postgres + FrozenClock + fake providers | — |
+| Property-based | Hypothesis (deadline math, stateful engine model) | — |
+| Concurrency | Multiple workers/connections, injected interleavings | — |
+| End-to-end | Staging: real app ↔ backend with the test clock router | `integration_test` on emulator/device |
+| Manual | Portal, emails | Devices, OEMs, accessibility, notifications, biometrics |
+
+## 2. Tooling
+
+| Purpose | Tool |
+|---|---|
+| Backend tests | pytest, pytest-asyncio, Hypothesis, httpx (ASGI transport), coverage |
+| DB for tests | Local PostgreSQL (dev); PostgreSQL service container in CI. The app under test connects as `afterme_api`. Every test starts from empty tables (TRUNCATE as `afterme_owner`): per-test rollback is not possible because some bookkeeping (rate-limit counters, failed-login counters, code attempts, failure audit records) commits on independent connections. Concurrency tests use isolated databases. |
+| Fakes | `FrozenClock`, `RecordingEmailProvider`, `RecordingPushProvider`, `LocalKeyProvider` |
+| Mobile | `flutter_test`, `mocktail`, `integration_test`, Flutter accessibility guideline matchers |
+| Static analysis | ruff, mypy, `flutter analyze` |
+| Security | pip-audit/OSV, gitleaks, custom authz-matrix and log-leak tests |
+
+## 3. Backend functional tests (by module)
+
+| ID range | Module | Key cases |
+|---|---|---|
+| AUTH-01…25 | Auth | Signup start/verify/resend; identical responses for existing email; code attempts and expiry; login success/failure/lockout; timing equalisation; refresh rotation, 30 s retry grace, reuse → session revoked; logout / logout-all; reauth window (4:59 ok, 5:01 rejected); password change revokes others; forgot/reset (web) single-use and expiry; email change flow |
+| PROF-01…08 | Profile | Validation (IANA tz, E.164, display-name rules); timezone change recomputes `next_due_at`; blocked during incident |
+| CON-01…20 | Contacts | CRUD; duplicate email; own email rejected; tier limit; invitation queued only if not suppressed; accept/decline via portal (POST only); opt-out (this user / everyone → suppression); bounce webhook → `bounced`; resend limits; email change resets verification; delete scrubs PII and removes links |
+| CHK-01…20 | Check-in | Schedule CRUD with `If-Match` (428/412); activation requirements; deactivate needs reauth; check-in idempotency replay; check-in resolves a grace incident; `409 safe_required` when messaged; history pagination |
+| PLAN-01…15 | Plan | Stage 1 offset = grace; ordering and gaps; max offset; tier presets/limits; foreign contact → 404; delete stage in use → 409; incident open → 409 |
+| INS-01…18 | Instructions | CRUD; encryption round-trip; ciphertext ≠ plaintext in DB; AAD binding (swapped ciphertext fails); release stage ≥ 24 h; recipients must be own contacts/stages; list excludes body; delete wipes ciphertext; tier limits |
+| REL-01…15 | Portal | Fragment token exchange; expired/revoked tokens; OTP send limits, attempts, expiry; elevated session 15 min; view only visible, unrevoked releases for that (incident, contact); `visible_after` respected; Hold-window releases hidden; fresh-link request is generic; views audited |
+| NOT-01…15 | Notifications | Outbox dedupe; retry/backoff schedule; fallback provider switch; addresses resolved at send; opted-out/suppressed → cancelled; push payload has no content; templates render with all params; no rendered email or push contains instruction content (asserted) |
+| AUD-01…08 | Audit | Each sensitive operation writes exactly the expected action; metadata contains no forbidden keys; `user_visible` feed filtering |
+| DEL-01…08 | Deletion/export | Export contains decrypted instructions and requires reauth; delete flow effects ([DATABASE §4](DATABASE.md#4-deletion-behaviour)); purge job after 30 days; audit survives |
+
+**Phase 4 status of CHK-\* (built; `backend/tests/integration/test_checkin_schedule.py`, `test_checkins.py`, `test_home.py`, `test_profile_timezone_schedule.py`, `tests/unit/test_schedule.py`).** Covered: schedule read/update with `If-Match` (428, 412, no-op PUT), validation, activation requirements (`no_contacts` stand-in), idempotent activate/deactivate, deactivate needs re-auth, an open incident blocks every change, timezone change recomputes the deadline, check-in on active and inactive schedules, idempotency replay (sequential and concurrent), the lock-wait race, 503 on lock timeout, rate limit with replays exempt, history pagination (ties, bounds, bad cursors), `client_reported_at` leniency, Home readiness and activity, owner scoping. Also: step-up for lengthening an active schedule (needed, expires after 5 minutes, not needed for shortening, time/reminder only, or an inactive schedule), baseline and last check-in never move backwards under concurrent restarts, a replay returns the stored JSON verbatim, `incident_open` makes a check-in a retryable 503, and a database error at COMMIT leaves nothing behind (ENG-FS-01). **Not yet coverable (no incident model until Phase 5):** "check-in resolves a grace incident" and "`409 safe_required` when messaged". ENG-FS-14 (DST vectors) and ENG-PBT-01 are in `tests/unit/test_schedule.py` (Hypothesis over every accepted IANA zone, plus a deterministic sweep that provably reaches gaps and overlaps).
+
+## 4. Escalation engine tests
+
+### 4.1 Lifecycle tests
+
+**ENG-LC-01: the critical T0–T8 scenario** ([ESCALATION_ENGINE §14](ESCALATION_ENGINE.md#14-worked-example-the-t0t8-lifecycle)). One automated test drives the whole lifecycle through the **public API + engine ticks** with a `FrozenClock`:
+
+```python
+async def test_eng_lc_01_full_lifecycle(world):            # world = api client + engine + clock + fakes
+    u = await world.user(tz="Asia/Kolkata", schedule=("20:00", 1))
+    mom, bro = await world.accepted_contacts(u, "Mom", "Brother")
+    s1, s2 = await world.plan(u, grace=180, stages=[(180, [mom]), (1440, [bro])])
+    house = await world.instruction(u, "House emergency", recipients=[(bro, s2)])
+    await world.activate(u)
+
+    await world.at("2026-10-13T19:30+05:30").checkin(u)                         # T0
+    assert await world.next_due(u) == ist("2026-10-14T20:00")
+
+    await world.run_until(ist("2026-10-14T20:00:15"))                           # T1
+    inc = await world.current_incident(u)
+    assert inc.status == "grace" and world.push.sent(u, "incident_missed")
+    assert world.email.contact_messages() == []
+
+    await world.run_until(ist("2026-10-14T22:45:15"))                           # T2
+    assert world.push.sent(u, "incident_midpoint") and world.push.sent(u, "incident_last_chance")
+
+    await world.run_until(ist("2026-10-14T23:00:15"))                           # T3
+    assert (await world.current_incident(u)).status == "escalating"
+    assert world.email.sent_to(mom) == []                                       # settle delay
+
+    await world.run_until(ist("2026-10-14T23:05:30"))                           # T4
+    assert world.email.sent_to(mom, "contact_alert")
+
+    await world.run_until(ist("2026-10-15T19:00:15"))
+    assert world.push.sent(u, "release_final_warning")
+
+    await world.run_until(ist("2026-10-15T20:05:30"))                           # T5
+    page = await world.portal(bro).open_latest_link().verify_otp()
+    assert "House emergency" in page.text
+
+    r = await world.at(ist("2026-10-15T21:00")).checkin(u, expect=409)          # T6
+    assert r.code == "safe_required"
+
+    await world.reauth(u); await world.safe(u, inc.id)                          # T7
+    await world.run_dispatch()
+    assert world.email.sent_to(mom, "contact_all_clear") and world.email.sent_to(bro, "contact_all_clear")
+    assert (await world.portal(bro).reload()).shows("no longer available")
+
+    before = world.email.contact_messages(incident=inc.id)                      # T8
+    await world.run_until(ist("2026-10-22T21:00"), step="15m")
+    assert world.email.contact_messages(incident=inc.id) == before              # nothing new for this incident
+    assert (await world.incidents(u))[-1].missed_due_at == ist("2026-10-16T20:00")  # schedule resumed
+    world.audit.assert_sequence(u, [...])                                       # full expected trail
+    world.logs.assert_no_secrets()                                              # leak test (SEC-25)
+```
+
+| ID | Scenario |
+|---|---|
+| ENG-LC-01 | Full T0–T8 (above) |
+| ENG-LC-02 | Check-in during grace → `resolved`; **zero** contact notifications created |
+| ENG-LC-03 | Check-in inside the settle delay after stage 1 → I'M OK accepted; queued messages cancelled; releases revoked; no contact email sent |
+| ENG-LC-04 | User never returns → all stages execute; incident `escalated`; releases stay viewable; no new incidents |
+| ENG-LC-05 | Account deletion mid-incident → `voided`; all-clear to contacts already messaged; releases revoked |
+| ENG-LC-06 | Plan with an empty stage (contact deleted) → stage executes as a no-op, recorded |
+| ENG-LC-07 | Multi-day interval (every 3 days) and late-night deadline (00:30) |
+| ENG-LC-08 | Instruction deactivated between final warning and release → not released; user summary reflects it |
+
+### 4.2 Invariant tests
+
+One or more dedicated tests per invariant ([ESCALATION_ENGINE §2](ESCALATION_ENGINE.md#2-safety-invariants)):
+
+| ID | Asserts |
+|---|---|
+| ENG-INV-1 | No API route creates incidents/actions/releases (route scan + DB grant test: `afterme_api` `INSERT` on `release_events` → permission denied) |
+| ENG-INV-2 | After a committed check-in, no contact-facing message enters `sending` for that incident (checked under all interleavings in ENG-CONC/ENG-PBT) |
+| ENG-INV-3 | Client-supplied times have no effect (send absurd `client_reported_at`; outcomes unchanged) |
+| ENG-INV-4 | Every gate check, forced to fail individually, prevents execution (fault-injection parametrised over G1…G9) |
+| ENG-INV-5 | Running ticks twice on identical state produces no new rows (snapshot diff) |
+| ENG-INV-6 | Pending/declined/opted-out/bounced/suppressed contacts never receive escalation messages or releases |
+| ENG-INV-7 | Adding a contact/instruction mid-incident never adds actions; removing does narrow |
+| ENG-INV-8 | Late-opened incident gets the full grace from `opened_at`; release never before anchor + 24 h |
+| ENG-INV-9 | A release stage with an unexecuted final warning stays pending; > 30 min → held + alert |
+| ENG-INV-10 | During Hold, no incidents open and no contact-facing messages are sent; all-clears still sent |
+
+### 4.3 Failure-scenario tests
+
+Each of FS-01…FS-28 in [ESCALATION_ENGINE §11](ESCALATION_ENGINE.md#11-failure-scenario-catalogue) has a test `ENG-FS-NN`. Highlights:
+
+| ID | Technique |
+|---|---|
+| ENG-FS-01 | Inject a DB error at commit in the check-in service → 5xx, no partial rows, client-retry path verified |
+| ENG-FS-05/06 | Raise inside the action executor after N statements → rollback; next tick succeeds; exactly one effect |
+| ENG-FS-07 | Fake provider accepts, then the dispatcher "crashes" before tx B → resend uses the same idempotency key |
+| ENG-FS-08 | Freeze the worker for 6 h of clock time while the API runs → late incidents get the full grace |
+| ENG-FS-09/10 | Stop probes (no rows) for 20 min across a stage time → Hold backdated; stage rolled back if undelivered; shift applied; reminder to user |
+| ENG-FS-13 | Open 30 incidents within an hour → anomaly Hold; requires manual exit |
+| ENG-FS-14 | DST vectors ([ESCALATION_ENGINE §3.3](ESCALATION_ENGINE.md#33-verified-test-vectors)) for New York, London, plus Sydney, Santiago, Tehran (historical), Kathmandu (+05:45) |
+| ENG-FS-22 | 4 concurrent workers over 500 due users → each incident/action/notification exactly once |
+| ENG-FS-25 | Insert a check-in event bypassing the service → incident not opened; critical alert emitted |
+
+### 4.4 Property-based tests (Hypothesis)
+
+| ID | Property |
+|---|---|
+| ENG-PBT-01 | `compute_next_due` over all IANA zones × random baselines (1970–2100) × intervals × times: bounds, wall-time match (except gaps), determinism |
+| ENG-PBT-02 | Timeline materialisation: reminders inside grace; stages at anchor + offset; final warnings 60 min before release stages; dedupe keys unique |
+| ENG-PBT-03 | **Stateful model test** (`RuleBasedStateMachine`). Rules: advance clock (random steps), tick, check-in, I'M SAFE (with/without reauth), delete contact, deactivate instruction, contact opt-out, probe gap (outage), provider failure. After **every** step, invariants INV-2/5/6/7/8/9/10 are checked against the DB. |
+
+### 4.5 Concurrency tests
+
+| ID | Scenario |
+|---|---|
+| ENG-CONC-01 | Check-in vs stage execution with an injected pause *inside* the worker transaction (test hook after locks are acquired) → the check-in waits, then sees the correct state |
+| ENG-CONC-02 | Check-in vs dispatcher tx A (both orders) → either the message is cancelled, or `safe_required` + all-clear |
+| ENG-CONC-03 | Concurrent duplicate check-ins (same key, different keys) |
+| ENG-CONC-04 | API lock timeout → `503` + successful client retry with the same key |
+| ENG-CONC-05 | Multiple workers + dispatchers under load; zero duplicates by dedupe key |
+
+
+**Phase 5 status (built; `backend/tests/engine/`, `backend/tests/unit/test_engine_pure.py`, `backend/tests/unit/test_plan_rules.py`, `backend/tests/integration/test_plan.py`).** Run the exit gate with `make engine-gate` (the T0-T8 lifecycle **100 times in a row**, then every engine suite).
+
+| Plan ID | Where | Notes |
+|---|---|---|
+| ENG-LC-01 | `test_lifecycle.py::test_the_full_lifecycle_t0_to_t8` | Through the real API, engine and dispatcher on the frozen clock; without releases (Phase 6) |
+| ENG-LC-02/03/04/05/06/07 | `test_lifecycle.py`, `test_incidents.py` | LC-05 exercises the engine side (`void_open_incident`); the deletion endpoint arrives later |
+| ENG-LC-08 | Phase 6 | needs instructions |
+| ENG-INV-1 | `test_invariants.py`, `tests/security/test_db_grants.py`, authorization matrix | route scan, import isolation, DB grants |
+| ENG-INV-2 | `test_concurrency.py`, `test_stateful.py` | both interleavings, plus a check after every simulated step |
+| ENG-INV-3/4/5/6/7/8/9/10 | `test_invariants.py`, `test_engine_pure.py`, `test_incidents.py`, `test_dispatch.py`, `test_hold.py` | INV-4 per gate (unit and engine level) |
+| ENG-FS-05/06/07/08/11/12/13/21/22/23/25/26/28 | `test_failures.py`, `test_concurrency.py`, `test_hold.py`, `test_incidents.py` | FS-09/10 in `test_hold.py` (backdating, gap scan) |
+| ENG-FS-14 | `tests/unit/test_schedule.py` | Hypothesis plus a sweep over transition-heavy zones |
+| ENG-PBT-02 | `test_engine_pure.py` | Hypothesis |
+| ENG-PBT-03 | `test_stateful.py` | **Deviation:** 20 seeded simulations of 60 random steps (ticks, jumps, check-ins, I'M SAFE, contact deletion/opt-out, operator Hold, provider failure, operator void) with invariants checked after every step, instead of `RuleBasedStateMachine` (the system is async and database-backed); a failure is reproduced by its seed |
+| ENG-CONC-01/02/03/05 | `test_concurrency.py` | pauses injected inside the worker/dispatcher transaction; 4 workers over 24 users |
+| ENG-CONC-04 | `tests/integration/test_checkins.py` | API lock timeout → 503 and a successful retry with the same key (a Phase 4 test; this table used to point at `test_concurrency.py`) |
+| Review findings F-01..F-17 | `test_review_findings.py` | one or more tests per finding that was fixed (ESCALATION_ENGINE §13.2): void restarts the schedule; an unevaluable Hold sends nothing; forged and out-of-stage rows are cancelled and the API role is refused at the database; the batch is not starved during a Hold; the summary is not sent when nobody was told or during a Hold; ambiguous attempts get an all-clear; rollback reaches back a settle delay; give-up counted from the first attempt and paged; infrastructure errors never hold an action and an operator can retry; every due user is reached whatever the batch size; G8 narrows a stage; two workers enter one Hold |
+
+**Phase 5, mobile half (built; `mobile/test/features/plan/`, `mobile/test/contracts/phase5_contract_test.dart`, `mobile/test/helpers/fake_plan_server.dart`).** 1668 Flutter tests pass (1505 before this half), coverage gate green. The plan repository and controller run against `FakePlanServer`, which mirrors the backend (ETag/If-Match 412/428, stage 1 = grace, ordering and gaps, tier presets, stage limit 403, 404 for foreign ids, 409 `incident_open`, an unchanged body bumps nothing); `phase5_contract_test` parses every file in `docs/contracts/phase5/index.json` and checks the recorded headers; 9 accessibility-matrix entries were added (plan step: custom delays account, changed elsewhere, delay refused; done step: contact and plan missing, stage missing, stage that tells no one; Plan tab: no stages, two stages, cannot load). Nothing in the mobile suite runs against a live backend. The incident, history and I'M SAFE endpoints have no app models until Phase 7: only their shape, headers and failure mapping are tested.
+
+## 5. Security and authorization tests
+
+### 5.1 Authorization matrix (generated)
+
+A test enumerates **every** route in the FastAPI app and checks it against a registry:
+
+```python
+ROUTE_POLICY = {
+  ("GET",  "/v1/contacts/{contact_id}"): Owned("contact_id", factory=make_contact),
+  ("POST", "/v1/checkins"):              Authenticated(),
+  ("POST", "/v1/auth/login"):            Public(rate_limited=True),
+  ...
+}
+```
+
+- A route **missing** from the registry fails the build.
+- `Authenticated` routes: no token → 401; expired → 401; revoked session → 401; tampered signature or `alg` → 401.
+- `Owned` routes: user B with user A's ID → **404** (never 403, never 200); the response body has no data from A.
+- Re-auth routes: without fresh reauth → `403 reauth_required`.
+
+### 5.2 Targeted security tests
+
+| ID | Test | Expected |
+|---|---|---|
+| SEC-01 | User A reads/updates/deletes B's contact, instruction, stage, incident | 404, no changes |
+| SEC-02 | A assigns B's contact or stage as a recipient | 404 (service) and FK violation if forced at the DB level |
+| SEC-03 | Unknown fields (`next_due_at`, `status`, `user_id`, `tier`) in any body | 422 |
+| SEC-04 | Attempt to call release/escalation endpoints (fuzz common paths) | 404/405; route scan proves none exist |
+| SEC-05 | Replay `POST /checkins` with the same key; with a new key after token expiry | Same result; 401 |
+| SEC-06 | Replay `POST /incidents/{id}/safe` after the reauth window | 403 |
+| SEC-07 | Refresh-token reuse outside the grace window | Session revoked; security email |
+| SEC-08 | JWT `alg: none`, wrong `aud`/`iss`, wrong `kid`, HS256-signed with the public key | 401 |
+| SEC-09 | Login brute force per IP and per account; `X-Forwarded-For` spoofing beyond trusted hops | 429 / lockout; spoofed header ignored |
+| SEC-10 | Enumeration: register/forgot responses identical; login timing for unknown vs known email within tolerance | Pass |
+| SEC-11 | OTP brute force: 6th attempt rejected; 4th send in an hour rejected | Pass |
+| SEC-12 | Portal session for (incident X, contact C) cannot view other contacts' or incidents' releases | 404 |
+| SEC-13 | Portal POST without/with a wrong CSRF token | 403 |
+| SEC-14 | GET on every portal/account route changes no state (DB snapshot unchanged) | Pass |
+| SEC-15 | Security headers on web routes (CSP, HSTS, frame-ancestors, no-referrer, no-store, noindex) | Present |
+| SEC-16 | XSS payloads in instruction title/body and display names render escaped in portal and emails | Pass |
+| SEC-17 | Display name with URLs/brand terms rejected | 422 |
+| SEC-18 | DB grants: `afterme_api` cannot `INSERT` incidents/actions/releases/portal access, nor `UPDATE`/`DELETE` audit logs | Permission denied |
+| SEC-19 | Ciphertext swap between two instructions/users fails decryption | Pass |
+| SEC-20 | Notification payloads (push data, email bodies, outbox `params`) never contain instruction title/body | Pass |
+| SEC-21 | Rate limits on every limited route ([API_SPEC §16](API_SPEC.md#16-rate-limits)) | 429 + `Retry-After` |
+| SEC-22 | Body-size limit and pagination caps | 413 / clamp |
+| SEC-23 | Test-only router absent when `APP_ENV=prod`; startup fails if forced on | Pass |
+| SEC-24 | Production startup refuses insecure config (local KMS, console email, debug, weak engine params) | Pass |
+| SEC-25 | **Log-leak test**: all logs captured during ENG-LC-01 contain no password, token, OTP, instruction text or contact email | Pass |
+| SEC-26 | Suspended user: no contact-facing actions | Pass |
+
+### 5.3 Mobile security checks
+Release APK inspection: no secrets or API keys beyond public Firebase config; `allowBackup=false`; cleartext disabled; exported components list; FLAG_SECURE on instruction screens (manual + instrumentation); tokens only in secure storage (inspect app data on an emulator); no sensitive output in `adb logcat` during a full flow.
+
+## 6. Mobile tests
+
+| ID | Area | Cases |
+|---|---|---|
+| MOB-01…10 | API client | Single-flight refresh under 5 concurrent 401s; rejected refresh (400/401/403/422, bad body) → logout; transient refresh failure (offline, timeout, 5xx, 429) → session kept and only that request fails; refresh response handled once on a cold start; idempotency key stable across retries; retry only idempotent/keyed requests; error mapping (409 codes, 426, 429) |
+| MOB-11…20 | Check-in controller | idle → sending → success; network error → pending persisted → retried on resume; 409 → safe flow; success shown only after 200 |
+| MOB-21…30 | Home state mapping | Each state in [USER_FLOWS §4](USER_FLOWS.md#4-home-screen-states) from API fixtures; readiness banner priority |
+| MOB-31…45 | Screens (widget) | Onboarding steps; contact add/edit; instruction create with recipients/stage; plan editor validation; reauth/confirm sheets; settings |
+| MOB-46…50 | Accessibility | `androidTapTargetGuideline`, `labeledTapTargetGuideline`, `textContrastGuideline` on key screens; layouts at text scale 2.0 without overflow; semantics labels for status |
+| MOB-51…55 | App lock | Lock on cold start/timeout (fake auth service); fallback path; disabled state |
+| MOB-56…60 | Notifications | Payload → route mapping; foreground display; token refresh → `PUT /devices/current` |
+| MOB-61…65 | Integration (`integration_test`, dev backend + test clock) | Onboarding → active plan; check-in; simulated miss → grace UI → I'M OK; escalation → I'M SAFE with reauth |
+
+**Phase 4 status of MOB-11…30 (built).** The check-in state machine (MOB-11…20) is `test/features/checkin/checkin_controller_test.dart` (success only after a 200; the key is stored before the request, reused on every retry, after process death and on resume; 409, 429, 426, 401, 503 and storage failures); Home state mapping (MOB-21…30) is `home_status_test.dart`, `home_controller_test.dart` and `home_screen_test.dart`. Repositories are tested over a fake Dio adapter (`checkin_data_test.dart`, `home_data_test.dart`); `phase4_contract_test.dart` parses every file in `docs/contracts/phase4` and asserts the recorded headers. Coverage gates added: `lib/features/checkin`, `lib/features/home`, `lib/core/time` (90%). Review and owner-decision additions: a pending tap survives a real sign-out (`pending_survives_signout_test.dart`), is dropped after 12 h on restore and before every retry (boundaries 12 h exactly / 11 h 59 m / negative age; open offline, resume, "Try again", 429 wait; mutation-checked), and the schedule screen follows a confirmed check-in; the password sheet for a longer interval (sheet then one retry with the same `If-Match`, cancel keeps the edits, wrong password, shortening / time-only / inactive need none; `problem_reauth_required_lengthen` in the contract test). MOB-61…65 (integration against the dev backend) are still manual: Phase 4 was walked on the emulator against the local backend, including an offline tap, process kill and relaunch (see the Phase 4 report).
+
+## 7. End-to-end and operational tests (staging)
+
+| ID | Scenario |
+|---|---|
+| E2E-01 | Full lifecycle with a real device, real email to test inboxes, real FCM (staging project), using the staging test-clock router |
+| E2E-02 | Lost phone: escalation running → web `/a/checkin` → I'M SAFE → all-clear |
+| E2E-03 | Contact journey on mobile browsers (Chrome Android, Safari iOS, Gmail in-app browser) |
+| OPS-01 | **Game day: ingress outage.** Block the probe/ingress for 15 min → Hold → recovery → shift verified |
+| OPS-02 | Kill all workers 30 min → heartbeat page → restart → correct catch-up |
+| OPS-03 | Invalid email-provider credentials → retries → fallback provider → backlog alert |
+| OPS-04 | Database failover (managed HA) during load → no duplicate effects; API 503s retried by clients |
+| OPS-05 | Backup restore into a scratch instance; app boots against it; data spot-checked |
+
+## 8. Manual test checklist (before each beta/production release)
+
+- **Devices:** Pixel (stock Android 15/16), Samsung (One UI), Xiaomi/Redmi (HyperOS, aggressive battery), Oppo/OnePlus (ColorOS); one low-end device (≤ 3 GB RAM); Android 8.0 (minSdk) emulator.
+- **Accessibility:** TalkBack full journey (onboarding → check-in → I'M SAFE); font size max + display size max; dark mode; reduce motion.
+- **Permissions:** notifications denied/granted/revoked later; no biometrics enrolled; device without screen lock.
+- **Lifecycle:** process death during check-in (pending survives); app update with an existing session; reinstall (secure storage cleared → login).
+- **Network:** airplane mode, flaky network (throttled), captive portal.
+- **Notifications:** delivery with the app killed, Doze, battery saver; lock-screen privacy (public version).
+- **Emails:** rendering in Gmail (web/Android/iOS), Outlook, Apple Mail; plain-text part; dark-mode email clients; links with fragments open correctly.
+- **Copy review:** every user and contact message against [USER_FLOWS §15](USER_FLOWS.md#15-wording-rules).
+
+## 9. Performance tests
+
+| ID | Target |
+|---|---|
+| PERF-01 | `POST /v1/checkins` p95 < 500 ms at 50 rps (staging-size DB with 100k users) |
+| PERF-02 | 10,000 users due in the same minute → all incidents opened within 2 min (1 worker) |
+| PERF-03 | Dispatcher ≥ 50 messages/s with a fake provider |
+| PERF-04 | `GET /v1/home` p95 < 300 ms |
+| PERF-05 | App cold start < 2 s on a mid-range device; no jank (> 16 ms frames) on Home |
+
+## 10. CI gates
+
+| Stage | Backend | Mobile |
+|---|---|---|
+| Format | `ruff format --check` | `dart format --set-exit-if-changed .` |
+| Lint / types | `ruff check`, `mypy app` | `flutter analyze` |
+| Tests | `pytest` (all suites) with PostgreSQL service | `flutter test --coverage` |
+| Migrations | `alembic upgrade head && alembic downgrade base && alembic upgrade head` + drift check | — |
+| Security | `pip-audit`, gitleaks | dependency audit, gitleaks |
+| Build | Docker image build | `flutter build apk --flavor dev` (compile check) |
+| Coverage | `escalation/`, `checkins/`, `releases/`, `notifications/` ≥ 95% branch; overall ≥ 85% | ≥ 70% lines (controllers/interceptors ≥ 90%) |
+
+Engine lifecycle and concurrency tests are also run **100× in a nightly job** to catch flakiness.
+
+## 11. Defect severity
+
+| Sev | Definition | Examples | Release blocker |
+|---|---|---|---|
+| **S1** | Safety or privacy failure | Wrongful alert/release; cross-user data exposure; sensitive data in logs or notifications; check-in impossible | Always |
+| **S2** | Core feature broken, no workaround | Can't add a contact; reminders not sent; portal unusable | Always |
+| S3 | Degraded, workaround exists | Wrong copy, minor layout issue at 200% text | Case by case |
+| S4 | Cosmetic | Spacing, typos in non-critical text | No |
+
+## 12. Release acceptance criteria
+
+**Closed beta (Play closed testing):**
+- All **M** requirements implemented; zero open S1/S2.
+- All ENG-*, SEC-*, AUTH-* tests green; nightly 100× lifecycle run green for 7 consecutive nights.
+- Manual checklist done on ≥ 3 OEMs; Phase 9 security review complete; privacy policy and terms live.
+- Game days OPS-01…OPS-03 passed in staging.
+
+**Production:**
+- Closed test ≥ 14 days with ≥ 12 opted-in testers (if a personal developer account).
+- **Zero** wrongful contact messages during beta (every escalated incident reviewed).
+- Crash-free sessions ≥ 99.5%; ANR rate below Play's bad-behaviour thresholds.
+- OPS-04/05 passed; alerts routed to a person; Data safety form and store listing complete.

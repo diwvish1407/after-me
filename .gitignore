@@ -1,0 +1,41 @@
+# OS / editors
+.DS_Store
+.idea/
+*.iml
+.vscode/*
+!.vscode/extensions.json
+
+# Secrets and local environment — never commit
+.env
+.env.*
+!.env.example
+*.pem
+*.keystore
+*.jks
+*.p12
+*.pfx
+*.pepk
+key.properties
+google-services.json
+service-account*.json
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.hypothesis/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+
+# Backend local artefacts
+backend/.dev_mail/
+
+# Flutter / Dart (mobile/.gitignore covers the rest)
+mobile/build/
+mobile/.dart_tool/
+mobile/coverage/

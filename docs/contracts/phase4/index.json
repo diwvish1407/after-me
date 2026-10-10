@@ -1,0 +1,229 @@
+{
+  "contract": "afterme-phase4",
+  "base_path": "/v1",
+  "notes": [
+    "Values are fictional placeholders; IDs are not real.",
+    "Errors are RFC 9457 application/problem+json; see problems[].",
+    "Instants are RFC 3339 UTC with a Z suffix; due_local_time is 24-hour HH:MM.",
+    "The schedule is a singleton with a strong ETag (\"sched-<version>\"). PUT needs If-Match: 428 when absent, 412 when stale. A check-in does not change the version.",
+    "POST /v1/checkins needs an Idempotency-Key (16 to 64 URL-safe characters). Reuse the SAME key for every retry of one tap: the original answer is replayed, marked with the response header Idempotent-Replayed: true. A replay's server_time is the ORIGINAL one: calibrate the clock offset from GET /v1/home (or a non-replayed response), never from a replay.",
+    "next_due_at is null while the schedule is inactive.",
+    "incident is always null in Phase 4; it becomes an object when escalation exists.",
+    "The deadline is computed by the server only; client_reported_at is informational.",
+    "Lengthening interval_days of an ACTIVE schedule needs a password re-auth within the last 5 minutes (403 reauth_required, as for deactivate); an inactive schedule does not."
+  ],
+  "endpoints": [
+    {
+      "name": "schedule_get_default",
+      "method": "GET",
+      "path": "/v1/checkin/schedule",
+      "auth": "bearer",
+      "status": 200,
+      "request": null,
+      "response": "schedule_get_default.response.json",
+      "response_headers": {
+        "ETag": "\"sched-1\""
+      }
+    },
+    {
+      "name": "home_new",
+      "method": "GET",
+      "path": "/v1/home",
+      "auth": "bearer",
+      "status": 200,
+      "request": null,
+      "response": "home_new.response.json"
+    },
+    {
+      "name": "schedule_put",
+      "method": "PUT",
+      "path": "/v1/checkin/schedule",
+      "auth": "bearer",
+      "status": 200,
+      "request": "schedule_put.request.json",
+      "response": "schedule_put.response.json",
+      "request_headers": {
+        "If-Match": "\"sched-1\""
+      },
+      "response_headers": {
+        "ETag": "\"sched-2\""
+      }
+    },
+    {
+      "name": "checkin_inactive",
+      "method": "POST",
+      "path": "/v1/checkins",
+      "auth": "bearer",
+      "status": 200,
+      "request": "checkin_inactive.request.json",
+      "response": "checkin_inactive.response.json",
+      "request_headers": {
+        "Idempotency-Key": "00000000-0000-4000-8000-000000000002"
+      }
+    },
+    {
+      "name": "schedule_activate",
+      "method": "POST",
+      "path": "/v1/checkin/activate",
+      "auth": "bearer",
+      "status": 200,
+      "request": null,
+      "response": "schedule_activate.response.json",
+      "response_headers": {
+        "ETag": "\"sched-3\""
+      }
+    },
+    {
+      "name": "home_active",
+      "method": "GET",
+      "path": "/v1/home",
+      "auth": "bearer",
+      "status": 200,
+      "request": null,
+      "response": "home_active.response.json"
+    },
+    {
+      "name": "checkin_record",
+      "method": "POST",
+      "path": "/v1/checkins",
+      "auth": "bearer",
+      "status": 200,
+      "request": "checkin_record.request.json",
+      "response": "checkin_record.response.json",
+      "request_headers": {
+        "Idempotency-Key": "00000000-0000-4000-8000-000000000005"
+      }
+    },
+    {
+      "name": "checkin_replay",
+      "method": "POST",
+      "path": "/v1/checkins",
+      "auth": "bearer",
+      "status": 200,
+      "request": "checkin_replay.request.json",
+      "response": "checkin_replay.response.json",
+      "request_headers": {
+        "Idempotency-Key": "00000000-0000-4000-8000-000000000005"
+      },
+      "response_headers": {
+        "Idempotent-Replayed": "true"
+      }
+    },
+    {
+      "name": "checkin_history",
+      "method": "GET",
+      "path": "/v1/checkins",
+      "auth": "bearer",
+      "status": 200,
+      "request": null,
+      "response": "checkin_history.response.json"
+    },
+    {
+      "name": "schedule_deactivate",
+      "method": "POST",
+      "path": "/v1/checkin/deactivate",
+      "auth": "bearer",
+      "status": 200,
+      "request": null,
+      "response": "schedule_deactivate.response.json",
+      "response_headers": {
+        "ETag": "\"sched-4\""
+      }
+    },
+    {
+      "name": "home_inactive",
+      "method": "GET",
+      "path": "/v1/home",
+      "auth": "bearer",
+      "status": 200,
+      "request": null,
+      "response": "home_inactive.response.json"
+    }
+  ],
+  "problems": [
+    {
+      "name": "problem_precondition_required",
+      "method": "PUT",
+      "path": "/v1/checkin/schedule",
+      "auth": "bearer",
+      "status": 428,
+      "request": "problem_precondition_required.request.json",
+      "response": "problem_precondition_required.response.json"
+    },
+    {
+      "name": "problem_validation_failed",
+      "method": "PUT",
+      "path": "/v1/checkin/schedule",
+      "auth": "bearer",
+      "status": 422,
+      "request": "problem_validation_failed.request.json",
+      "response": "problem_validation_failed.response.json",
+      "request_headers": {
+        "If-Match": "\"sched-1\""
+      }
+    },
+    {
+      "name": "problem_precondition_failed",
+      "method": "PUT",
+      "path": "/v1/checkin/schedule",
+      "auth": "bearer",
+      "status": 412,
+      "request": "problem_precondition_failed.request.json",
+      "response": "problem_precondition_failed.response.json",
+      "request_headers": {
+        "If-Match": "\"sched-1\""
+      }
+    },
+    {
+      "name": "problem_activation_requirements_unmet",
+      "method": "POST",
+      "path": "/v1/checkin/activate",
+      "auth": "bearer",
+      "status": 409,
+      "request": null,
+      "response": "problem_activation_requirements_unmet.response.json"
+    },
+    {
+      "name": "problem_reauth_required_lengthen",
+      "method": "PUT",
+      "path": "/v1/checkin/schedule",
+      "auth": "bearer",
+      "status": 403,
+      "request": "problem_reauth_required_lengthen.request.json",
+      "response": "problem_reauth_required_lengthen.response.json",
+      "request_headers": {
+        "If-Match": "\"sched-3\""
+      }
+    },
+    {
+      "name": "problem_idempotency_key_missing",
+      "method": "POST",
+      "path": "/v1/checkins",
+      "auth": "bearer",
+      "status": 422,
+      "request": null,
+      "response": "problem_idempotency_key_missing.response.json"
+    },
+    {
+      "name": "problem_reauth_required",
+      "method": "POST",
+      "path": "/v1/checkin/deactivate",
+      "auth": "bearer",
+      "status": 403,
+      "request": null,
+      "response": "problem_reauth_required.response.json"
+    },
+    {
+      "name": "problem_incident_open",
+      "method": "PUT",
+      "path": "/v1/checkin/schedule",
+      "auth": "bearer",
+      "status": 409,
+      "request": "problem_incident_open.request.json",
+      "response": "problem_incident_open.response.json",
+      "request_headers": {
+        "If-Match": "\"sched-4\""
+      }
+    }
+  ]
+}

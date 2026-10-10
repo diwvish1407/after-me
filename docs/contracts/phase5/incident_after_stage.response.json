@@ -1,0 +1,58 @@
+{
+  "incident": {
+    "id": "00000000-0000-4000-8000-000000000004",
+    "status": "escalated",
+    "requires": "safe",
+    "missed_due_at": "2026-10-09T14:30:00Z",
+    "anchor_at": "2026-10-09T14:30:01Z",
+    "grace_ends_at": "2026-10-09T17:30:01Z",
+    "contacts_messaged": true,
+    "closed_at": null,
+    "closed_by": null,
+    "timeline": [
+      {
+        "kind": "user_reminder",
+        "variant": "missed",
+        "stage_position": null,
+        "scheduled_for": "2026-10-09T14:30:01Z",
+        "status": "executed",
+        "contacts": null,
+        "release_count": null
+      },
+      {
+        "kind": "user_reminder",
+        "variant": "midpoint",
+        "stage_position": null,
+        "scheduled_for": "2026-10-09T16:00:01Z",
+        "status": "executed",
+        "contacts": null,
+        "release_count": null
+      },
+      {
+        "kind": "user_reminder",
+        "variant": "last_chance",
+        "stage_position": null,
+        "scheduled_for": "2026-10-09T17:15:01Z",
+        "status": "executed",
+        "contacts": null,
+        "release_count": null
+      },
+      {
+        "kind": "execute_stage",
+        "variant": null,
+        "stage_position": 1,
+        "scheduled_for": "2026-10-09T17:30:01Z",
+        "status": "executed",
+        "contacts": [
+          {
+            "id": "00000000-0000-4000-8000-000000000002",
+            "display_name": "Mom",
+            "result": "messaged"
+          }
+        ],
+        "release_count": 0
+      }
+    ],
+    "server_time": "2026-10-09T17:36:20Z"
+  }
+}

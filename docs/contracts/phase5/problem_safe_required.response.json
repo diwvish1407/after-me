@@ -1,0 +1,9 @@
+{
+  "type": "https://afterme.test/problems/safe-required",
+  "title": "Confirm you're safe",
+  "status": 409,
+  "code": "safe_required",
+  "detail": "Your contacts have been notified. Confirm I'M SAFE to stop the escalation.",
+  "request_id": "req_0123456789abcdef0123456789abcdef",
+  "incident_id": "00000000-0000-4000-8000-000000000004"
+}

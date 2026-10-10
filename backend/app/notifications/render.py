@@ -1,0 +1,81 @@
+"""Turning an outbox row into a message (USER_FLOWS §13).
+
+Rows hold identifiers and instants only. Names, addresses and times are resolved here, at send
+time, so that an edit or an opt-out made after the row was queued is respected, and so that no
+personal data ever sits in the outbox. Push text is **generic** (SECURITY T21, FR-NOT-04): the
+app fetches the details over the API.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Sequence
+from datetime import datetime
+from typing import Final
+from zoneinfo import ZoneInfo
+
+from app.notifications import outbox
+from app.notifications.push import PushMessage
+
+_NOON: Final = 12
+
+PUSH_COPY: Final[dict[str, tuple[str, str]]] = {
+    outbox.USER_PRE_REMINDER: ("Check-in due soon", "Tap to let AfterMe know you're OK."),
+    outbox.USER_MISSED: ("You missed your check-in", "Tap I'M OK to stop the reminders."),
+    outbox.USER_MIDPOINT: ("Still waiting for your check-in", "Tap to check in."),
+    outbox.USER_LAST_CHANCE: (
+        "Your contacts will be notified in 15 minutes",
+        "Tap to check in now.",
+    ),
+    outbox.USER_STAGE_EXECUTED: (
+        "Your contacts have been notified",
+        "If you're safe, open AfterMe and tap I'M SAFE.",
+    ),
+    outbox.USER_FINAL_WARNING: (
+        "Information will be shared in 1 hour",
+        "Tap I'M SAFE to stop it.",
+    ),
+    outbox.USER_ALL_CLEAR: ("All clear sent", "Your contacts know you're safe."),
+    outbox.USER_HOLD_NOTICE: ("We had a service interruption", "Please check in."),
+}
+
+
+def push_message(template_key: str, *, token: str, incident_id: str | None) -> PushMessage | None:
+    copy = PUSH_COPY.get(template_key)
+    if copy is None:
+        return None
+    return PushMessage(
+        token=token, type=template_key, title=copy[0], body=copy[1], incident_id=incident_id
+    )
+
+
+def join_names(names: Sequence[str]) -> str:
+    """``["Mom"]`` -> ``Mom``; two -> ``Mom and Dad``; three -> ``Mom, Dad and Sam``."""
+    cleaned = [n for n in names if n]
+    if not cleaned:
+        return ""
+    if len(cleaned) == 1:
+        return cleaned[0]
+    return f"{', '.join(cleaned[:-1])} and {cleaned[-1]}"
+
+
+def _zone(timezone: str) -> ZoneInfo:
+    try:
+        return ZoneInfo(timezone)
+    except (KeyError, ValueError):  # an unusable zone must not stop a message
+        return ZoneInfo("UTC")
+
+
+def clock_time(instant: datetime, timezone: str) -> str:
+    """``8:00 PM``."""
+    local = instant.astimezone(_zone(timezone))
+    hour12 = local.hour % _NOON or _NOON
+    return f"{hour12}:{local.minute:02d} {'AM' if local.hour < _NOON else 'PM'}"
+
+
+def day_time(instant: datetime, timezone: str) -> str:
+    """``Wednesday 15 Oct, 8:00 PM IST``: a contact must not have to guess the day or zone."""
+    local = instant.astimezone(_zone(timezone))
+    return (
+        f"{local.strftime('%A')} {local.day} {local.strftime('%b')}, "
+        f"{clock_time(instant, timezone)} {local.tzname() or ''}"
+    ).strip()

@@ -1,0 +1,14 @@
+{
+  "tier": "free",
+  "limits": {
+    "contacts": 1,
+    "instructions": 3,
+    "stages": 2,
+    "custom_offsets": false
+  },
+  "usage": {
+    "contacts": 0,
+    "instructions": 0,
+    "stages": 0
+  }
+}

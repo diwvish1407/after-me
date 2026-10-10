@@ -1,0 +1,56 @@
+{
+  "server_time": "2026-10-08T09:03:20Z",
+  "user": {
+    "display_name": "Test User",
+    "tier": "free",
+    "timezone": "Asia/Kolkata"
+  },
+  "checkin": {
+    "status": "active",
+    "next_due_at": "2026-10-10T16:00:00Z",
+    "last_checkin_at": "2026-10-08T09:02:40Z",
+    "schedule": {
+      "interval_days": 2,
+      "due_local_time": "21:30",
+      "reminder_lead_minutes": 30
+    }
+  },
+  "incident": null,
+  "plan_summary": {
+    "stages": 1,
+    "contacts_total": 1,
+    "contacts_verified": 0,
+    "instructions_active": 0
+  },
+  "readiness": {
+    "ready": false,
+    "issues": [
+      {
+        "code": "contact_pending",
+        "contact_id": "00000000-0000-4000-8000-000000000003"
+      }
+    ]
+  },
+  "recent_activity": [
+    {
+      "action": "schedule.activated",
+      "occurred_at": "2026-10-08T09:03:00Z"
+    },
+    {
+      "action": "plan.updated",
+      "occurred_at": "2026-10-08T09:02:40Z"
+    },
+    {
+      "action": "contact.invitation_sent",
+      "occurred_at": "2026-10-08T09:02:40Z"
+    },
+    {
+      "action": "contact.created",
+      "occurred_at": "2026-10-08T09:02:40Z"
+    },
+    {
+      "action": "checkin.recorded",
+      "occurred_at": "2026-10-08T09:02:40Z"
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "grace_minutes": 180,
+  "stages": [
+    {
+      "id": null,
+      "offset_minutes": 360,
+      "notify_contact_ids": [
+        "00000000-0000-4000-8000-000000000002"
+      ]
+    }
+  ]
+}

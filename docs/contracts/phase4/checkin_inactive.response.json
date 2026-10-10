@@ -1,0 +1,10 @@
+{
+  "checkin": {
+    "id": "00000000-0000-4000-8000-000000000001",
+    "kind": "ok",
+    "received_at": "2026-10-08T09:02:40Z"
+  },
+  "next_due_at": null,
+  "incident_resolved": false,
+  "server_time": "2026-10-08T09:02:40Z"
+}

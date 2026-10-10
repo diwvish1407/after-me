@@ -1,0 +1,8 @@
+{
+  "type": "https://afterme.test/problems/contact-duplicate",
+  "title": "Contact already added",
+  "status": 409,
+  "code": "contact_duplicate",
+  "detail": "One of your contacts already uses this email address.",
+  "request_id": "req_0123456789abcdef0123456789abcdef"
+}

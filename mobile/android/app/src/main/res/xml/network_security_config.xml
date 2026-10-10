@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Release-safe network policy (SECURITY.md §11 NETWORK): HTTPS only, platform CA trust.
+     The dev flavor overrides this file in src/dev/res/xml to reach a local backend. -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

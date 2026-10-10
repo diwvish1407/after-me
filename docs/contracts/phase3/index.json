@@ -1,0 +1,213 @@
+{
+  "contract": "afterme-phase3",
+  "base_path": "/v1",
+  "notes": [
+    "Values are fictional placeholders; IDs are not real.",
+    "Errors are RFC 9457 application/problem+json; see problems[].",
+    "204 responses have no body and no response file.",
+    "Contact objects never reveal whether an address is on the suppression list.",
+    "The recipient pages (/c/open, /c/session, /c/invite/accept, /c/invite/decline, /c/optout, /c/optout/confirm) are server-rendered HTML forms, not JSON endpoints."
+  ],
+  "endpoints": [
+    {
+      "name": "entitlements_free",
+      "method": "GET",
+      "path": "/v1/me/entitlements",
+      "auth": "bearer",
+      "status": 200,
+      "request": null,
+      "response": "entitlements_free.response.json"
+    },
+    {
+      "name": "contact_create",
+      "method": "POST",
+      "path": "/v1/contacts",
+      "auth": "bearer",
+      "status": 201,
+      "request": "contact_create.request.json",
+      "response": "contact_create.response.json"
+    },
+    {
+      "name": "entitlements_free_in_use",
+      "method": "GET",
+      "path": "/v1/me/entitlements",
+      "auth": "bearer",
+      "status": 200,
+      "request": null,
+      "response": "entitlements_free_in_use.response.json"
+    },
+    {
+      "name": "contact_get",
+      "method": "GET",
+      "path": "/v1/contacts/{contact_id}",
+      "auth": "bearer",
+      "status": 200,
+      "request": null,
+      "response": "contact_get.response.json"
+    },
+    {
+      "name": "contact_patch",
+      "method": "PATCH",
+      "path": "/v1/contacts/{contact_id}",
+      "auth": "bearer",
+      "status": 200,
+      "request": "contact_patch.request.json",
+      "response": "contact_patch.response.json"
+    },
+    {
+      "name": "entitlements_premium",
+      "method": "GET",
+      "path": "/v1/me/entitlements",
+      "auth": "bearer",
+      "status": 200,
+      "request": null,
+      "response": "entitlements_premium.response.json"
+    },
+    {
+      "name": "contact_create_other",
+      "method": "POST",
+      "path": "/v1/contacts",
+      "auth": "bearer",
+      "status": 201,
+      "request": "contact_create_other.request.json",
+      "response": "contact_create_other.response.json"
+    },
+    {
+      "name": "contact_create_friend",
+      "method": "POST",
+      "path": "/v1/contacts",
+      "auth": "bearer",
+      "status": 201,
+      "request": "contact_create_friend.request.json",
+      "response": "contact_create_friend.response.json"
+    },
+    {
+      "name": "contact_get_verified",
+      "method": "GET",
+      "path": "/v1/contacts/{contact_id}",
+      "auth": "bearer",
+      "status": 200,
+      "request": null,
+      "response": "contact_get_verified.response.json"
+    },
+    {
+      "name": "contact_get_declined",
+      "method": "GET",
+      "path": "/v1/contacts/{contact_id}",
+      "auth": "bearer",
+      "status": 200,
+      "request": null,
+      "response": "contact_get_declined.response.json"
+    },
+    {
+      "name": "contacts_list",
+      "method": "GET",
+      "path": "/v1/contacts",
+      "auth": "bearer",
+      "status": 200,
+      "request": null,
+      "response": "contacts_list.response.json"
+    },
+    {
+      "name": "contact_patch_email",
+      "method": "PATCH",
+      "path": "/v1/contacts/{contact_id}",
+      "auth": "bearer",
+      "status": 200,
+      "request": "contact_patch_email.request.json",
+      "response": "contact_patch_email.response.json"
+    },
+    {
+      "name": "contact_resend",
+      "method": "POST",
+      "path": "/v1/contacts/{contact_id}/invitation",
+      "auth": "bearer",
+      "status": 202,
+      "request": null,
+      "response": "contact_resend.response.json"
+    },
+    {
+      "name": "contact_delete",
+      "method": "DELETE",
+      "path": "/v1/contacts/{contact_id}",
+      "auth": "bearer",
+      "status": 204,
+      "request": null,
+      "response": null
+    },
+    {
+      "name": "entitlements_after_delete",
+      "method": "GET",
+      "path": "/v1/me/entitlements",
+      "auth": "bearer",
+      "status": 200,
+      "request": null,
+      "response": "entitlements_after_delete.response.json"
+    }
+  ],
+  "problems": [
+    {
+      "name": "problem_plan_limit_reached",
+      "method": "POST",
+      "path": "/v1/contacts",
+      "auth": "bearer",
+      "status": 403,
+      "request": "problem_plan_limit_reached.request.json",
+      "response": "problem_plan_limit_reached.response.json"
+    },
+    {
+      "name": "problem_cannot_be_own_email",
+      "method": "POST",
+      "path": "/v1/contacts",
+      "auth": "bearer",
+      "status": 422,
+      "request": "problem_cannot_be_own_email.request.json",
+      "response": "problem_cannot_be_own_email.response.json"
+    },
+    {
+      "name": "problem_validation_failed",
+      "method": "PATCH",
+      "path": "/v1/contacts/{contact_id}",
+      "auth": "bearer",
+      "status": 422,
+      "request": "problem_validation_failed.request.json",
+      "response": "problem_validation_failed.response.json"
+    },
+    {
+      "name": "problem_contact_duplicate",
+      "method": "POST",
+      "path": "/v1/contacts",
+      "auth": "bearer",
+      "status": 409,
+      "request": "problem_contact_duplicate.request.json",
+      "response": "problem_contact_duplicate.response.json"
+    },
+    {
+      "name": "problem_invalid_state",
+      "method": "POST",
+      "path": "/v1/contacts/{contact_id}/invitation",
+      "auth": "bearer",
+      "status": 409,
+      "request": null,
+      "response": "problem_invalid_state.response.json"
+    },
+    {
+      "name": "problem_rate_limited",
+      "method": "POST",
+      "path": "/v1/contacts/{contact_id}/invitation",
+      "auth": "bearer",
+      "status": 429,
+      "request": null,
+      "response": "problem_rate_limited.response.json"
+    },
+    {
+      "name": "problem_not_found",
+      "method": "GET",
+      "path": "/v1/contacts/{contact_id}",
+      "auth": "bearer",
+      "status": 404,
+      "request": null,
+      "response": "problem_not_found.response.json"
+    }
+  ]
+}

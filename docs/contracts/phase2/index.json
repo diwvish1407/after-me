@@ -1,0 +1,239 @@
+{
+  "contract": "afterme-phase2",
+  "base_path": "/v1",
+  "notes": [
+    "Values are fictional placeholders; tokens, codes and IDs are not real.",
+    "Errors are RFC 9457 application/problem+json; see problems[].",
+    "204 responses have no body and no response file.",
+    "POST /a/reset is a web form (urlencoded: token, new_password, csrf), not a JSON endpoint."
+  ],
+  "endpoints": [
+    {
+      "name": "register_start",
+      "method": "POST",
+      "path": "/v1/auth/register/start",
+      "auth": "public",
+      "status": 202,
+      "request": "register_start.request.json",
+      "response": "register_start.response.json"
+    },
+    {
+      "name": "register_resend",
+      "method": "POST",
+      "path": "/v1/auth/register/resend",
+      "auth": "public",
+      "status": 202,
+      "request": "register_resend.request.json",
+      "response": "register_resend.response.json"
+    },
+    {
+      "name": "register_verify",
+      "method": "POST",
+      "path": "/v1/auth/register/verify",
+      "auth": "public",
+      "status": 201,
+      "request": "register_verify.request.json",
+      "response": "register_verify.response.json"
+    },
+    {
+      "name": "login",
+      "method": "POST",
+      "path": "/v1/auth/login",
+      "auth": "public",
+      "status": 200,
+      "request": "login.request.json",
+      "response": "login.response.json"
+    },
+    {
+      "name": "refresh",
+      "method": "POST",
+      "path": "/v1/auth/refresh",
+      "auth": "public",
+      "status": 200,
+      "request": "refresh.request.json",
+      "response": "refresh.response.json"
+    },
+    {
+      "name": "me",
+      "method": "GET",
+      "path": "/v1/me",
+      "auth": "bearer",
+      "status": 200,
+      "request": null,
+      "response": "me.response.json"
+    },
+    {
+      "name": "sessions",
+      "method": "GET",
+      "path": "/v1/auth/sessions",
+      "auth": "bearer",
+      "status": 200,
+      "request": null,
+      "response": "sessions.response.json"
+    },
+    {
+      "name": "reauth",
+      "method": "POST",
+      "path": "/v1/auth/reauth",
+      "auth": "bearer",
+      "status": 204,
+      "request": "reauth.request.json",
+      "response": null
+    },
+    {
+      "name": "password_forgot",
+      "method": "POST",
+      "path": "/v1/auth/password/forgot",
+      "auth": "public",
+      "status": 202,
+      "request": "password_forgot.request.json",
+      "response": "password_forgot.response.json"
+    },
+    {
+      "name": "email_change_start",
+      "method": "POST",
+      "path": "/v1/auth/email/change/start",
+      "auth": "bearer+reauth",
+      "status": 202,
+      "request": "email_change_start.request.json",
+      "response": "email_change_start.response.json"
+    },
+    {
+      "name": "email_change_verify",
+      "method": "POST",
+      "path": "/v1/auth/email/change/verify",
+      "auth": "bearer",
+      "status": 200,
+      "request": "email_change_verify.request.json",
+      "response": "email_change_verify.response.json"
+    },
+    {
+      "name": "profile_patch",
+      "method": "PATCH",
+      "path": "/v1/me/profile",
+      "auth": "bearer",
+      "status": 200,
+      "request": "profile_patch.request.json",
+      "response": "profile_patch.response.json"
+    },
+    {
+      "name": "password_change",
+      "method": "POST",
+      "path": "/v1/auth/password/change",
+      "auth": "bearer",
+      "status": 204,
+      "request": "password_change.request.json",
+      "response": null
+    },
+    {
+      "name": "session_revoke",
+      "method": "DELETE",
+      "path": "/v1/auth/sessions/{session_id}",
+      "auth": "bearer",
+      "status": 204,
+      "request": null,
+      "response": null
+    },
+    {
+      "name": "logout",
+      "method": "POST",
+      "path": "/v1/auth/logout",
+      "auth": "bearer",
+      "status": 204,
+      "request": null,
+      "response": null
+    },
+    {
+      "name": "logout_all",
+      "method": "POST",
+      "path": "/v1/auth/logout-all",
+      "auth": "bearer",
+      "status": 204,
+      "request": null,
+      "response": null
+    }
+  ],
+  "problems": [
+    {
+      "name": "problem_invalid_code",
+      "method": "POST",
+      "path": "/v1/auth/register/verify",
+      "auth": "public",
+      "status": 400,
+      "request": "problem_invalid_code.request.json",
+      "response": "problem_invalid_code.response.json"
+    },
+    {
+      "name": "problem_invalid_credentials",
+      "method": "POST",
+      "path": "/v1/auth/login",
+      "auth": "public",
+      "status": 401,
+      "request": "problem_invalid_credentials.request.json",
+      "response": "problem_invalid_credentials.response.json"
+    },
+    {
+      "name": "problem_email_unverified",
+      "method": "POST",
+      "path": "/v1/auth/login",
+      "auth": "public",
+      "status": 403,
+      "request": "problem_email_unverified.request.json",
+      "response": "problem_email_unverified.response.json"
+    },
+    {
+      "name": "problem_unauthenticated",
+      "method": "GET",
+      "path": "/v1/me",
+      "auth": "public",
+      "status": 401,
+      "request": null,
+      "response": "problem_unauthenticated.response.json"
+    },
+    {
+      "name": "problem_validation_failed",
+      "method": "PATCH",
+      "path": "/v1/me/profile",
+      "auth": "bearer",
+      "status": 422,
+      "request": "problem_validation_failed.request.json",
+      "response": "problem_validation_failed.response.json"
+    },
+    {
+      "name": "problem_reauth_required",
+      "method": "POST",
+      "path": "/v1/auth/email/change/start",
+      "auth": "bearer+reauth",
+      "status": 403,
+      "request": "problem_reauth_required.request.json",
+      "response": "problem_reauth_required.response.json"
+    },
+    {
+      "name": "problem_session_revoked",
+      "method": "GET",
+      "path": "/v1/me",
+      "auth": "bearer",
+      "status": 401,
+      "request": null,
+      "response": "problem_session_revoked.response.json"
+    },
+    {
+      "name": "problem_rate_limited",
+      "method": "POST",
+      "path": "/v1/auth/password/forgot",
+      "auth": "public",
+      "status": 429,
+      "request": "problem_rate_limited.request.json",
+      "response": "problem_rate_limited.response.json"
+    },
+    {
+      "name": "problem_token_expired",
+      "method": "GET",
+      "path": "/v1/me",
+      "auth": "bearer",
+      "status": 401,
+      "request": null,
+      "response": "problem_token_expired.response.json"
+    }
+  ]
+}

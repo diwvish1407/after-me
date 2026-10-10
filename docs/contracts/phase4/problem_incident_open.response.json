@@ -1,0 +1,8 @@
+{
+  "type": "https://afterme.test/problems/incident-open",
+  "title": "Check in first",
+  "status": 409,
+  "code": "incident_open",
+  "detail": "This can't be changed while a check-in is overdue. Check in first.",
+  "request_id": "req_0123456789abcdef0123456789abcdef"
+}

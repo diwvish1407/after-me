@@ -1,0 +1,6 @@
+{
+  "APP_ENV": "staging",
+  "API_BASE_URL": "https://api.staging.afterme.invalid",
+  "PUBLIC_BASE_URL": "https://staging.afterme.invalid",
+  "SENTRY_DSN": ""
+}

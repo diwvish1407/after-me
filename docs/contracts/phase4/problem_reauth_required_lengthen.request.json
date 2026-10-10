@@ -1,0 +1,5 @@
+{
+  "interval_days": 30,
+  "due_local_time": "21:30",
+  "reminder_lead_minutes": 30
+}

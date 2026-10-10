@@ -1,0 +1,30 @@
+{% extends "base.html.j2" %}
+{% block title %}{{ heading }} · AfterMe{% endblock %}
+{% block content %}
+<h1>{{ heading }}</h1>
+<p>{{ intro }}</p>
+<p id="no-token" class="notice" role="alert" hidden>This page opens from the link in your email. Open that link again to continue.</p>
+<noscript><p class="notice" role="alert">This page needs JavaScript to read the link from your email. Turn it on and open the link again.</p></noscript>
+<form method="post" action="{{ action }}" id="form" data-prefix="{{ prefix }}" autocomplete="off">
+<input type="hidden" name="csrf" value="{{ csrf }}">
+<input type="hidden" name="token" id="token" value="">
+<button type="submit" id="submit">Continue</button>
+</form>
+{% endblock %}
+{% block script %}
+<script nonce="{{ nonce }}">
+(function () {
+  var form = document.getElementById("form");
+  var field = document.getElementById("token");
+  var hash = window.location.hash.replace(/^#/, "");
+  if (form && field && hash.indexOf(form.getAttribute("data-prefix")) === 0) {
+    field.value = hash;
+    window.history.replaceState(null, "", window.location.pathname + window.location.search);
+    form.submit();
+  } else {
+    document.getElementById("no-token").hidden = false;
+    document.getElementById("submit").disabled = true;
+  }
+})();
+</script>
+{% endblock %}

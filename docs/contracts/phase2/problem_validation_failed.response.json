@@ -1,0 +1,20 @@
+{
+  "type": "https://afterme.test/problems/validation-failed",
+  "title": "Some fields are invalid",
+  "status": 422,
+  "code": "validation_failed",
+  "detail": "Check the highlighted fields and try again.",
+  "request_id": "req_0123456789abcdef0123456789abcdef",
+  "errors": [
+    {
+      "field": "phone_e164",
+      "code": "invalid_phone",
+      "message": "Use international format, for example +919876543210."
+    },
+    {
+      "field": "timezone",
+      "code": "invalid_timezone",
+      "message": "Choose a timezone from the list."
+    }
+  ]
+}

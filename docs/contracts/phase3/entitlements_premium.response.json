@@ -1,0 +1,14 @@
+{
+  "tier": "premium",
+  "limits": {
+    "contacts": 25,
+    "instructions": 200,
+    "stages": 10,
+    "custom_offsets": true
+  },
+  "usage": {
+    "contacts": 1,
+    "instructions": 0,
+    "stages": 0
+  }
+}

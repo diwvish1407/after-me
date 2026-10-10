@@ -1,0 +1,8 @@
+{
+  "type": "https://afterme.test/problems/not-found",
+  "title": "Not found",
+  "status": 404,
+  "code": "not_found",
+  "detail": "The resource does not exist.",
+  "request_id": "req_0123456789abcdef0123456789abcdef"
+}

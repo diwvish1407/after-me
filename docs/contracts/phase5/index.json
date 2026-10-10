@@ -1,0 +1,257 @@
+{
+  "contract": "afterme-phase5",
+  "base_path": "/v1",
+  "notes": [
+    "Values are fictional placeholders; IDs are not real.",
+    "Errors are RFC 9457 application/problem+json; see problems[].",
+    "The plan is a singleton with a strong ETag (\"plan-<version>\"); PUT needs If-Match (428 when absent, 412 when stale) and is refused with 409 incident_open during an incident.",
+    "Incidents are created only by the worker; the API reads them and can stop one (a check-in, or POST /v1/incidents/{id}/safe).",
+    "`requires` is \"checkin\" while nobody has been messaged and \"safe\" afterwards; a POST /v1/checkins in the \"safe\" state is 409 safe_required with the incident_id.",
+    "POST /v1/incidents/{id}/safe needs a password re-auth within 5 minutes and an Idempotency-Key; a replay is marked Idempotent-Replayed: true.",
+    "Push payloads carry no names or content: the app fetches the incident over the API."
+  ],
+  "endpoints": [
+    {
+      "name": "plan_get_default",
+      "method": "GET",
+      "path": "/v1/plan",
+      "auth": "bearer",
+      "status": 200,
+      "request": null,
+      "response": "plan_get_default.response.json",
+      "response_headers": {
+        "ETag": "\"plan-1\""
+      }
+    },
+    {
+      "name": "home_without_plan",
+      "method": "GET",
+      "path": "/v1/home",
+      "auth": "bearer",
+      "status": 200,
+      "request": null,
+      "response": "home_without_plan.response.json"
+    },
+    {
+      "name": "plan_put",
+      "method": "PUT",
+      "path": "/v1/plan",
+      "auth": "bearer",
+      "status": 200,
+      "request": "plan_put.request.json",
+      "response": "plan_put.response.json",
+      "request_headers": {
+        "If-Match": "\"plan-1\""
+      },
+      "response_headers": {
+        "ETag": "\"plan-2\""
+      }
+    },
+    {
+      "name": "schedule_activate",
+      "method": "POST",
+      "path": "/v1/checkin/activate",
+      "auth": "bearer",
+      "status": 200,
+      "request": null,
+      "response": "schedule_activate.response.json",
+      "response_headers": {
+        "ETag": "\"sched-2\""
+      }
+    },
+    {
+      "name": "incidents_current_none",
+      "method": "GET",
+      "path": "/v1/incidents/current",
+      "auth": "bearer",
+      "status": 200,
+      "request": null,
+      "response": "incidents_current_none.response.json"
+    },
+    {
+      "name": "incident_current",
+      "method": "GET",
+      "path": "/v1/incidents/current",
+      "auth": "bearer",
+      "status": 200,
+      "request": null,
+      "response": "incident_current.response.json"
+    },
+    {
+      "name": "home_incident",
+      "method": "GET",
+      "path": "/v1/home",
+      "auth": "bearer",
+      "status": 200,
+      "request": null,
+      "response": "home_incident.response.json"
+    },
+    {
+      "name": "incident_get",
+      "method": "GET",
+      "path": "/v1/incidents/{incident_id}",
+      "auth": "bearer",
+      "status": 200,
+      "request": null,
+      "response": "incident_get.response.json"
+    },
+    {
+      "name": "incident_after_stage",
+      "method": "GET",
+      "path": "/v1/incidents/current",
+      "auth": "bearer",
+      "status": 200,
+      "request": null,
+      "response": "incident_after_stage.response.json"
+    },
+    {
+      "name": "incident_safe",
+      "method": "POST",
+      "path": "/v1/incidents/{incident_id}/safe",
+      "auth": "bearer",
+      "status": 200,
+      "request": null,
+      "response": "incident_safe.response.json",
+      "request_headers": {
+        "Idempotency-Key": "00000000-0000-4000-8000-000000000006"
+      }
+    },
+    {
+      "name": "incident_safe_replay",
+      "method": "POST",
+      "path": "/v1/incidents/{incident_id}/safe",
+      "auth": "bearer",
+      "status": 200,
+      "request": null,
+      "response": "incident_safe_replay.response.json",
+      "request_headers": {
+        "Idempotency-Key": "00000000-0000-4000-8000-000000000006"
+      },
+      "response_headers": {
+        "Idempotent-Replayed": "true"
+      }
+    },
+    {
+      "name": "incidents_list",
+      "method": "GET",
+      "path": "/v1/incidents",
+      "auth": "bearer",
+      "status": 200,
+      "request": null,
+      "response": "incidents_list.response.json"
+    },
+    {
+      "name": "checkin_resolves_incident",
+      "method": "POST",
+      "path": "/v1/checkins",
+      "auth": "bearer",
+      "status": 200,
+      "request": null,
+      "response": "checkin_resolves_incident.response.json",
+      "request_headers": {
+        "Idempotency-Key": "00000000-0000-4000-8000-000000000009"
+      }
+    },
+    {
+      "name": "incidents_list_after",
+      "method": "GET",
+      "path": "/v1/incidents",
+      "auth": "bearer",
+      "status": 200,
+      "request": null,
+      "response": "incidents_list_after.response.json"
+    }
+  ],
+  "problems": [
+    {
+      "name": "problem_activation_requirements_unmet",
+      "method": "POST",
+      "path": "/v1/checkin/activate",
+      "auth": "bearer",
+      "status": 409,
+      "request": null,
+      "response": "problem_activation_requirements_unmet.response.json"
+    },
+    {
+      "name": "problem_precondition_required",
+      "method": "PUT",
+      "path": "/v1/plan",
+      "auth": "bearer",
+      "status": 428,
+      "request": "problem_precondition_required.request.json",
+      "response": "problem_precondition_required.response.json"
+    },
+    {
+      "name": "problem_validation_failed",
+      "method": "PUT",
+      "path": "/v1/plan",
+      "auth": "bearer",
+      "status": 422,
+      "request": "problem_validation_failed.request.json",
+      "response": "problem_validation_failed.response.json",
+      "request_headers": {
+        "If-Match": "\"plan-1\""
+      }
+    },
+    {
+      "name": "problem_precondition_failed",
+      "method": "PUT",
+      "path": "/v1/plan",
+      "auth": "bearer",
+      "status": 412,
+      "request": "problem_precondition_failed.request.json",
+      "response": "problem_precondition_failed.response.json",
+      "request_headers": {
+        "If-Match": "\"plan-1\""
+      }
+    },
+    {
+      "name": "problem_plan_incident_open",
+      "method": "PUT",
+      "path": "/v1/plan",
+      "auth": "bearer",
+      "status": 409,
+      "request": "problem_plan_incident_open.request.json",
+      "response": "problem_plan_incident_open.response.json",
+      "request_headers": {
+        "If-Match": "\"plan-2\""
+      }
+    },
+    {
+      "name": "problem_safe_required",
+      "method": "POST",
+      "path": "/v1/checkins",
+      "auth": "bearer",
+      "status": 409,
+      "request": null,
+      "response": "problem_safe_required.response.json",
+      "request_headers": {
+        "Idempotency-Key": "00000000-0000-4000-8000-000000000005"
+      }
+    },
+    {
+      "name": "problem_reauth_required",
+      "method": "POST",
+      "path": "/v1/incidents/{incident_id}/safe",
+      "auth": "bearer",
+      "status": 403,
+      "request": null,
+      "response": "problem_reauth_required.response.json",
+      "request_headers": {
+        "Idempotency-Key": "00000000-0000-4000-8000-000000000006"
+      }
+    },
+    {
+      "name": "problem_invalid_state",
+      "method": "POST",
+      "path": "/v1/incidents/{incident_id}/safe",
+      "auth": "bearer",
+      "status": 409,
+      "request": null,
+      "response": "problem_invalid_state.response.json",
+      "request_headers": {
+        "Idempotency-Key": "00000000-0000-4000-8000-000000000007"
+      }
+    }
+  ]
+}

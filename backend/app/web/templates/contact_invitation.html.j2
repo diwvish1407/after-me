@@ -1,0 +1,29 @@
+{% extends "base.html.j2" %}
+{% block title %}Your invitation · AfterMe{% endblock %}
+{% block content %}
+<h1>{{ inviter_name }} would like you to be a trusted contact</h1>
+<p>{{ inviter_name }} ({{ inviter_email }}) uses AfterMe to check in regularly, and has asked you to be one of their trusted contacts.</p>
+<h2>What this means</h2>
+<p>If {{ inviter_name }} misses a check-in and doesn't respond to our reminders, we may email you so you can try to reach them. They may also have prepared information for you, which you could view securely at that time.</p>
+<p>You don't need to install anything. You can change your mind later with the link at the bottom of any email from us.</p>
+<form method="post" action="/c/invite/accept">
+<input type="hidden" name="csrf" value="{{ csrf }}">
+<input type="hidden" name="token" value="{{ token }}">
+<button type="submit">Accept</button>
+</form>
+<form method="post" action="/c/invite/decline">
+<input type="hidden" name="csrf" value="{{ csrf }}">
+<input type="hidden" name="token" value="{{ token }}">
+<button type="submit" class="secondary">Decline</button>
+</form>
+<section class="separate">
+<h2>Don't want to hear from AfterMe at all?</h2>
+<p>This declines the invitation and asks us never to email you about AfterMe again, whoever the sender is.</p>
+<form method="post" action="/c/invite/decline">
+<input type="hidden" name="csrf" value="{{ csrf }}">
+<input type="hidden" name="token" value="{{ token }}">
+<input type="hidden" name="never_contact" value="1">
+<button type="submit" class="secondary">Never contact me about AfterMe again</button>
+</form>
+</section>
+{% endblock %}

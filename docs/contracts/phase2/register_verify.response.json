@@ -1,0 +1,12 @@
+{
+  "access_token": "eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCIsImtpZCI6ImV4YW1wbGUta2V5In0.eyJzdWIiOiJleGFtcGxlLXVzZXIiLCJzaWQiOiJleGFtcGxlLXNlc3Npb24tMSJ9.ZXhhbXBsZS1zaWduYXR1cmUtMQ",
+  "access_token_expires_at": "2026-10-08T09:16:01Z",
+  "refresh_token": "rt_example-refresh-token-01",
+  "session_id": "00000000-0000-4000-8000-000000000001",
+  "device_id": "00000000-0000-4000-8000-000000000002",
+  "user": {
+    "id": "00000000-0000-4000-8000-000000000003",
+    "email": "asha@example.com",
+    "tier": "free"
+  }
+}

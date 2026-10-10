@@ -1,0 +1,10 @@
+{% extends "base.html.j2" %}
+{% block title %}Thanks for letting us know · AfterMe{% endblock %}
+{% block content %}
+<h1>Thanks for letting us know</h1>
+{% if never_contact %}
+<p>We won't contact you about AfterMe again. {{ inviter_name }} has been told that you declined.</p>
+{% else %}
+<p>You declined, so you won't be notified about {{ inviter_name }}'s check-ins, and we won't send this invitation again. {{ inviter_name }} has been told.</p>
+{% endif %}
+{% endblock %}

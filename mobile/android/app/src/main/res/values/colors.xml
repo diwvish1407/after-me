@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- `bg` token, light (USER_FLOWS.md §1.2). -->
+    <color name="launch_background">#F7F5F2</color>
+</resources>

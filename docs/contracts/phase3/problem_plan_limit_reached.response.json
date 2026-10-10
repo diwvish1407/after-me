@@ -1,0 +1,11 @@
+{
+  "type": "https://afterme.test/problems/plan-limit-reached",
+  "title": "Plan limit reached",
+  "status": 403,
+  "code": "plan_limit_reached",
+  "detail": "Your plan does not allow more of these. Remove one or upgrade.",
+  "request_id": "req_0123456789abcdef0123456789abcdef",
+  "limit": 1,
+  "current": 1,
+  "resource": "contacts"
+}

@@ -1,0 +1,11 @@
+{
+  "type": "https://afterme.test/problems/activation-requirements-unmet",
+  "title": "Finish your plan first",
+  "status": 409,
+  "code": "activation_requirements_unmet",
+  "detail": "Something is still missing before check-ins can be turned on.",
+  "request_id": "req_0123456789abcdef0123456789abcdef",
+  "requirements": [
+    "no_stages"
+  ]
+}

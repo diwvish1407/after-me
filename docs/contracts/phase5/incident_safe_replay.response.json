@@ -1,0 +1,12 @@
+{
+  "status": "cancelled",
+  "incident_id": "00000000-0000-4000-8000-000000000004",
+  "next_due_at": "2026-10-10T14:30:00Z",
+  "server_time": "2026-10-09T17:37:20Z",
+  "all_clear_sent_to": [
+    {
+      "contact_id": "00000000-0000-4000-8000-000000000002",
+      "display_name": "Mom"
+    }
+  ]
+}

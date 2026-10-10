@@ -1,0 +1,23 @@
+{
+  "items": [
+    {
+      "id": "00000000-0000-4000-8000-000000000010",
+      "status": "resolved",
+      "missed_due_at": "2026-10-10T14:30:00Z",
+      "opened_at": "2026-10-10T14:30:01Z",
+      "closed_at": "2026-10-10T14:30:21Z",
+      "closed_by": "user_checkin",
+      "contacts_messaged": false
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000004",
+      "status": "cancelled",
+      "missed_due_at": "2026-10-09T14:30:00Z",
+      "opened_at": "2026-10-09T14:30:01Z",
+      "closed_at": "2026-10-09T17:37:20Z",
+      "closed_by": "user_safe",
+      "contacts_messaged": true
+    }
+  ],
+  "next_cursor": null
+}

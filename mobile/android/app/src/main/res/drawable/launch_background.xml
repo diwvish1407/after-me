@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Calm, brief launch background using the `bg` token (USER_FLOWS.md §1.2). A proper
+     Android 12+ SplashScreen with the app icon is planned with the store assets
+     (PLAY_STORE.md §3). -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@color/launch_background" />
+</layer-list>

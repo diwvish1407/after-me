@@ -1,0 +1,10 @@
+{
+  "interval_days": 2,
+  "due_local_time": "21:30",
+  "reminder_lead_minutes": 30,
+  "timezone": "Asia/Kolkata",
+  "status": "inactive",
+  "next_due_at": null,
+  "last_checkin_at": "2026-10-08T09:04:00Z",
+  "version": 4
+}

@@ -1,0 +1,8 @@
+{
+  "type": "https://afterme.test/problems/token-expired",
+  "title": "Access token expired",
+  "status": 401,
+  "code": "token_expired",
+  "detail": "Refresh the access token and try again.",
+  "request_id": "req_0123456789abcdef0123456789abcdef"
+}

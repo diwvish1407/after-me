@@ -1,0 +1,99 @@
+name: mobile
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "mobile/**"
+      - ".github/workflows/mobile.yml"
+  pull_request:
+    paths:
+      - "mobile/**"
+      - ".github/workflows/mobile.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mobile-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: Format, analyze, test, build (dev, staging, prod)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    defaults:
+      run:
+        working-directory: mobile
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+
+      - name: Set up Java (Temurin 17)
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: Set up Flutter (pinned)
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.47.6
+          cache: true
+          pub-cache: true
+
+      - name: Flutter version
+        run: flutter --version
+
+      # pubspec.lock is committed; `flutter pub get` also runs gen-l10n (generate: true).
+      - name: Get dependencies
+        run: flutter pub get --enforce-lockfile
+
+      # Generated code is NOT committed (see mobile/README.md "Generated code"): it is
+      # regenerated here before anything reads it. build_runner >= 2.16 always replaces
+      # stale or conflicting outputs (--delete-conflicting-outputs was removed).
+      - name: Generate code (freezed, json_serializable)
+        run: dart run build_runner build
+
+      - name: Generate localizations
+        run: flutter gen-l10n
+
+      - name: Check formatting
+        run: dart format --output=none --set-exit-if-changed lib test tool
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Test with coverage
+        run: flutter test --coverage
+
+      - name: Coverage gates (>= 70% overall, >= 90% interceptors, session and every Phase 2-3 feature area, contacts included)
+        run: dart run tool/coverage_check.dart
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: mobile-coverage
+          path: mobile/coverage/lcov.info
+          if-no-files-found: ignore
+
+      - name: Build dev APK (compile check)
+        run: flutter build apk --flavor dev --debug --dart-define-from-file=config/dev.json
+
+      - name: Build staging APK (flavor compile check)
+        run: flutter build apk --flavor staging --debug --dart-define-from-file=config/staging.json
+
+      # Release build with the debug-signing fallback (no key.properties in CI).
+      - name: Build prod release APK
+        run: flutter build apk --flavor prod --release --dart-define-from-file=config/prod.json
+
+      # Allowlist: INTERNET, POST_NOTIFICATIONS, USE_BIOMETRIC + app.afterme.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION
+      # (no AD_ID, no READ_CONTACTS).
+      - name: Check merged prod manifest permissions
+        run: dart run tool/check_manifest_permissions.dart

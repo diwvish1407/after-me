@@ -1,0 +1,8 @@
+{
+  "type": "https://afterme.test/problems/invalid-code",
+  "title": "Invalid code",
+  "status": 400,
+  "code": "invalid_code",
+  "detail": "That code is wrong or has expired.",
+  "request_id": "req_0123456789abcdef0123456789abcdef"
+}

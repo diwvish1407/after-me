@@ -1,0 +1,30 @@
+# Static analysis for the AfterMe app. `flutter analyze` must report zero issues (CI gate).
+include: package:flutter_lints/flutter.yaml
+
+analyzer:
+  language:
+    strict-casts: true
+    strict-inference: true
+    strict-raw-types: true
+  exclude:
+    - build/**
+    - android/**
+    # Generated code (build_runner and gen-l10n); regenerated in CI, never edited by hand.
+    - "**/*.g.dart"
+    - "**/*.freezed.dart"
+    - lib/l10n/gen/**
+
+linter:
+  rules:
+    - always_declare_return_types
+    - avoid_dynamic_calls
+    - avoid_print
+    - cancel_subscriptions
+    - close_sinks
+    - directives_ordering
+    - prefer_const_constructors
+    - prefer_final_locals
+    - sort_child_properties_last
+    - unawaited_futures
+    - unnecessary_lambdas
+    - use_build_context_synchronously

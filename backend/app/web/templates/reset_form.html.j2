@@ -1,0 +1,33 @@
+{% extends "base.html.j2" %}
+{% block title %}Choose a new password · AfterMe{% endblock %}
+{% block content %}
+<h1>Choose a new password</h1>
+<p>Enter a new password for your AfterMe account. Use at least 10 characters; a phrase of several words is easy to remember and hard to guess.</p>
+{% if message %}<p class="notice" role="alert">{{ message }}</p>{% endif %}
+<p id="no-token" class="notice" role="alert" hidden>This page opens from the link in your email. Open that link again to continue.</p>
+<noscript><p class="notice" role="alert">This page needs JavaScript to read the link from your email. Turn it on and open the link again.</p></noscript>
+<form method="post" action="/a/reset" autocomplete="off">
+<input type="hidden" name="csrf" value="{{ csrf }}">
+<input type="hidden" name="token" id="token" value="{{ token }}">
+<label for="new_password">New password</label>
+<input type="password" name="new_password" id="new_password" autocomplete="new-password" minlength="10" maxlength="128" required>
+<button type="submit" id="submit">Change password</button>
+</form>
+<p class="hint">After the change, every device is signed out and you sign in again in the AfterMe app.</p>
+{% endblock %}
+{% block script %}
+<script nonce="{{ nonce }}">
+(function () {
+  var field = document.getElementById("token");
+  var hash = window.location.hash.replace(/^#/, "");
+  if (hash && field) {
+    field.value = hash;
+    window.history.replaceState(null, "", window.location.pathname + window.location.search);
+  }
+  if (!field || !field.value) {
+    document.getElementById("no-token").hidden = false;
+    document.getElementById("submit").disabled = true;
+  }
+})();
+</script>
+{% endblock %}

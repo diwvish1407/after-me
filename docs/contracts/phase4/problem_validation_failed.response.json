@@ -1,0 +1,25 @@
+{
+  "type": "https://afterme.test/problems/validation-failed",
+  "title": "Some fields are invalid",
+  "status": 422,
+  "code": "validation_failed",
+  "detail": "Check the highlighted fields and try again.",
+  "request_id": "req_0123456789abcdef0123456789abcdef",
+  "errors": [
+    {
+      "field": "interval_days",
+      "code": "too_small",
+      "message": "Input should be greater than or equal to 1"
+    },
+    {
+      "field": "due_local_time",
+      "code": "invalid_time",
+      "message": "Use a time such as 20:00 (24-hour)."
+    },
+    {
+      "field": "reminder_lead_minutes",
+      "code": "invalid_choice",
+      "message": "Input should be 0, 30, 60, 120 or 240"
+    }
+  ]
+}

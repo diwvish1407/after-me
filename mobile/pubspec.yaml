@@ -1,0 +1,59 @@
+name: afterme
+description: "AfterMe: personal contingency planning. If you can't answer, your instructions can."
+# Private app: never published to pub.dev.
+publish_to: 'none'
+
+# versionName (semver) + versionCode (monotonic build number). See DEPLOYMENT.md §5.1.
+version: 0.1.0+1
+
+environment:
+  sdk: ^3.13.5
+  # CI pins the exact toolchain (3.47.6 stable); see .github/workflows/mobile.yml.
+  flutter: ">=3.47.6"
+
+dependencies:
+  # Font for CupertinoIcons referenced by cupertino_ui (pulled in by material_ui and
+  # go_router). Tree-shaken to a few bytes in release builds.
+  characters: ^1.4.1
+  cupertino_icons: ^2.0.0
+  device_info_plus: ^13.3.0
+  dio: ^5.11.1
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  flutter_riverpod: ^3.4.3
+  flutter_secure_storage: ^11.2.0
+  flutter_timezone: ^5.1.1
+  freezed_annotation: ^3.1.0
+  go_router: ^18.0.2
+  intl: ^0.20.3
+  json_annotation: ^4.12.0
+  local_auth: ^3.0.2
+  material_ui: ^1.6.0
+  package_info_plus: ^10.2.2
+  permission_handler: ^12.0.1
+  shared_preferences: ^2.5.6
+  timezone: ^0.11.1
+  url_launcher: ^6.3.3
+  uuid: ^4.6.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  build_runner: ^2.16.2
+  freezed: ^4.0.2
+  json_serializable: ^6.14.1
+  mocktail: ^1.0.5
+  shared_preferences_platform_interface: ^2.4.2
+  fake_async: ^1.3.3
+  url_launcher_platform_interface: ^2.3.2
+
+flutter:
+  # Material icon font (used by package:material_ui Icons).
+  uses-material-design: true
+  # Runs gen-l10n (see l10n.yaml) on `flutter pub get`, `flutter run` and `flutter build`.
+  generate: true
+  # The platform default font is used in Phase 1. A bundled, OFL-licensed humanist
+  # sans (USER_FLOWS.md §1.3) is a Phase 2 item.

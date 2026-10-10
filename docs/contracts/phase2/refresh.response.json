@@ -1,0 +1,5 @@
+{
+  "access_token": "eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCIsImtpZCI6ImV4YW1wbGUta2V5In0.eyJzdWIiOiJleGFtcGxlLXVzZXIiLCJzaWQiOiJleGFtcGxlLXNlc3Npb24tMyJ9.ZXhhbXBsZS1zaWduYXR1cmUtMw",
+  "access_token_expires_at": "2026-10-08T09:16:11Z",
+  "refresh_token": "rt_example-refresh-token-03"
+}

@@ -1,0 +1,8 @@
+{
+  "type": "https://afterme.test/problems/session-revoked",
+  "title": "Session ended",
+  "status": 401,
+  "code": "session_revoked",
+  "detail": "Please sign in again.",
+  "request_id": "req_0123456789abcdef0123456789abcdef"
+}

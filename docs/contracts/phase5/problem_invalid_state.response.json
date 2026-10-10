@@ -1,0 +1,8 @@
+{
+  "type": "https://afterme.test/problems/invalid-state",
+  "title": "Conflict",
+  "status": 409,
+  "code": "invalid_state",
+  "detail": "This incident is already closed.",
+  "request_id": "req_0123456789abcdef0123456789abcdef"
+}

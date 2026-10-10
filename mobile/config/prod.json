@@ -1,0 +1,6 @@
+{
+  "APP_ENV": "prod",
+  "API_BASE_URL": "https://api.afterme.invalid",
+  "PUBLIC_BASE_URL": "https://afterme.invalid",
+  "SENTRY_DSN": ""
+}

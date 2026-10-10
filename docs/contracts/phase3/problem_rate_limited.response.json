@@ -1,0 +1,8 @@
+{
+  "type": "https://afterme.test/problems/rate-limited",
+  "title": "Too many attempts",
+  "status": 429,
+  "code": "rate_limited",
+  "detail": "Too many attempts. Try again later.",
+  "request_id": "req_0123456789abcdef0123456789abcdef"
+}

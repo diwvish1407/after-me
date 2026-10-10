@@ -1,0 +1,2779 @@
+{
+  "@@locale": "en",
+  "appName": "AfterMe",
+  "@appName": {
+    "description": "Product name. Not translated."
+  },
+  "tagline": "If you can't answer, your instructions can.",
+  "@tagline": {
+    "description": "Product tagline shown on the welcome screen."
+  },
+  "notEmergencyService": "AfterMe is not an emergency service. If someone is in danger, contact your local emergency services.",
+  "@notEmergencyService": {
+    "description": "Mandatory disclaimer (USER_FLOWS §3, PRD)."
+  },
+  "welcomeGetStarted": "Get started",
+  "@welcomeGetStarted": {
+    "description": "Primary action on the welcome screen; opens account creation."
+  },
+  "welcomeSignIn": "I already have an account",
+  "@welcomeSignIn": {
+    "description": "Link from the welcome screen to the sign-in screen."
+  },
+  "welcomeOpenGallery": "Design system gallery (developer build)",
+  "@welcomeOpenGallery": {
+    "description": "Developer-only link to the component gallery. Only shown in dev builds."
+  },
+  "signInTitle": "Sign in",
+  "@signInTitle": {
+    "description": "Title of the sign-in screen."
+  },
+  "splashLoading": "Getting things ready",
+  "@splashLoading": {
+    "description": "Shown while the app restores the saved session at start-up."
+  },
+  "navHome": "Home",
+  "@navHome": {
+    "description": "Bottom navigation: Home tab."
+  },
+  "navPeople": "People",
+  "@navPeople": {
+    "description": "Bottom navigation: trusted contacts tab."
+  },
+  "navInstructions": "Instructions",
+  "@navInstructions": {
+    "description": "Bottom navigation: instructions tab."
+  },
+  "navPlan": "Plan",
+  "@navPlan": {
+    "description": "Bottom navigation: escalation plan tab."
+  },
+  "navSettings": "Settings",
+  "@navSettings": {
+    "description": "Bottom navigation: settings tab."
+  },
+  "homeCheckInUnavailable": "Turn on check-ins to start checking in.",
+  "@homeCheckInUnavailable": {
+    "description": "Explains why the check-in button on Home is disabled while check-ins are off."
+  },
+  "peopleEmptyTitle": "Who should know if you can't be reached?",
+  "@peopleEmptyTitle": {
+    "description": "Empty state title on the People tab (USER_FLOWS §14)."
+  },
+  "peopleEmptyBody": "Add someone you trust. We'll email them an invitation, and nothing is ever sent to them until they accept.",
+  "@peopleEmptyBody": {
+    "description": "Empty state body on the People tab."
+  },
+  "instructionsEmptyTitle": "Your instructions will live here",
+  "@instructionsEmptyTitle": {
+    "description": "Empty state title on the Instructions tab."
+  },
+  "instructionsEmptyBody": "Write down what someone may need, and choose who receives it and when. This arrives in a later phase.",
+  "@instructionsEmptyBody": {
+    "description": "Empty state body on the Instructions tab."
+  },
+  "planEmptyTitle": "You haven't set up a plan yet",
+  "@planEmptyTitle": {
+    "description": "Empty state title on the Plan tab, before the plan has a stage."
+  },
+  "planEmptyBody": "Your plan is how long we wait after a missed check-in, and who is told then.",
+  "@planEmptyBody": {
+    "description": "Empty state body on the Plan tab."
+  },
+  "planSetUp": "Set up your plan",
+  "@planSetUp": {
+    "description": "Plan tab action that opens the plan step."
+  },
+  "planGraceCardTitle": "Grace period",
+  "@planGraceCardTitle": {
+    "description": "Heading of the grace period on the Plan tab."
+  },
+  "planGraceSentence": "If you miss a check-in, we'll remind you for {delay} before anyone is contacted.",
+  "@planGraceSentence": {
+    "description": "The grace period in a sentence, on the Plan tab.",
+    "placeholders": {
+      "delay": {
+        "type": "String",
+        "example": "3 hours"
+      }
+    }
+  },
+  "planStagesTitle": "Who is told, and when",
+  "@planStagesTitle": {
+    "description": "Heading of the stages on the Plan tab."
+  },
+  "planStageTitle": "Stage {position}: after {delay}",
+  "@planStageTitle": {
+    "description": "One stage on the Plan tab: its number and how long after the missed check-in it runs.",
+    "placeholders": {
+      "position": {
+        "type": "int",
+        "example": "1"
+      },
+      "delay": {
+        "type": "String",
+        "example": "3 hours"
+      }
+    }
+  },
+  "planStageNotify": "Notify: {names}",
+  "@planStageNotify": {
+    "description": "Who a stage tells, on the Plan tab.",
+    "placeholders": {
+      "names": {
+        "type": "String",
+        "example": "Mom and Brother"
+      }
+    }
+  },
+  "planStageNobody": "Nobody to notify yet",
+  "@planStageNobody": {
+    "description": "A stage on the Plan tab whose contacts are not known (none chosen, or removed)."
+  },
+  "planStale": "Your plan was changed somewhere else, so we've loaded the latest version. Look it over and save again if you still want to.",
+  "@planStale": {
+    "description": "Message after a 412 on the plan."
+  },
+  "planContactGone": "Someone in this plan can't be found any more, so we've reloaded your trusted contacts. Look it over and try again.",
+  "@planContactGone": {
+    "description": "Message after a 404 when saving the plan: a contact it names is not the person's any more."
+  },
+  "planErrorGrace": "That wait isn't available for your plan. Choose one of the times shown.",
+  "@planErrorGrace": {
+    "description": "Field error of the plan's grace period (422 on grace_minutes)."
+  },
+  "planErrorStageTime": "The times in your plan don't fit together. Choose a wait and try again.",
+  "@planErrorStageTime": {
+    "description": "Field error of a stage's time (422 on stages[n].offset_minutes)."
+  },
+  "settingsVersion": "Version {version}",
+  "@settingsVersion": {
+    "description": "App version line in Settings.",
+    "placeholders": {
+      "version": {
+        "type": "String",
+        "example": "0.1.0 (1)"
+      }
+    }
+  },
+  "checkInLabelIdle": "I'M OK",
+  "@checkInLabelIdle": {
+    "description": "Check-in button label, ready state."
+  },
+  "checkInLabelSending": "Sending…",
+  "@checkInLabelSending": {
+    "description": "Check-in button label while the check-in is being sent."
+  },
+  "checkInLabelSuccess": "Checked in",
+  "@checkInLabelSuccess": {
+    "description": "Check-in button label after the server confirmed the check-in."
+  },
+  "checkInLabelPending": "Not received yet",
+  "@checkInLabelPending": {
+    "description": "Check-in button label when the check-in has not reached the server yet."
+  },
+  "checkInHintIdle": "Lets AfterMe know you're OK",
+  "@checkInHintIdle": {
+    "description": "Screen reader hint for the check-in button, ready state."
+  },
+  "checkInHintSending": "Sending your check-in",
+  "@checkInHintSending": {
+    "description": "Screen reader hint while sending."
+  },
+  "checkInHintSuccess": "AfterMe received your check-in",
+  "@checkInHintSuccess": {
+    "description": "Screen reader hint after success."
+  },
+  "checkInHintPending": "We'll keep trying. Tap to try again now",
+  "@checkInHintPending": {
+    "description": "Screen reader hint when the check-in is pending."
+  },
+  "checkInHintDisabled": "Not available right now",
+  "@checkInHintDisabled": {
+    "description": "Screen reader hint when the check-in button is disabled."
+  },
+  "bannerKindInfo": "Information",
+  "@bannerKindInfo": {
+    "description": "Screen reader label for an informational status banner icon."
+  },
+  "bannerKindAttention": "Needs your attention",
+  "@bannerKindAttention": {
+    "description": "Screen reader label for an attention status banner icon."
+  },
+  "bannerKindEscalation": "Important",
+  "@bannerKindEscalation": {
+    "description": "Screen reader label for an escalation status banner icon (contacts notified)."
+  },
+  "loading": "Loading",
+  "@loading": {
+    "description": "Generic loading label."
+  },
+  "retry": "Try again",
+  "@retry": {
+    "description": "Retry button on error views."
+  },
+  "back": "Back",
+  "@back": {
+    "description": "Back navigation label."
+  },
+  "showPassword": "Show password",
+  "@showPassword": {
+    "description": "Tooltip for the button that reveals a password field."
+  },
+  "hidePassword": "Hide password",
+  "@hidePassword": {
+    "description": "Tooltip for the button that hides a password field."
+  },
+  "errorNetwork": "You're offline or the connection dropped. Check your connection and try again.",
+  "@errorNetwork": {
+    "description": "Shown for network failures."
+  },
+  "errorServer": "Something went wrong on our side. Your data is safe. Try again in a moment.",
+  "@errorServer": {
+    "description": "Shown for server errors (USER_FLOWS §14)."
+  },
+  "errorUnknown": "Something unexpected happened. Your data is safe. Try again in a moment.",
+  "@errorUnknown": {
+    "description": "Shown for unexpected errors."
+  },
+  "errorSessionExpired": "Please sign in again.",
+  "@errorSessionExpired": {
+    "description": "Shown when the session ended (USER_FLOWS §14)."
+  },
+  "errorInvalidCredentials": "That didn't match. Check your details and try again.",
+  "@errorInvalidCredentials": {
+    "description": "Shown for a failed sign-in or password confirmation (401 invalid_credentials). Deliberately generic."
+  },
+  "errorReauthRequired": "For your security, please confirm your password to continue.",
+  "@errorReauthRequired": {
+    "description": "Shown when an action needs password re-authentication."
+  },
+  "errorEmailUnverified": "Please confirm your email address to continue.",
+  "@errorEmailUnverified": {
+    "description": "Shown when the account email is not verified."
+  },
+  "errorPlanLimitReached": "You've reached the number of trusted contacts your plan includes.",
+  "@errorPlanLimitReached": {
+    "description": "Shown when a tier limit is reached."
+  },
+  "errorPlanLimitStages": "You've reached the number of stages your account includes.",
+  "@errorPlanLimitStages": {
+    "description": "Shown for 403 plan_limit_reached on the plan's stages."
+  },
+  "errorForbidden": "That isn't available for your account.",
+  "@errorForbidden": {
+    "description": "Generic forbidden message."
+  },
+  "errorNotFound": "We couldn't find that. It may have been removed.",
+  "@errorNotFound": {
+    "description": "Shown for 404 responses."
+  },
+  "errorSafeRequired": "Your contacts have been notified. Confirm you're safe to stop your plan.",
+  "@errorSafeRequired": {
+    "description": "Shown for 409 safe_required."
+  },
+  "errorIncidentOpen": "This can't be changed while a check-in is overdue. Check in first to make changes.",
+  "@errorIncidentOpen": {
+    "description": "Shown for 409 incident_open (USER_FLOWS §10)."
+  },
+  "errorStaleData": "This was changed somewhere else. Refresh and try again.",
+  "@errorStaleData": {
+    "description": "Shown for 412/428 precondition conflicts."
+  },
+  "errorConflict": "That couldn't be completed because something changed. Refresh and try again.",
+  "@errorConflict": {
+    "description": "Generic conflict message."
+  },
+  "errorInvalidCode": "That code is wrong or has expired.",
+  "@errorInvalidCode": {
+    "description": "Shown for 400 invalid_code."
+  },
+  "errorValidation": "Some details need another look.",
+  "@errorValidation": {
+    "description": "Generic validation message; field errors are shown inline."
+  },
+  "errorRateLimitedMinutes": "{minutes, plural, =1{Too many attempts. Try again in 1 minute.} other{Too many attempts. Try again in {minutes} minutes.}}",
+  "@errorRateLimitedMinutes": {
+    "description": "Shown for 429 with a Retry-After value (USER_FLOWS §14).",
+    "placeholders": {
+      "minutes": {
+        "type": "int",
+        "example": "10"
+      }
+    }
+  },
+  "errorRateLimited": "Too many attempts. Try again in a moment.",
+  "@errorRateLimited": {
+    "description": "Shown for 429 without a usable Retry-After value."
+  },
+  "errorUpgradeRequired": "Please update AfterMe to keep your plan running.",
+  "@errorUpgradeRequired": {
+    "description": "Shown for 426 upgrade_required (USER_FLOWS §14)."
+  },
+  "galleryTitle": "Design system",
+  "@galleryTitle": {
+    "description": "Developer-only gallery screen title."
+  },
+  "galleryLight": "Light",
+  "@galleryLight": {
+    "description": "Developer gallery: light theme section."
+  },
+  "galleryDark": "Dark",
+  "@galleryDark": {
+    "description": "Developer gallery: dark theme section."
+  },
+  "galleryButtons": "Buttons",
+  "@galleryButtons": {
+    "description": "Developer gallery section."
+  },
+  "galleryCheckIn": "Check-in button",
+  "@galleryCheckIn": {
+    "description": "Developer gallery section."
+  },
+  "galleryBanners": "Status banners",
+  "@galleryBanners": {
+    "description": "Developer gallery section."
+  },
+  "galleryCards": "Section card",
+  "@galleryCards": {
+    "description": "Developer gallery section."
+  },
+  "galleryEmptyState": "Empty state",
+  "@galleryEmptyState": {
+    "description": "Developer gallery section."
+  },
+  "galleryTextFields": "Text fields",
+  "@galleryTextFields": {
+    "description": "Developer gallery section."
+  },
+  "galleryLoading": "Loading view",
+  "@galleryLoading": {
+    "description": "Developer gallery section."
+  },
+  "galleryErrors": "Error views",
+  "@galleryErrors": {
+    "description": "Developer gallery section."
+  },
+  "galleryPrimary": "Primary action",
+  "@galleryPrimary": {
+    "description": "Developer gallery sample button label."
+  },
+  "gallerySecondary": "Secondary action",
+  "@gallerySecondary": {
+    "description": "Developer gallery sample button label."
+  },
+  "galleryText": "Text action",
+  "@galleryText": {
+    "description": "Developer gallery sample button label."
+  },
+  "galleryDisabled": "Disabled",
+  "@galleryDisabled": {
+    "description": "Developer gallery sample button label."
+  },
+  "gallerySampleTitle": "Next check-in",
+  "@gallerySampleTitle": {
+    "description": "Developer gallery sample card title."
+  },
+  "gallerySampleBody": "Tomorrow · 8:00 PM",
+  "@gallerySampleBody": {
+    "description": "Developer gallery sample card body."
+  },
+  "galleryBannerInfo": "Mom accepted your invitation.",
+  "@galleryBannerInfo": {
+    "description": "Developer gallery sample info banner."
+  },
+  "galleryBannerAttentionTitle": "Check-in due at 8:00 PM",
+  "@galleryBannerAttentionTitle": {
+    "description": "Developer gallery sample attention banner title."
+  },
+  "galleryBannerAttention": "You missed your 8:00 PM check-in. Mom will be notified at 11:00 PM unless you check in.",
+  "@galleryBannerAttention": {
+    "description": "Developer gallery sample attention banner."
+  },
+  "galleryBannerEscalationTitle": "Your contacts have been notified",
+  "@galleryBannerEscalationTitle": {
+    "description": "Developer gallery sample escalation banner title."
+  },
+  "galleryBannerEscalation": "Mom was notified at 11:00 PM. If you're safe, tap I'M SAFE.",
+  "@galleryBannerEscalation": {
+    "description": "Developer gallery sample escalation banner."
+  },
+  "galleryFieldLabel": "Email",
+  "@galleryFieldLabel": {
+    "description": "Developer gallery sample text field label."
+  },
+  "galleryFieldHint": "you@example.com",
+  "@galleryFieldHint": {
+    "description": "Developer gallery sample text field hint."
+  },
+  "galleryFieldError": "Enter a valid email address.",
+  "@galleryFieldError": {
+    "description": "Developer gallery sample field error."
+  },
+  "galleryPasswordLabel": "Password",
+  "@galleryPasswordLabel": {
+    "description": "Developer gallery sample password field label."
+  },
+  "cancel": "Cancel",
+  "@cancel": {
+    "description": "Dismisses a dialog or sheet without doing anything."
+  },
+  "actionContinue": "Continue",
+  "@actionContinue": {
+    "description": "Moves to the next step."
+  },
+  "actionSave": "Save",
+  "@actionSave": {
+    "description": "Saves changes in a form."
+  },
+  "actionSkipForNow": "Skip for now",
+  "@actionSkipForNow": {
+    "description": "Skips an optional onboarding step."
+  },
+  "valueNotSet": "Not set",
+  "@valueNotSet": {
+    "description": "Shown for an optional profile value that is empty."
+  },
+  "languageEnglish": "English",
+  "@languageEnglish": {
+    "description": "The only supported language in the first release."
+  },
+  "statusDone": "Done",
+  "@statusDone": {
+    "description": "Accessibility label of a completed checklist item."
+  },
+  "statusNotDone": "Not done yet",
+  "@statusNotDone": {
+    "description": "Accessibility label of an unfinished checklist item."
+  },
+  "welcomeSkip": "Skip",
+  "@welcomeSkip": {
+    "description": "Skips the three introduction cards and goes to account creation."
+  },
+  "welcomeNext": "Next",
+  "@welcomeNext": {
+    "description": "Shows the next introduction card."
+  },
+  "welcomeCard1": "Prepare today for what someone may need tomorrow.",
+  "@welcomeCard1": {
+    "description": "First welcome card (USER_FLOWS 3.1)."
+  },
+  "welcomeCard2": "Check in with one tap. If you don't, the people you choose are told.",
+  "@welcomeCard2": {
+    "description": "Second welcome card."
+  },
+  "welcomeCard3": "You decide who gets what, and when. You can stop it anytime.",
+  "@welcomeCard3": {
+    "description": "Third welcome card."
+  },
+  "welcomeCardPosition": "Card {current} of {total}",
+  "@welcomeCardPosition": {
+    "description": "Accessibility label of a welcome card.",
+    "placeholders": {
+      "current": {
+        "type": "int",
+        "example": "1"
+      },
+      "total": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  },
+  "fieldName": "Your name",
+  "@fieldName": {
+    "description": "Label of the display-name field."
+  },
+  "fieldEmail": "Email",
+  "@fieldEmail": {
+    "description": "Label of an email field."
+  },
+  "fieldNewEmail": "New email address",
+  "@fieldNewEmail": {
+    "description": "Label of the new-email field when changing the email."
+  },
+  "fieldPassword": "Password",
+  "@fieldPassword": {
+    "description": "Label of a password field."
+  },
+  "fieldCurrentPassword": "Current password",
+  "@fieldCurrentPassword": {
+    "description": "Label of the current-password field."
+  },
+  "fieldNewPassword": "New password",
+  "@fieldNewPassword": {
+    "description": "Label of the new-password field."
+  },
+  "fieldConfirmPassword": "Confirm new password",
+  "@fieldConfirmPassword": {
+    "description": "Label of the repeat-password field."
+  },
+  "fieldCode": "6-digit code",
+  "@fieldCode": {
+    "description": "Label of the verification-code field."
+  },
+  "fieldPhone": "Phone (optional)",
+  "@fieldPhone": {
+    "description": "Label of the phone field in the profile."
+  },
+  "fieldPhoneHint": "+919876543210",
+  "@fieldPhoneHint": {
+    "description": "Example phone number in international format."
+  },
+  "fieldCountry": "Country",
+  "@fieldCountry": {
+    "description": "Label of the country row in the profile."
+  },
+  "fieldTimezone": "Timezone",
+  "@fieldTimezone": {
+    "description": "Label of the timezone row in the profile."
+  },
+  "fieldLanguage": "Language",
+  "@fieldLanguage": {
+    "description": "Label of the language row in the profile."
+  },
+  "fieldContactName": "Their name",
+  "@fieldContactName": {
+    "description": "Label of the contact-name field."
+  },
+  "fieldContactEmail": "Their email",
+  "@fieldContactEmail": {
+    "description": "Label of the contact-email field."
+  },
+  "fieldRelationship": "Relationship",
+  "@fieldRelationship": {
+    "description": "Heading above the relationship choices."
+  },
+  "fieldInstructionTitle": "Title",
+  "@fieldInstructionTitle": {
+    "description": "Label of the instruction title field."
+  },
+  "fieldInstructionBody": "What should they know?",
+  "@fieldInstructionBody": {
+    "description": "Label of the instruction body field."
+  },
+  "fieldRequired": "Please fill this in.",
+  "@fieldRequired": {
+    "description": "Validation: empty required field."
+  },
+  "fieldInvalidEmail": "Enter a valid email address.",
+  "@fieldInvalidEmail": {
+    "description": "Validation: malformed email."
+  },
+  "fieldPasswordTooShort": "Use at least 10 characters.",
+  "@fieldPasswordTooShort": {
+    "description": "Validation: password too short."
+  },
+  "fieldPasswordTooLong": "Use at most 128 characters.",
+  "@fieldPasswordTooLong": {
+    "description": "Validation: password too long."
+  },
+  "fieldPasswordMatchesEmail": "Choose something other than your email address.",
+  "@fieldPasswordMatchesEmail": {
+    "description": "Validation: password equals the email."
+  },
+  "fieldPasswordTooCommon": "That password is too common. Try a few unrelated words instead.",
+  "@fieldPasswordTooCommon": {
+    "description": "Validation: password on the blocklist."
+  },
+  "fieldPasswordsDiffer": "The two passwords don't match.",
+  "@fieldPasswordsDiffer": {
+    "description": "Validation: confirmation differs."
+  },
+  "fieldSamePassword": "Choose a password different from your current one.",
+  "@fieldSamePassword": {
+    "description": "Validation: new password equals the current one."
+  },
+  "fieldSameEmail": "That is already your email address.",
+  "@fieldSameEmail": {
+    "description": "Validation: new email equals the current one."
+  },
+  "fieldNameTooLong": "Use at most 80 characters.",
+  "@fieldNameTooLong": {
+    "description": "Validation: name too long."
+  },
+  "fieldNameInvalid": "That name contains characters we can't use.",
+  "@fieldNameInvalid": {
+    "description": "Validation: name has control characters."
+  },
+  "fieldNameHasLink": "Names can't contain links, web addresses or emails.",
+  "@fieldNameHasLink": {
+    "description": "Validation: name looks like a link."
+  },
+  "fieldNameReserved": "Names can't contain the word AfterMe.",
+  "@fieldNameReserved": {
+    "description": "Validation: reserved word in the name."
+  },
+  "fieldInvalidPhone": "Use international format, for example +919876543210.",
+  "@fieldInvalidPhone": {
+    "description": "Validation: phone not in E.164 format."
+  },
+  "fieldInvalidCode": "Enter the 6-digit code from the email.",
+  "@fieldInvalidCode": {
+    "description": "Validation: code is not six digits."
+  },
+  "fieldInvalidTimezone": "Choose a timezone from the list.",
+  "@fieldInvalidTimezone": {
+    "description": "Validation: timezone rejected."
+  },
+  "fieldInvalidCountry": "Choose a country from the list.",
+  "@fieldInvalidCountry": {
+    "description": "Validation: country rejected."
+  },
+  "passwordHintEmpty": "At least 10 characters. A few unrelated words work well.",
+  "@passwordHintEmpty": {
+    "description": "Hint under an empty new-password field."
+  },
+  "passwordHintTooShort": "Keep going. You need at least 10 characters.",
+  "@passwordHintTooShort": {
+    "description": "Hint while the new password is too short."
+  },
+  "passwordHintFine": "That works. A longer password is harder to guess.",
+  "@passwordHintFine": {
+    "description": "Hint for an acceptable password."
+  },
+  "passwordHintStrong": "Strong. Easy for you to remember is best.",
+  "@passwordHintStrong": {
+    "description": "Hint for a long password."
+  },
+  "pickerSearch": "Search",
+  "@pickerSearch": {
+    "description": "Label of the search field in pickers."
+  },
+  "pickerNoResults": "Nothing matches your search.",
+  "@pickerNoResults": {
+    "description": "Empty picker result."
+  },
+  "pickerSelected": "Selected",
+  "@pickerSelected": {
+    "description": "Accessibility label of the checkmark on the selected picker row."
+  },
+  "pickTimezoneTitle": "Choose your timezone",
+  "@pickTimezoneTitle": {
+    "description": "Title of the timezone picker."
+  },
+  "pickCountryTitle": "Choose your country",
+  "@pickCountryTitle": {
+    "description": "Title of the country picker."
+  },
+  "pickCountryNone": "Not set",
+  "@pickCountryNone": {
+    "description": "Row that clears the country."
+  },
+  "timezoneChange": "Change",
+  "@timezoneChange": {
+    "description": "Button that opens the timezone picker."
+  },
+  "createAccountTitle": "Create account",
+  "@createAccountTitle": {
+    "description": "App bar title of account creation."
+  },
+  "createAccountHeading": "Let's set you up",
+  "@createAccountHeading": {
+    "description": "Heading of account creation."
+  },
+  "createAccountIntro": "It takes about five minutes. We'll send a code to your email to confirm it's yours.",
+  "@createAccountIntro": {
+    "description": "Intro text of account creation."
+  },
+  "createAccountSubmit": "Send my code",
+  "@createAccountSubmit": {
+    "description": "Primary action of account creation."
+  },
+  "createAccountHaveAccount": "I already have an account",
+  "@createAccountHaveAccount": {
+    "description": "Link from account creation to sign-in."
+  },
+  "createAccountPasswordNote": "Your password is sent securely to AfterMe and kept only in scrambled (hashed) form. We can never read it.",
+  "@createAccountPasswordNote": {
+    "description": "Reassurance under the sign-up form."
+  },
+  "consentAdult": "I am 18 or older.",
+  "@consentAdult": {
+    "description": "Age confirmation checkbox."
+  },
+  "consentTerms": "I agree to the Terms of Service and the Privacy Policy.",
+  "@consentTerms": {
+    "description": "Consent checkbox."
+  },
+  "consentRequired": "Please confirm both to continue.",
+  "@consentRequired": {
+    "description": "Shown when the consent boxes are not both ticked."
+  },
+  "legalTerms": "Terms of Service",
+  "@legalTerms": {
+    "description": "Link to the terms."
+  },
+  "legalPrivacy": "Privacy Policy",
+  "@legalPrivacy": {
+    "description": "Link to the privacy policy."
+  },
+  "legalOpenFailed": "We couldn't open that page. Check your connection and try again.",
+  "@legalOpenFailed": {
+    "description": "Shown when the browser could not open a legal page."
+  },
+  "codeTitle": "Check your email",
+  "@codeTitle": {
+    "description": "App bar title of the code screen."
+  },
+  "codeHeading": "Enter your code",
+  "@codeHeading": {
+    "description": "Heading of the code screen."
+  },
+  "codeVerify": "Confirm",
+  "@codeVerify": {
+    "description": "Primary action of the code screen."
+  },
+  "codeWrong": "That code is wrong or has expired. Check it, or ask for a new one.",
+  "@codeWrong": {
+    "description": "Shown after a rejected code."
+  },
+  "codeResent": "A new code is on its way.",
+  "@codeResent": {
+    "description": "Snackbar after resending the code."
+  },
+  "resendCode": "Send a new code",
+  "@resendCode": {
+    "description": "Resend button, available after the countdown."
+  },
+  "resendCountdown": "You can ask for a new code in {time}",
+  "@resendCountdown": {
+    "description": "Countdown before the resend button appears.",
+    "placeholders": {
+      "time": {
+        "type": "String",
+        "example": "0:42"
+      }
+    }
+  },
+  "codeWrongEmail": "Wrong email address?",
+  "@codeWrongEmail": {
+    "description": "Goes back to change the email."
+  },
+  "codeSpamHint": "Nothing yet? Check your spam folder. Emails can take a minute to arrive.",
+  "@codeSpamHint": {
+    "description": "Hint on the code screen."
+  },
+  "signInHeading": "Welcome back",
+  "@signInHeading": {
+    "description": "Heading of the sign-in screen."
+  },
+  "signInSubmit": "Sign in",
+  "@signInSubmit": {
+    "description": "Primary action of the sign-in screen."
+  },
+  "signInForgot": "Forgot your password?",
+  "@signInForgot": {
+    "description": "Link to the forgot-password screen."
+  },
+  "signInCreateAccount": "Create an account",
+  "@signInCreateAccount": {
+    "description": "Link from sign-in to account creation."
+  },
+  "signInWrongDetails": "That email and password didn't match. Check them and try again.",
+  "@signInWrongDetails": {
+    "description": "Shown after a failed sign-in."
+  },
+  "forgotTitle": "Reset password",
+  "@forgotTitle": {
+    "description": "App bar title of forgot password."
+  },
+  "forgotHeading": "Forgot your password?",
+  "@forgotHeading": {
+    "description": "Heading of forgot password."
+  },
+  "forgotIntro": "Enter your email address and we'll send you a link to choose a new password.",
+  "@forgotIntro": {
+    "description": "Intro of forgot password."
+  },
+  "forgotSubmit": "Send the link",
+  "@forgotSubmit": {
+    "description": "Primary action of forgot password."
+  },
+  "forgotSentHeading": "Check your email",
+  "@forgotSentHeading": {
+    "description": "Heading after requesting the link."
+  },
+  "forgotSentSteps": "The link works for 30 minutes and opens in your browser. After you choose a new password, come back here and sign in.",
+  "@forgotSentSteps": {
+    "description": "What happens next."
+  },
+  "forgotBackToSignIn": "Back to sign in",
+  "@forgotBackToSignIn": {
+    "description": "Leaves forgot password."
+  },
+  "forgotDifferentEmail": "Use a different email",
+  "@forgotDifferentEmail": {
+    "description": "Returns to the forgot-password form."
+  },
+  "reauthTitle": "Confirm it's you",
+  "@reauthTitle": {
+    "description": "Title of the re-authentication sheet."
+  },
+  "reauthBody": "For your security, enter your password to continue.",
+  "@reauthBody": {
+    "description": "Body of the re-authentication sheet."
+  },
+  "reauthConfirm": "Confirm",
+  "@reauthConfirm": {
+    "description": "Primary action of the re-authentication sheet."
+  },
+  "reauthWrongPassword": "That password didn't match. Try again.",
+  "@reauthWrongPassword": {
+    "description": "Shown after a wrong password in a re-authentication prompt."
+  },
+  "settingsSectionAccount": "Account",
+  "@settingsSectionAccount": {
+    "description": "Section heading in settings."
+  },
+  "settingsSectionHelp": "Help and about",
+  "@settingsSectionHelp": {
+    "description": "Section heading in settings."
+  },
+  "settingsProfile": "Profile",
+  "@settingsProfile": {
+    "description": "Settings row."
+  },
+  "settingsSecurity": "Security",
+  "@settingsSecurity": {
+    "description": "Settings row."
+  },
+  "settingsSecuritySubtitle": "Password, email, devices, app lock",
+  "@settingsSecuritySubtitle": {
+    "description": "Subtitle of the Security row."
+  },
+  "settingsNotifications": "Notifications",
+  "@settingsNotifications": {
+    "description": "Settings row."
+  },
+  "settingsAbout": "About AfterMe",
+  "@settingsAbout": {
+    "description": "Settings row."
+  },
+  "aboutLicenses": "Open-source licences",
+  "@aboutLicenses": {
+    "description": "Row that opens the licences page."
+  },
+  "signOut": "Sign out",
+  "@signOut": {
+    "description": "Sign-out action."
+  },
+  "signOutConfirmTitle": "Sign out of this phone?",
+  "@signOutConfirmTitle": {
+    "description": "Dialog title."
+  },
+  "signOutConfirmBody": "Your plan keeps running while you're signed out, so sign in again before your next check-in.",
+  "@signOutConfirmBody": {
+    "description": "Dialog body."
+  },
+  "signOutConfirm": "Sign out",
+  "@signOutConfirm": {
+    "description": "Dialog confirm button."
+  },
+  "profileSaved": "Profile saved.",
+  "@profileSaved": {
+    "description": "Snackbar after saving the profile."
+  },
+  "securityChangePassword": "Change password",
+  "@securityChangePassword": {
+    "description": "Security row."
+  },
+  "securityChangeEmail": "Change email",
+  "@securityChangeEmail": {
+    "description": "Security row."
+  },
+  "securitySessions": "Active sessions",
+  "@securitySessions": {
+    "description": "Security row."
+  },
+  "securitySessionsSubtitle": "Where you're signed in",
+  "@securitySessionsSubtitle": {
+    "description": "Subtitle of the sessions row."
+  },
+  "securityAppLock": "App lock",
+  "@securityAppLock": {
+    "description": "Security row."
+  },
+  "logoutAll": "Log out everywhere",
+  "@logoutAll": {
+    "description": "Signs out every device."
+  },
+  "logoutAllHint": "This signs you out on all your devices, including this one.",
+  "@logoutAllHint": {
+    "description": "Hint under the log-out-everywhere button."
+  },
+  "logoutAllTitle": "Log out everywhere?",
+  "@logoutAllTitle": {
+    "description": "Dialog title."
+  },
+  "logoutAllBody": "Every device, including this phone, will be signed out. You can sign in again anytime.",
+  "@logoutAllBody": {
+    "description": "Dialog body."
+  },
+  "logoutAllConfirm": "Log out everywhere",
+  "@logoutAllConfirm": {
+    "description": "Dialog confirm."
+  },
+  "changePasswordIntro": "Choose a new password. You'll stay signed in on this phone.",
+  "@changePasswordIntro": {
+    "description": "Intro of change password."
+  },
+  "changePasswordEffect": "Your other devices will be signed out, and we'll email you to confirm the change.",
+  "@changePasswordEffect": {
+    "description": "What changing the password does."
+  },
+  "changePasswordSubmit": "Change password",
+  "@changePasswordSubmit": {
+    "description": "Primary action."
+  },
+  "changePasswordDone": "Password changed. Your other devices were signed out.",
+  "@changePasswordDone": {
+    "description": "Snackbar."
+  },
+  "changeEmailIntro": "Enter the new address. We'll send it a code to confirm it's yours.",
+  "@changeEmailIntro": {
+    "description": "Intro of change email."
+  },
+  "changeEmailSend": "Send the code",
+  "@changeEmailSend": {
+    "description": "Primary action."
+  },
+  "changeEmailNotice": "We'll also let your current address know about this request.",
+  "@changeEmailNotice": {
+    "description": "Notice."
+  },
+  "changeEmailCodeHeading": "Enter the code",
+  "@changeEmailCodeHeading": {
+    "description": "Heading of the code step."
+  },
+  "changeEmailVerify": "Confirm new email",
+  "@changeEmailVerify": {
+    "description": "Primary action of the code step."
+  },
+  "changeEmailDifferent": "Use a different address",
+  "@changeEmailDifferent": {
+    "description": "Returns to the address step."
+  },
+  "changeEmailDone": "Your email address was updated.",
+  "@changeEmailDone": {
+    "description": "Snackbar."
+  },
+  "sessionsIntro": "These are the devices where your account is signed in. Sign out any you don't recognise.",
+  "@sessionsIntro": {
+    "description": "Intro of the sessions screen."
+  },
+  "sessionsEmpty": "No other sessions.",
+  "@sessionsEmpty": {
+    "description": "Empty sessions list."
+  },
+  "sessionThisDevice": "This device",
+  "@sessionThisDevice": {
+    "description": "Marks the current session."
+  },
+  "sessionWeb": "Web check-in",
+  "@sessionWeb": {
+    "description": "A session that is not an app."
+  },
+  "sessionDevice": "{platform} app",
+  "@sessionDevice": {
+    "description": "Session title.",
+    "placeholders": {
+      "platform": {
+        "type": "String",
+        "example": "android"
+      }
+    }
+  },
+  "sessionDeviceVersion": "{platform} app, version {version}",
+  "@sessionDeviceVersion": {
+    "description": "Session title with the app version.",
+    "placeholders": {
+      "platform": {
+        "type": "String",
+        "example": "android"
+      },
+      "version": {
+        "type": "String",
+        "example": "1.0.0+12"
+      }
+    }
+  },
+  "sessionLastActive": "Last active {when}",
+  "@sessionLastActive": {
+    "description": "Session last-used time.",
+    "placeholders": {
+      "when": {
+        "type": "String",
+        "example": "8 Oct 2026, 7:31 PM"
+      }
+    }
+  },
+  "sessionRevoke": "Sign out this device",
+  "@sessionRevoke": {
+    "description": "Revokes one session."
+  },
+  "sessionPlatformOther": "Device",
+  "@sessionPlatformOther": {
+    "description": "Neutral name for a session whose platform is not one of Android, iOS or Web."
+  },
+  "sessionRevokeFor": "Sign out {device}, last active {when}",
+  "@sessionRevokeFor": {
+    "description": "Spoken label of the sign-out button on one device card.",
+    "placeholders": {
+      "device": {
+        "type": "String"
+      },
+      "when": {
+        "type": "String"
+      }
+    }
+  },
+  "sessionRevokeTitle": "Sign out this device?",
+  "@sessionRevokeTitle": {
+    "description": "Dialog title."
+  },
+  "sessionRevokeBody": "That device will need the password to sign in again.",
+  "@sessionRevokeBody": {
+    "description": "Dialog body."
+  },
+  "sessionRevoked": "Device signed out.",
+  "@sessionRevoked": {
+    "description": "Snackbar."
+  },
+  "appLockIntro": "Ask for your fingerprint, face or phone screen lock when you open AfterMe. It keeps others out if they pick up your phone.",
+  "@appLockIntro": {
+    "description": "Intro of app lock settings."
+  },
+  "appLockSwitch": "Require unlock",
+  "@appLockSwitch": {
+    "description": "Switch label."
+  },
+  "appLockOn": "On",
+  "@appLockOn": {
+    "description": "App lock state."
+  },
+  "appLockOff": "Off",
+  "@appLockOff": {
+    "description": "App lock state."
+  },
+  "appLockTimeoutTitle": "Lock after",
+  "@appLockTimeoutTitle": {
+    "description": "Heading of the timeout choices."
+  },
+  "appLockTimeoutNow": "Immediately when I leave the app",
+  "@appLockTimeoutNow": {
+    "description": "Timeout choice."
+  },
+  "appLockTimeoutOne": "After 1 minute away",
+  "@appLockTimeoutOne": {
+    "description": "Timeout choice."
+  },
+  "appLockTimeoutFive": "After 5 minutes away",
+  "@appLockTimeoutFive": {
+    "description": "Timeout choice."
+  },
+  "appLockFootnote": "App lock protects what is on this phone. Your plan keeps running either way.",
+  "@appLockFootnote": {
+    "description": "Footnote."
+  },
+  "appLockNoScreenLock": "This phone has no screen lock yet. Set a PIN, pattern or fingerprint in your phone's settings, then come back.",
+  "@appLockNoScreenLock": {
+    "description": "Shown when app lock cannot be turned on."
+  },
+  "appLockNotConfirmed": "We couldn't confirm it was you, so nothing changed.",
+  "@appLockNotConfirmed": {
+    "description": "Shown when the unlock prompt was dismissed."
+  },
+  "appLockEnableReason": "Confirm it's you to turn on app lock",
+  "@appLockEnableReason": {
+    "description": "Reason text in the system prompt."
+  },
+  "appLockDisableReason": "Confirm it's you to turn off app lock",
+  "@appLockDisableReason": {
+    "description": "Reason text in the system prompt."
+  },
+  "appLockUnlockReason": "Unlock AfterMe",
+  "@appLockUnlockReason": {
+    "description": "Reason text in the system prompt."
+  },
+  "lockTitle": "AfterMe is locked",
+  "@lockTitle": {
+    "description": "Lock screen title."
+  },
+  "lockBody": "Unlock with your fingerprint, face or screen lock to continue.",
+  "@lockBody": {
+    "description": "Lock screen body."
+  },
+  "lockUnlock": "Unlock",
+  "@lockUnlock": {
+    "description": "Lock screen button."
+  },
+  "lockCanceled": "Unlock whenever you're ready.",
+  "@lockCanceled": {
+    "description": "Lock screen message after dismissing the prompt."
+  },
+  "lockFailed": "That didn't work. Try again.",
+  "@lockFailed": {
+    "description": "Lock screen message after a failed attempt."
+  },
+  "lockLockedOut": "Too many attempts. Wait a moment, then try again.",
+  "@lockLockedOut": {
+    "description": "Lock screen message when the system locks biometrics."
+  },
+  "lockUnavailable": "This phone no longer has a screen lock, so AfterMe can't check who is opening it. You can turn app lock off, or set a screen lock in your phone's settings.",
+  "@lockUnavailable": {
+    "description": "Lock screen when no lock is available."
+  },
+  "lockUnavailableNow": "The unlock screen couldn't be shown just now. Try again.",
+  "@lockUnavailableNow": {
+    "description": "Lock screen message when the system prompt could not be shown right now."
+  },
+  "lockTurnOff": "Turn off app lock and continue",
+  "@lockTurnOff": {
+    "description": "Lock screen: explicit choice to continue unlocked."
+  },
+  "notificationsPromptTitle": "Reminders",
+  "@notificationsPromptTitle": {
+    "description": "Heading of the notification prompt card."
+  },
+  "notificationsPromptBody": "AfterMe can remind you shortly before a check-in is due, so a busy day never costs you a missed one. Reminders appear as notifications on this phone.",
+  "@notificationsPromptBody": {
+    "description": "Pre-prompt explanation."
+  },
+  "notificationsAllow": "Allow notifications",
+  "@notificationsAllow": {
+    "description": "Button that shows the system permission dialog."
+  },
+  "notificationsOpenSettings": "Open phone settings",
+  "@notificationsOpenSettings": {
+    "description": "Button that opens the system settings."
+  },
+  "notificationsBlockedBody": "Android won't show the question again. You can turn notifications on in your phone's settings.",
+  "@notificationsBlockedBody": {
+    "description": "Shown when the permission is permanently denied."
+  },
+  "notificationsStatusOn": "Notifications are on.",
+  "@notificationsStatusOn": {
+    "description": "Permission status."
+  },
+  "notificationsStatusOff": "Notifications are off.",
+  "@notificationsStatusOff": {
+    "description": "Permission status."
+  },
+  "notificationsStatusBlocked": "Notifications are blocked in your phone's settings.",
+  "@notificationsStatusBlocked": {
+    "description": "Permission status."
+  },
+  "notificationsStatusUnknown": "Checking notification settings…",
+  "@notificationsStatusUnknown": {
+    "description": "Permission status while loading."
+  },
+  "notificationsEmailAlways": "Emails about a missed check-in are always on, because they are how your plan reaches you if a phone notification doesn't.",
+  "@notificationsEmailAlways": {
+    "description": "Explains that incident emails cannot be turned off."
+  },
+  "onboardingTitle": "Set up your plan",
+  "@onboardingTitle": {
+    "description": "App bar title of onboarding steps."
+  },
+  "onboardingStepOf": "Step {current} of {total}",
+  "@onboardingStepOf": {
+    "description": "Onboarding progress.",
+    "placeholders": {
+      "current": {
+        "type": "int",
+        "example": "4"
+      },
+      "total": {
+        "type": "int",
+        "example": "9"
+      }
+    }
+  },
+  "contactStepTitle": "Who should we tell if you don't check in?",
+  "@contactStepTitle": {
+    "description": "Contact step heading."
+  },
+  "contactStepBody": "Choose someone you trust. They'll get an invitation to accept first, and nothing is sent to them until they do.",
+  "@contactStepBody": {
+    "description": "Contact step body."
+  },
+  "contactStepInviteNote": "They don't need the app. They'll get an email, and they can say no at any time.",
+  "@contactStepInviteNote": {
+    "description": "Contact step note."
+  },
+  "contactStepSave": "Save and continue",
+  "@contactStepSave": {
+    "description": "Contact step primary action."
+  },
+  "contactStepInvited": "{name} will get an invitation to accept.",
+  "@contactStepInvited": {
+    "description": "Contact step when a contact exists.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Mom"
+      }
+    }
+  },
+  "contactPickFromPhone": "Pick from my contacts",
+  "@contactPickFromPhone": {
+    "description": "Opens the system contact picker."
+  },
+  "contactPickUnavailable": "We couldn't open your contacts here. You can type their details instead.",
+  "@contactPickUnavailable": {
+    "description": "Shown when no picker is available."
+  },
+  "relationshipParent": "Parent",
+  "@relationshipParent": {
+    "description": "Relationship chip."
+  },
+  "relationshipPartner": "Partner",
+  "@relationshipPartner": {
+    "description": "Relationship chip."
+  },
+  "relationshipSibling": "Sibling",
+  "@relationshipSibling": {
+    "description": "Relationship chip."
+  },
+  "relationshipChild": "Child",
+  "@relationshipChild": {
+    "description": "Relationship chip."
+  },
+  "relationshipFriend": "Friend",
+  "@relationshipFriend": {
+    "description": "Relationship chip."
+  },
+  "relationshipOther": "Other",
+  "@relationshipOther": {
+    "description": "Relationship chip."
+  },
+  "relationshipRequired": "Choose how you know them.",
+  "@relationshipRequired": {
+    "description": "Validation."
+  },
+  "scheduleStepTitle": "When should you check in?",
+  "@scheduleStepTitle": {
+    "description": "Schedule step heading."
+  },
+  "scheduleStepBody": "Pick what suits your day. You can change it later.",
+  "@scheduleStepBody": {
+    "description": "Schedule step body."
+  },
+  "scheduleCheckInEvery": "Check in",
+  "@scheduleCheckInEvery": {
+    "description": "Heading above interval choices."
+  },
+  "scheduleBy": "by",
+  "@scheduleBy": {
+    "description": "Heading above the time button."
+  },
+  "scheduleStepSave": "Save schedule",
+  "@scheduleStepSave": {
+    "description": "Schedule step primary action."
+  },
+  "scheduleSummary": "Check in {interval} by {time}.",
+  "@scheduleSummary": {
+    "description": "One-sentence summary of the schedule.",
+    "placeholders": {
+      "interval": {
+        "type": "String",
+        "example": "every day"
+      },
+      "time": {
+        "type": "String",
+        "example": "8:00 PM"
+      }
+    }
+  },
+  "scheduleReminder": "We'll remind you an hour before.",
+  "@scheduleReminder": {
+    "description": "Schedule note."
+  },
+  "scheduleTimezoneNote": "Times are in {timezone}.",
+  "@scheduleTimezoneNote": {
+    "description": "Schedule timezone note.",
+    "placeholders": {
+      "timezone": {
+        "type": "String",
+        "example": "Asia/Kolkata"
+      }
+    }
+  },
+  "intervalEveryDay": "Every day",
+  "@intervalEveryDay": {
+    "description": "Interval choice."
+  },
+  "intervalEveryWeek": "Every week",
+  "@intervalEveryWeek": {
+    "description": "Interval choice."
+  },
+  "intervalEveryNDays": "Every {days} days",
+  "@intervalEveryNDays": {
+    "description": "Interval choice.",
+    "placeholders": {
+      "days": {
+        "type": "int",
+        "example": "2"
+      }
+    }
+  },
+  "planStepTitle": "Your plan",
+  "@planStepTitle": {
+    "description": "Plan step heading."
+  },
+  "planStepBody": "We've filled in a sensible plan. You can change it later.",
+  "@planStepBody": {
+    "description": "Plan step body."
+  },
+  "planStepUse": "Use this plan",
+  "@planStepUse": {
+    "description": "Plan step primary action."
+  },
+  "planStandardName": "Standard plan",
+  "@planStandardName": {
+    "description": "Plan preset name."
+  },
+  "planStandardDescription": "We remind you first. If you still haven't checked in after a few hours, your trusted contact is told.",
+  "@planStandardDescription": {
+    "description": "Plan preset description."
+  },
+  "planGraceTitle": "How long should we wait before telling anyone?",
+  "@planGraceTitle": {
+    "description": "Heading above the grace choices."
+  },
+  "planPreviewTitle": "What would happen",
+  "@planPreviewTitle": {
+    "description": "Heading above the plan preview."
+  },
+  "planPreviewMissed": "If you miss {time}, we remind you first.",
+  "@planPreviewMissed": {
+    "description": "Preview line.",
+    "placeholders": {
+      "time": {
+        "type": "String",
+        "example": "8:00 PM"
+      }
+    }
+  },
+  "planPreviewNotify": "{count, plural, =1{At {time}, {names} is notified.} other{At {time}, {names} are notified.}}",
+  "@planPreviewNotify": {
+    "description": "Preview line: who is notified when.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "1"
+      },
+      "time": {
+        "type": "String",
+        "example": "11:00 PM"
+      },
+      "names": {
+        "type": "String",
+        "example": "Mom"
+      }
+    }
+  },
+  "planPreviewStop": "Checking in before then stops it.",
+  "@planPreviewStop": {
+    "description": "Preview line."
+  },
+  "planNoContact": "You haven't added a trusted contact yet, so nobody would be told. Add one to complete your plan.",
+  "@planNoContact": {
+    "description": "Shown in the plan step without contacts."
+  },
+  "planAddContact": "Add a trusted contact",
+  "@planAddContact": {
+    "description": "Button back to the contact step."
+  },
+  "namesJoined": "{first} and {last}",
+  "@namesJoined": {
+    "description": "Joins names: first part may be a comma-separated list.",
+    "placeholders": {
+      "first": {
+        "type": "String",
+        "example": "Mom, Brother"
+      },
+      "last": {
+        "type": "String",
+        "example": "Sam"
+      }
+    }
+  },
+  "timeNextDay": "{time} the next day",
+  "@timeNextDay": {
+    "description": "A time on the following day.",
+    "placeholders": {
+      "time": {
+        "type": "String",
+        "example": "1:00 AM"
+      }
+    }
+  },
+  "timeDaysLater": "{time}, {days} days later",
+  "@timeDaysLater": {
+    "description": "A time several days later.",
+    "placeholders": {
+      "time": {
+        "type": "String",
+        "example": "8:00 PM"
+      },
+      "days": {
+        "type": "int",
+        "example": "2"
+      }
+    }
+  },
+  "durationMinutes": "{minutes, plural, =1{1 minute} other{{minutes} minutes}}",
+  "@durationMinutes": {
+    "description": "A duration.",
+    "placeholders": {
+      "minutes": {
+        "type": "int",
+        "example": "90"
+      }
+    }
+  },
+  "durationHours": "{hours, plural, =1{1 hour} other{{hours} hours}}",
+  "@durationHours": {
+    "description": "A duration.",
+    "placeholders": {
+      "hours": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  },
+  "durationDays": "{days, plural, =1{1 day} other{{days} days}}",
+  "@durationDays": {
+    "description": "A duration.",
+    "placeholders": {
+      "days": {
+        "type": "int",
+        "example": "1"
+      }
+    }
+  },
+  "instructionStepTitle": "Add a first instruction",
+  "@instructionStepTitle": {
+    "description": "Instruction step heading."
+  },
+  "instructionStepBody": "Write down something someone may need. Pick a starter to begin, or skip this for now.",
+  "@instructionStepBody": {
+    "description": "Instruction step body."
+  },
+  "instructionStepSaved": "Saved: {title}. You can add more later.",
+  "@instructionStepSaved": {
+    "description": "Instruction step when one exists.",
+    "placeholders": {
+      "title": {
+        "type": "String",
+        "example": "Home and keys"
+      }
+    }
+  },
+  "instructionWriteBody": "Change anything you like. Only the people you choose can read it, and only when you've decided.",
+  "@instructionWriteBody": {
+    "description": "Instruction editor body."
+  },
+  "instructionPasswordNote": "Don't write passwords here. Say where they can be found, for example your password manager's emergency access.",
+  "@instructionPasswordNote": {
+    "description": "Guidance note."
+  },
+  "instructionWho": "Who receives this?",
+  "@instructionWho": {
+    "description": "Heading above recipients."
+  },
+  "instructionNoContact": "Add a trusted contact first, then choose who receives this.",
+  "@instructionNoContact": {
+    "description": "Shown without contacts."
+  },
+  "instructionPickRecipient": "Choose at least one person.",
+  "@instructionPickRecipient": {
+    "description": "Validation."
+  },
+  "instructionWhen": "When?",
+  "@instructionWhen": {
+    "description": "Heading above release choices."
+  },
+  "instructionReleaseAfterDays": "{days, plural, =1{If you haven't checked in for 1 day} other{If you haven't checked in for {days} days}}",
+  "@instructionReleaseAfterDays": {
+    "description": "Release choice.",
+    "placeholders": {
+      "days": {
+        "type": "int",
+        "example": "2"
+      }
+    }
+  },
+  "instructionSave": "Save instruction",
+  "@instructionSave": {
+    "description": "Primary action."
+  },
+  "instructionChooseAnother": "Choose a different starter",
+  "@instructionChooseAnother": {
+    "description": "Returns to the template list."
+  },
+  "templateCallFirstTitle": "Who to call first",
+  "@templateCallFirstTitle": {
+    "description": "Starter template."
+  },
+  "templateCallFirstDescription": "The first people to reach, and what to say.",
+  "@templateCallFirstDescription": {
+    "description": "Starter template."
+  },
+  "templateCallFirstStarter": "The first person to call is… Their number is… They will know what to do about…",
+  "@templateCallFirstStarter": {
+    "description": "Starter text."
+  },
+  "templateHomeTitle": "Home and keys",
+  "@templateHomeTitle": {
+    "description": "Starter template."
+  },
+  "templateHomeDescription": "Where keys are, how to get in, what to look after.",
+  "@templateHomeDescription": {
+    "description": "Starter template."
+  },
+  "templateHomeStarter": "A spare key is… The alarm code is kept… Bills and mail go to… Please check on…",
+  "@templateHomeStarter": {
+    "description": "Starter text."
+  },
+  "templatePetsTitle": "Pets",
+  "@templatePetsTitle": {
+    "description": "Starter template."
+  },
+  "templatePetsDescription": "Who looks after them, food, vet details.",
+  "@templatePetsDescription": {
+    "description": "Starter template."
+  },
+  "templatePetsStarter": "My pet's name is… Food and routine… The vet is… Someone who can take them in…",
+  "@templatePetsStarter": {
+    "description": "Starter text."
+  },
+  "templateWorkTitle": "Work handover",
+  "@templateWorkTitle": {
+    "description": "Starter template."
+  },
+  "templateWorkDescription": "What colleagues will need to pick up.",
+  "@templateWorkDescription": {
+    "description": "Starter template."
+  },
+  "templateWorkStarter": "The most urgent thing at work is… My manager is… Files and tools are in…",
+  "@templateWorkStarter": {
+    "description": "Starter text."
+  },
+  "templateDocumentsTitle": "Where my documents are",
+  "@templateDocumentsTitle": {
+    "description": "Starter template."
+  },
+  "templateDocumentsDescription": "Important papers and where to find them.",
+  "@templateDocumentsDescription": {
+    "description": "Starter template."
+  },
+  "templateDocumentsStarter": "My important papers are kept… The folder with identity documents is… A copy of my will is with…",
+  "@templateDocumentsStarter": {
+    "description": "Starter text."
+  },
+  "templateInsuranceTitle": "Insurance",
+  "@templateInsuranceTitle": {
+    "description": "Starter template."
+  },
+  "templateInsuranceDescription": "Policies, providers and who to contact.",
+  "@templateInsuranceDescription": {
+    "description": "Starter template."
+  },
+  "templateInsuranceStarter": "My health insurance is with… The policy number is kept… My agent is…",
+  "@templateInsuranceStarter": {
+    "description": "Starter text."
+  },
+  "protectStepTitle": "Stay protected",
+  "@protectStepTitle": {
+    "description": "Protect step heading."
+  },
+  "protectStepBody": "Two quick things that help. Both are optional.",
+  "@protectStepBody": {
+    "description": "Protect step body."
+  },
+  "protectAppLockBody": "Ask for your fingerprint, face or screen lock when AfterMe opens.",
+  "@protectAppLockBody": {
+    "description": "App lock card text."
+  },
+  "batteryTipTitle": "A tip for some phones",
+  "@batteryTipTitle": {
+    "description": "Battery tip heading."
+  },
+  "batteryTipBody": "Some phones stop apps to save battery. If reminders don't arrive, open your phone's battery settings and set AfterMe to \"Unrestricted\" or \"Not optimised\".",
+  "@batteryTipBody": {
+    "description": "Battery tip."
+  },
+  "doneTitle": "Almost there",
+  "@doneTitle": {
+    "description": "Done step heading when the plan is not active."
+  },
+  "doneTitleActive": "You're set",
+  "@doneTitleActive": {
+    "description": "Done step heading."
+  },
+  "doneActiveInvited": "Your plan is active. {name} has been invited, and we'll let you know when they accept.",
+  "@doneActiveInvited": {
+    "description": "Done step message.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Mom"
+      }
+    }
+  },
+  "doneActive": "Your plan is active.",
+  "@doneActive": {
+    "description": "Done step message."
+  },
+  "previewBanner": "Preview: your instructions are not saved yet, so nothing will be shared. Your check-in schedule, trusted contacts and plan are real.",
+  "@previewBanner": {
+    "description": "Banner shown while the instruction service is still a temporary stand-in."
+  },
+  "doneActivePreview": "Check-ins are on. Instructions are still a preview, so nothing will be shared yet.",
+  "@doneActivePreview": {
+    "description": "Done step message while the instructions are a stand-in."
+  },
+  "doneActiveInvitedPreview": "Check-ins are on. {name} has been sent an invitation. Instructions are still a preview, so nothing will be shared yet.",
+  "@doneActiveInvitedPreview": {
+    "description": "Done step message while the instructions are a stand-in.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "doneGoHome": "Go to Home",
+  "@doneGoHome": {
+    "description": "Done step primary action."
+  },
+  "doneReminder": "You can change any of this later from Home and Settings.",
+  "@doneReminder": {
+    "description": "Done step footnote."
+  },
+  "summaryNoContact": "No trusted contact yet",
+  "@summaryNoContact": {
+    "description": "Summary row."
+  },
+  "summaryContact": "{name} ({relationship}) is invited",
+  "@summaryContact": {
+    "description": "Summary row.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Mom"
+      },
+      "relationship": {
+        "type": "String",
+        "example": "parent"
+      }
+    }
+  },
+  "summaryNoSchedule": "No check-in schedule yet",
+  "@summaryNoSchedule": {
+    "description": "Summary row."
+  },
+  "summaryNoPlan": "No plan yet",
+  "@summaryNoPlan": {
+    "description": "Summary row."
+  },
+  "summaryPlan": "We wait {delay} before telling your contact",
+  "@summaryPlan": {
+    "description": "Summary row.",
+    "placeholders": {
+      "delay": {
+        "type": "String",
+        "example": "3 hours"
+      }
+    }
+  },
+  "summaryNoInstruction": "No instruction yet (optional)",
+  "@summaryNoInstruction": {
+    "description": "Summary row."
+  },
+  "summaryInstructions": "{count, plural, =1{1 instruction saved} other{{count} instructions saved}}",
+  "@summaryInstructions": {
+    "description": "Summary row.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "2"
+      }
+    }
+  },
+  "homeGreeting": "Hello, {name}",
+  "@homeGreeting": {
+    "description": "Greeting on Home.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Diwakar"
+      }
+    }
+  },
+  "homeFinishTitle": "Let's finish your plan",
+  "@homeFinishTitle": {
+    "description": "Home header while setup is incomplete (USER_FLOWS 4)."
+  },
+  "homeFinishBody": "A few things are left before your plan can look after you.",
+  "@homeFinishBody": {
+    "description": "Home body while setup is incomplete."
+  },
+  "homeReadyTitle": "Ready to turn on check-ins",
+  "@homeReadyTitle": {
+    "description": "Home header when the checklist is complete but check-ins are still off."
+  },
+  "homeReadyBody": "Everything needed is in place. Turn on check-ins to start.",
+  "@homeReadyBody": {
+    "description": "Home body when the checklist is complete but check-ins are still off."
+  },
+  "checklistContact": "Add a trusted contact",
+  "@checklistContact": {
+    "description": "Checklist item."
+  },
+  "checklistSchedule": "Choose your check-in schedule",
+  "@checklistSchedule": {
+    "description": "Checklist item."
+  },
+  "checklistPlan": "Review your plan",
+  "@checklistPlan": {
+    "description": "Checklist item."
+  },
+  "checklistAdd": "Add",
+  "@checklistAdd": {
+    "description": "Checklist action."
+  },
+  "checklistSetUp": "Set up",
+  "@checklistSetUp": {
+    "description": "Checklist action."
+  },
+  "codeIntro": "We sent a 6-digit code to this address:",
+  "@codeIntro": {
+    "description": "Introduces the email address a sign-up code was sent to (the address is shown on its own line)."
+  },
+  "codeValidity": "The code stays valid for 15 minutes.",
+  "@codeValidity": {
+    "description": "Under the address on the code screen."
+  },
+  "changeEmailCodeIntro": "We sent an email to this address. Enter the 6-digit code it contains.",
+  "@changeEmailCodeIntro": {
+    "description": "Introduces the new address on the change-email code step (the address is shown on its own line)."
+  },
+  "changeEmailCurrent": "Your current email address:",
+  "@changeEmailCurrent": {
+    "description": "Introduces the current address (shown on its own line)."
+  },
+  "forgotSentBody": "If there's an account for this address, we've sent a link to choose a new password.",
+  "@forgotSentBody": {
+    "description": "Confirmation under the address; does not reveal whether an account exists."
+  },
+  "timezoneMismatch": "Your phone's timezone is different from the one in your profile.",
+  "@timezoneMismatch": {
+    "description": "Banner when device and profile timezone differ."
+  },
+  "timezoneUseDevice": "Use my phone's timezone",
+  "@timezoneUseDevice": {
+    "description": "Button that adopts the device timezone."
+  },
+  "timezoneYours": "Your timezone",
+  "@timezoneYours": {
+    "description": "Accessibility label of the timezone row."
+  },
+  "errorContactDuplicate": "You've already added someone with this email address.",
+  "@errorContactDuplicate": {
+    "description": "Error: 409 contact_duplicate."
+  },
+  "errorOwnEmail": "That's your own email address. Choose someone else.",
+  "@errorOwnEmail": {
+    "description": "Error: 422 cannot_be_own_email."
+  },
+  "errorInvalidState": "That isn't possible for this contact right now. Refresh to see their latest status.",
+  "@errorInvalidState": {
+    "description": "Error: 409 invalid_state."
+  },
+  "errorRateLimitedHours": "{hours, plural, =1{Too many attempts. Try again in about 1 hour.} other{Too many attempts. Try again in about {hours} hours.}}",
+  "@errorRateLimitedHours": {
+    "description": "Error: 429 with a Retry-After of an hour or more.",
+    "placeholders": {
+      "hours": {
+        "type": "int"
+      }
+    }
+  },
+  "errorRateLimitedDays": "{days, plural, =1{Too many attempts. Try again in about 1 day.} other{Too many attempts. Try again in about {days} days.}}",
+  "@errorRateLimitedDays": {
+    "description": "Error: 429 with a Retry-After of a day or more.",
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+  "fieldOwnEmail": "That's your own email address. Choose someone else.",
+  "@fieldOwnEmail": {
+    "description": "Inline error: contact email equals the user's own."
+  },
+  "fieldDuplicateEmail": "You've already added someone with this email address.",
+  "@fieldDuplicateEmail": {
+    "description": "Inline error: duplicate contact email."
+  },
+  "fieldLabelTooLong": "Use 40 characters or fewer.",
+  "@fieldLabelTooLong": {
+    "description": "Inline error: relationship label too long."
+  },
+  "fieldLabelInvalid": "That description contains characters we can't use.",
+  "@fieldLabelInvalid": {
+    "description": "Inline error: relationship label has invalid characters."
+  },
+  "fieldLabelHasLink": "The description can't contain links, web addresses or emails.",
+  "@fieldLabelHasLink": {
+    "description": "Inline error: relationship label contains a link."
+  },
+  "relationshipMother": "Mother",
+  "@relationshipMother": {
+    "description": "Relationship chip."
+  },
+  "relationshipFather": "Father",
+  "@relationshipFather": {
+    "description": "Relationship chip."
+  },
+  "relationshipSpouse": "Spouse",
+  "@relationshipSpouse": {
+    "description": "Relationship chip."
+  },
+  "relationshipRelative": "Relative",
+  "@relationshipRelative": {
+    "description": "Relationship chip."
+  },
+  "relationshipNeighbor": "Neighbor",
+  "@relationshipNeighbor": {
+    "description": "Relationship chip."
+  },
+  "relationshipEmployer": "Employer",
+  "@relationshipEmployer": {
+    "description": "Relationship chip."
+  },
+  "relationshipColleague": "Colleague",
+  "@relationshipColleague": {
+    "description": "Relationship chip."
+  },
+  "contactStatusLabel": "Status: {status}",
+  "@contactStatusLabel": {
+    "description": "Screen reader prefix for a contact status chip.",
+    "placeholders": {
+      "status": {
+        "type": "String"
+      }
+    }
+  },
+  "contactStatusPending": "Pending",
+  "@contactStatusPending": {
+    "description": "Status chip: invited, no answer yet."
+  },
+  "contactStatusAccepted": "Accepted",
+  "@contactStatusAccepted": {
+    "description": "Status chip: the contact accepted the invitation."
+  },
+  "contactStatusDeclined": "Declined",
+  "@contactStatusDeclined": {
+    "description": "Status chip: the contact declined."
+  },
+  "contactStatusOptedOut": "Opted out",
+  "@contactStatusOptedOut": {
+    "description": "Status chip: the contact asked not to be contacted."
+  },
+  "contactStatusBounced": "Email could not be delivered",
+  "@contactStatusBounced": {
+    "description": "Status chip: the invitation email bounced."
+  },
+  "contactExplainPending": "Waiting for them to accept.",
+  "@contactExplainPending": {
+    "description": "One-line explanation for a pending contact."
+  },
+  "contactExplainAccepted": "They accepted and can be told if you can't be reached.",
+  "@contactExplainAccepted": {
+    "description": "One-line explanation for an accepted contact."
+  },
+  "contactExplainDeclined": "They said no, so we won't contact them.",
+  "@contactExplainDeclined": {
+    "description": "One-line explanation for a declined contact."
+  },
+  "contactExplainOptedOut": "They asked us not to contact them.",
+  "@contactExplainOptedOut": {
+    "description": "One-line explanation for an opted-out contact."
+  },
+  "contactExplainBounced": "We couldn't deliver the invitation to this address.",
+  "@contactExplainBounced": {
+    "description": "One-line explanation for a bounced contact."
+  },
+  "contactNextPending": "You can resend the invitation or fix the email address.",
+  "@contactNextPending": {
+    "description": "Next action for a pending contact."
+  },
+  "contactNextAccepted": "Nothing to do. You can change their details at any time.",
+  "@contactNextAccepted": {
+    "description": "Next action for an accepted contact."
+  },
+  "contactNextDeclined": "You can remove them or add someone else.",
+  "@contactNextDeclined": {
+    "description": "Next action for a declined contact."
+  },
+  "contactNextOptedOut": "You can remove them or add someone else.",
+  "@contactNextOptedOut": {
+    "description": "Next action for an opted-out contact."
+  },
+  "contactNextBounced": "Check the email address and fix it, or resend the invitation.",
+  "@contactNextBounced": {
+    "description": "Next action for a bounced contact."
+  },
+  "peopleAddContact": "Add contact",
+  "@peopleAddContact": {
+    "description": "Button: add a trusted contact."
+  },
+  "peopleListSemantics": "{name}, {relationship}. {status}. {explanation}",
+  "@peopleListSemantics": {
+    "description": "Screen reader label of a row in the contacts list.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "relationship": {
+        "type": "String"
+      },
+      "status": {
+        "type": "String"
+      },
+      "explanation": {
+        "type": "String"
+      }
+    }
+  },
+  "peopleHintNoneAccepted": "Nobody has accepted yet. Until someone does, no one can be told if you miss a check-in.",
+  "@peopleHintNoneAccepted": {
+    "description": "Readiness hint: contacts exist but none accepted."
+  },
+  "peopleHintPlanPending": "Some of the people in your plan haven't accepted yet. They can only be told once they accept.",
+  "@peopleHintPlanPending": {
+    "description": "Readiness hint: the plan depends on contacts who have not accepted."
+  },
+  "peopleHintProblem": "{count, plural, =1{One trusted contact can't be reached right now.} other{{count} trusted contacts can't be reached right now.}} Open them to see what to do next.",
+  "@peopleHintProblem": {
+    "description": "Readiness hint: contacts declined, opted out or bounced.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "contactAddTitle": "Add a trusted contact",
+  "@contactAddTitle": {
+    "description": "App bar title of the add screen."
+  },
+  "contactEditTitle": "Edit contact",
+  "@contactEditTitle": {
+    "description": "App bar title of the edit screen."
+  },
+  "fieldContactRelationshipLabel": "How do you know them?",
+  "@fieldContactRelationshipLabel": {
+    "description": "Label of the free-text description when 'Other' is chosen."
+  },
+  "fieldContactPhone": "Their phone (optional)",
+  "@fieldContactPhone": {
+    "description": "Label of the contact phone field."
+  },
+  "fieldContactPhoneHelper": "Include the country code, like +14155550123",
+  "@fieldContactPhoneHelper": {
+    "description": "Helper under the contact phone field."
+  },
+  "contactFormInviteExplain": "We will email them an invitation they must accept. They can say no, and nothing is sent to them about you until they accept.",
+  "@contactFormInviteExplain": {
+    "description": "Explanation under the add form."
+  },
+  "contactFormSendInvite": "Save and send invitation",
+  "@contactFormSendInvite": {
+    "description": "Primary action of the add form."
+  },
+  "contactFormSaveChanges": "Save changes",
+  "@contactFormSaveChanges": {
+    "description": "Primary action of the edit form."
+  },
+  "contactFormEmailChangeWarning": "Changing the email address sends a new invitation to the new address. They will need to accept again, and any earlier answer no longer counts.",
+  "@contactFormEmailChangeWarning": {
+    "description": "Warning shown in the edit form when the email changed."
+  },
+  "contactAdded": "Saved. We're emailing the invitation to {email}.",
+  "@contactAdded": {
+    "description": "Snackbar after adding a contact.",
+    "placeholders": {
+      "email": {
+        "type": "String"
+      }
+    }
+  },
+  "contactUpdated": "Changes saved.",
+  "@contactUpdated": {
+    "description": "Snackbar after editing a contact."
+  },
+  "contactUpdatedReinvited": "Saved. We're emailing a new invitation to {email}.",
+  "@contactUpdatedReinvited": {
+    "description": "Snackbar after changing a contact's email.",
+    "placeholders": {
+      "email": {
+        "type": "String"
+      }
+    }
+  },
+  "contactDetailTitle": "Trusted contact",
+  "@contactDetailTitle": {
+    "description": "App bar title of the contact detail."
+  },
+  "contactEmailLabel": "Email",
+  "@contactEmailLabel": {
+    "description": "Label of the email row in the contact detail."
+  },
+  "contactPhoneLabel": "Phone",
+  "@contactPhoneLabel": {
+    "description": "Label of the phone row in the contact detail."
+  },
+  "contactInvitationHeading": "Invitation",
+  "@contactInvitationHeading": {
+    "description": "Heading of the invitation history."
+  },
+  "contactInvitationLastSent": "Last sent {when}",
+  "@contactInvitationLastSent": {
+    "description": "Invitation history: last sent time.",
+    "placeholders": {
+      "when": {
+        "type": "String"
+      }
+    }
+  },
+  "contactInvitationCount": "{count, plural, =1{Sent once} other{Sent {count} times}}",
+  "@contactInvitationCount": {
+    "description": "Invitation history: how many times.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "contactInvitationNotSent": "The invitation hasn't gone out yet.",
+  "@contactInvitationNotSent": {
+    "description": "Invitation history when nothing was sent yet."
+  },
+  "contactAcceptedOn": "Accepted {when}",
+  "@contactAcceptedOn": {
+    "description": "Invitation history: accepted time.",
+    "placeholders": {
+      "when": {
+        "type": "String"
+      }
+    }
+  },
+  "contactResend": "Resend invitation",
+  "@contactResend": {
+    "description": "Button: resend the invitation."
+  },
+  "contactResendQueued": "We're sending the invitation again.",
+  "@contactResendQueued": {
+    "description": "Snackbar after a resend was queued."
+  },
+  "contactResendNotNeededAccepted": "They've already accepted, so there's nothing to resend.",
+  "@contactResendNotNeededAccepted": {
+    "description": "Reason the resend button is off for an accepted contact."
+  },
+  "contactResendNotNeededDeclined": "They declined, so we won't send another invitation.",
+  "@contactResendNotNeededDeclined": {
+    "description": "Reason the resend button is off for a declined contact."
+  },
+  "contactResendNotNeededOptedOut": "They asked not to be contacted, so we won't send anything.",
+  "@contactResendNotNeededOptedOut": {
+    "description": "Reason the resend button is off for an opted-out contact."
+  },
+  "contactResendWaitMinutes": "{minutes, plural, =1{You've sent several invitations recently. Try again in 1 minute.} other{You've sent several invitations recently. Try again in {minutes} minutes.}}",
+  "@contactResendWaitMinutes": {
+    "description": "Reason the resend button is off after a 429 (under an hour).",
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "contactResendWaitHours": "{hours, plural, =1{You've sent several invitations recently. Try again in about 1 hour.} other{You've sent several invitations recently. Try again in about {hours} hours.}}",
+  "@contactResendWaitHours": {
+    "description": "Reason the resend button is off after a 429 (hours).",
+    "placeholders": {
+      "hours": {
+        "type": "int"
+      }
+    }
+  },
+  "contactResendWaitDays": "{days, plural, =1{You've sent several invitations recently. Try again in about 1 day.} other{You've sent several invitations recently. Try again in about {days} days.}}",
+  "@contactResendWaitDays": {
+    "description": "Reason the resend button is off after a 429 (days).",
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+  "contactResendWaitLater": "You've sent several invitations recently. Try again later.",
+  "@contactResendWaitLater": {
+    "description": "Reason the resend button is off after a 429 without a time."
+  },
+  "contactEditAction": "Edit",
+  "@contactEditAction": {
+    "description": "Button: edit the contact."
+  },
+  "contactRemoveAction": "Remove",
+  "@contactRemoveAction": {
+    "description": "Button: remove the contact."
+  },
+  "contactRemoveTitle": "Remove {name}?",
+  "@contactRemoveTitle": {
+    "description": "Title of the remove confirmation sheet.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "contactRemoveBody": "{name} will no longer be notified.",
+  "@contactRemoveBody": {
+    "description": "Body of the remove confirmation sheet.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "contactRemoveBodyInstructions": "{name} will no longer be notified and won't receive {count, plural, =1{1 instruction} other{{count} instructions}}.",
+  "@contactRemoveBodyInstructions": {
+    "description": "Body of the remove confirmation when instructions were shared.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "contactRemoveConfirm": "Remove",
+  "@contactRemoveConfirm": {
+    "description": "Confirm button of the remove sheet."
+  },
+  "contactRemoved": "{name} was removed.",
+  "@contactRemoved": {
+    "description": "Snackbar after removing a contact.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "contactMustAccept": "People must accept your invitation before they can be notified. They can change their mind at any time.",
+  "@contactMustAccept": {
+    "description": "Note on the contact detail."
+  },
+  "contactLimitTitle": "More trusted contacts are part of Premium",
+  "@contactLimitTitle": {
+    "description": "Title of the free-plan limit sheet."
+  },
+  "contactLimitBodyFree": "The free plan allows {limit, plural, =1{1 trusted contact} other{{limit} trusted contacts}}. Adding more is part of Premium. You can also remove a contact to make room for someone else.",
+  "@contactLimitBodyFree": {
+    "description": "Body of the free-plan limit sheet.",
+    "placeholders": {
+      "limit": {
+        "type": "int"
+      }
+    }
+  },
+  "contactLimitBodyMax": "You've reached the most trusted contacts one account can have ({limit}). Remove someone to add another.",
+  "@contactLimitBodyMax": {
+    "description": "Body of the limit sheet at the top tier.",
+    "placeholders": {
+      "limit": {
+        "type": "int"
+      }
+    }
+  },
+  "actionClose": "Close",
+  "@actionClose": {
+    "description": "Closes a sheet or dialog."
+  },
+  "doneUnmet": "Check-ins aren't on yet. Still needed: {items}. You can finish from Home.",
+  "@doneUnmet": {
+    "description": "Done step message when the server says what is missing. [items] is a short list such as 'a trusted contact'.",
+    "placeholders": {
+      "items": {
+        "type": "String",
+        "example": "a trusted contact"
+      }
+    }
+  },
+  "bannerKindOk": "All good",
+  "@bannerKindOk": {
+    "description": "Screen reader label for an all-good status banner icon."
+  },
+  "errorActivationRequirements": "Check-ins can't be turned on yet. A few things still need to be set up.",
+  "@errorActivationRequirements": {
+    "description": "Error: 409 activation_requirements_unmet without a known list."
+  },
+  "dayTimeToday": "Today · {time}",
+  "@dayTimeToday": {
+    "description": "A time today.",
+    "placeholders": {
+      "time": {
+        "type": "String",
+        "example": "8:00 PM"
+      }
+    }
+  },
+  "dayTimeTomorrow": "Tomorrow · {time}",
+  "@dayTimeTomorrow": {
+    "description": "A time tomorrow.",
+    "placeholders": {
+      "time": {
+        "type": "String",
+        "example": "8:00 PM"
+      }
+    }
+  },
+  "dayTimeYesterday": "Yesterday · {time}",
+  "@dayTimeYesterday": {
+    "description": "A time yesterday.",
+    "placeholders": {
+      "time": {
+        "type": "String",
+        "example": "8:00 PM"
+      }
+    }
+  },
+  "dayTimeOther": "{date} · {time}",
+  "@dayTimeOther": {
+    "description": "A time on another day.",
+    "placeholders": {
+      "date": {
+        "type": "String",
+        "example": "Oct 16"
+      },
+      "time": {
+        "type": "String",
+        "example": "8:00 PM"
+      }
+    }
+  },
+  "spokenToday": "today at {time}",
+  "@spokenToday": {
+    "description": "A time today, inside a sentence.",
+    "placeholders": {
+      "time": {
+        "type": "String",
+        "example": "8:00 PM"
+      }
+    }
+  },
+  "spokenTomorrow": "tomorrow at {time}",
+  "@spokenTomorrow": {
+    "description": "A time tomorrow, inside a sentence.",
+    "placeholders": {
+      "time": {
+        "type": "String",
+        "example": "8:00 PM"
+      }
+    }
+  },
+  "spokenYesterday": "yesterday at {time}",
+  "@spokenYesterday": {
+    "description": "A time yesterday, inside a sentence.",
+    "placeholders": {
+      "time": {
+        "type": "String",
+        "example": "8:00 PM"
+      }
+    }
+  },
+  "spokenOther": "on {date} at {time}",
+  "@spokenOther": {
+    "description": "A time on another day, inside a sentence.",
+    "placeholders": {
+      "date": {
+        "type": "String",
+        "example": "Oct 16"
+      },
+      "time": {
+        "type": "String",
+        "example": "8:00 PM"
+      }
+    }
+  },
+  "untilLessThanMinute": "less than a minute",
+  "@untilLessThanMinute": {
+    "description": "A wait of under a minute."
+  },
+  "durationHoursMinutes": "{hours} h {minutes} min",
+  "@durationHoursMinutes": {
+    "description": "A duration of hours and minutes.",
+    "placeholders": {
+      "hours": {
+        "type": "int",
+        "example": "1"
+      },
+      "minutes": {
+        "type": "int",
+        "example": "30"
+      }
+    }
+  },
+  "homeTurnOn": "Turn on check-ins",
+  "@homeTurnOn": {
+    "description": "Home action that switches check-ins on."
+  },
+  "homeActivationMissing": "Check-ins aren't on yet. Still needed: {items}.",
+  "@homeActivationMissing": {
+    "description": "Home message when the server says what is missing before check-ins can start.",
+    "placeholders": {
+      "items": {
+        "type": "String",
+        "example": "a trusted contact"
+      }
+    }
+  },
+  "activationNoContacts": "a trusted contact",
+  "@activationNoContacts": {
+    "description": "Requirement no_contacts, inside a list of what is missing."
+  },
+  "activationNoStages": "a plan stage",
+  "@activationNoStages": {
+    "description": "Requirement no_stages, inside a list of what is missing."
+  },
+  "activationStageEmpty": "a plan stage that tells someone",
+  "@activationStageEmpty": {
+    "description": "Requirement stage_empty, inside a list of what is missing: no stage notifies a contact who is switched on."
+  },
+  "activationOther": "something else in your plan",
+  "@activationOther": {
+    "description": "A requirement this app version does not know, inside a list of what is missing."
+  },
+  "homeStatusActiveTitle": "You're checked in",
+  "@homeStatusActiveTitle": {
+    "description": "Home header while check-ins are on and nothing is due soon."
+  },
+  "homeStatusDueSoonTitle": "Check-in due at {time} — in {until}",
+  "@homeStatusDueSoonTitle": {
+    "description": "Home header within the reminder lead of the deadline.",
+    "placeholders": {
+      "time": {
+        "type": "String",
+        "example": "8:00 PM"
+      },
+      "until": {
+        "type": "String",
+        "example": "45 minutes"
+      }
+    }
+  },
+  "homeStatusOverdueTitle": "Your {time} check-in is due",
+  "@homeStatusOverdueTitle": {
+    "description": "Home header when the deadline has passed and the server has not reported more yet.",
+    "placeholders": {
+      "time": {
+        "type": "String",
+        "example": "8:00 PM"
+      }
+    }
+  },
+  "homeStatusOverdueBody": "Tap I'M OK to check in.",
+  "@homeStatusOverdueBody": {
+    "description": "Home body when the deadline has passed."
+  },
+  "homeStatusIncidentTitle": "Your check-in is overdue",
+  "@homeStatusIncidentTitle": {
+    "description": "Neutral Home header while an incident is open (the full screen arrives in a later phase)."
+  },
+  "homeStatusIncidentBody": "Tap I'M OK if you're all right.",
+  "@homeStatusIncidentBody": {
+    "description": "Neutral Home body while an incident is open."
+  },
+  "homeStatusUnknownTitle": "Your check-in status can't be shown",
+  "@homeStatusUnknownTitle": {
+    "description": "Home header when the server reports a status this app version does not know."
+  },
+  "homeStatusUnknownBody": "This version of AfterMe can't show it. You can still tap I'M OK.",
+  "@homeStatusUnknownBody": {
+    "description": "Home body when the server reports a status this app version does not know."
+  },
+  "homeNextCheckIn": "Next check-in",
+  "@homeNextCheckIn": {
+    "description": "Label of the next check-in row on Home."
+  },
+  "homeNextCheckInNone": "Not scheduled",
+  "@homeNextCheckInNone": {
+    "description": "Value of the next check-in row when there is none."
+  },
+  "homeLastCheckIn": "Last check-in",
+  "@homeLastCheckIn": {
+    "description": "Label of the last check-in row on Home."
+  },
+  "homeLastCheckInNone": "No check-in yet",
+  "@homeLastCheckInNone": {
+    "description": "Value of the last check-in row when there is none."
+  },
+  "homePlanTitle": "Your plan",
+  "@homePlanTitle": {
+    "description": "Title of the plan card on Home."
+  },
+  "homePlanContacts": "Trusted contacts: {verified} of {total} accepted",
+  "@homePlanContacts": {
+    "description": "Plan card row.",
+    "placeholders": {
+      "verified": {
+        "type": "int",
+        "example": "1"
+      },
+      "total": {
+        "type": "int",
+        "example": "2"
+      }
+    }
+  },
+  "homePlanContactsNone": "No trusted contacts yet",
+  "@homePlanContactsNone": {
+    "description": "Plan card row."
+  },
+  "homePlanInstructions": "{count, plural, =0{No instructions shared yet} =1{1 instruction} other{{count} instructions}}",
+  "@homePlanInstructions": {
+    "description": "Plan card row.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  },
+  "homePlanStages": "{count, plural, =0{No plan stages yet} =1{1 plan stage} other{{count} plan stages}}",
+  "@homePlanStages": {
+    "description": "Plan card row.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "2"
+      }
+    }
+  },
+  "homePendingTitle": "Not received yet — we'll keep trying",
+  "@homePendingTitle": {
+    "description": "Home header while a check-in is not confirmed (USER_FLOWS 4)."
+  },
+  "homePendingBody": "You tapped I'M OK at {time}. A check-in counts only once we've confirmed it, so this stays here until then.",
+  "@homePendingBody": {
+    "description": "Explains a pending check-in.",
+    "placeholders": {
+      "time": {
+        "type": "String",
+        "example": "8:01 PM"
+      }
+    }
+  },
+  "homeRateLimitedBody": "Too many attempts. We'll send your check-in again in {wait}.",
+  "@homeRateLimitedBody": {
+    "description": "Home message after a 429 on a check-in.",
+    "placeholders": {
+      "wait": {
+        "type": "String",
+        "example": "12 minutes"
+      }
+    }
+  },
+  "homeSignInRequiredBody": "Please sign in to check in. Your check-in is kept and will be sent once you're signed in.",
+  "@homeSignInRequiredBody": {
+    "description": "Home message when the session cannot be used for a check-in."
+  },
+  "homeFailedTitle": "That check-in didn't go through",
+  "@homeFailedTitle": {
+    "description": "Home header after the server refused a check-in for good."
+  },
+  "homeExpiredTitle": "Your earlier check-in wasn't received",
+  "@homeExpiredTitle": {
+    "description": "Home notice when an unconfirmed I'M OK tap was too old to send and was dropped (ESCALATION_ENGINE 9.1)."
+  },
+  "homeExpiredBody": "You tapped I'M OK {when}, but it never reached us and is too old to count. Please tap I'M OK again.",
+  "@homeExpiredBody": {
+    "description": "Explains the notice above and asks for a new tap. {when} is the day and time of the old tap in the profile timezone.",
+    "placeholders": {
+      "when": {
+        "type": "String",
+        "example": "yesterday at 8:01 PM"
+      }
+    }
+  },
+  "homeExpiredDismiss": "Got it",
+  "@homeExpiredDismiss": {
+    "description": "Dismisses the notice of a check-in that was too old to send."
+  },
+  "homeSafeRequiredTitle": "Please confirm you're safe",
+  "@homeSafeRequiredTitle": {
+    "description": "Home header when a check-in is answered with safe_required."
+  },
+  "homeSafeRequiredBody": "Your contacts have been notified, so confirming that you're safe is what stops your plan. That isn't available in this version of AfterMe yet.",
+  "@homeSafeRequiredBody": {
+    "description": "Home body when a check-in is answered with safe_required (the I'M SAFE flow arrives in a later phase)."
+  },
+  "homeCheckedIn": "Checked in. Next check-in {when}.",
+  "@homeCheckedIn": {
+    "description": "Announced after a confirmed check-in.",
+    "placeholders": {
+      "when": {
+        "type": "String",
+        "example": "tomorrow at 8:00 PM"
+      }
+    }
+  },
+  "homeCheckedInNoNext": "Checked in.",
+  "@homeCheckedInNoNext": {
+    "description": "Announced after a confirmed check-in while the schedule is off."
+  },
+  "homeWelcomeBack": "Welcome back. No one was contacted.",
+  "@homeWelcomeBack": {
+    "description": "Announced after a check-in that resolved an incident."
+  },
+  "homeOfflineBanner": "Offline — showing last known status",
+  "@homeOfflineBanner": {
+    "description": "Banner on Home while the latest refresh failed (USER_FLOWS 4)."
+  },
+  "homeUnavailableBody": "We can't show your latest status right now. If you tap I'M OK, it will be sent when you're back online.",
+  "@homeUnavailableBody": {
+    "description": "Home message when the status could not be loaded at all."
+  },
+  "readinessContactProblem": "{count, plural, =1{One trusted contact can't be reached or said no.} other{{count} trusted contacts can't be reached or said no.}} Until that is sorted out, they can't be told if you miss a check-in.",
+  "@readinessContactProblem": {
+    "description": "Readiness banner: a contact declined, opted out or could not be reached.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "1"
+      }
+    }
+  },
+  "readinessContactPending": "{count, plural, =1{One trusted contact hasn't accepted your invitation yet.} other{{count} trusted contacts haven't accepted your invitation yet.}}",
+  "@readinessContactPending": {
+    "description": "Readiness banner: contacts have not answered.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "1"
+      }
+    }
+  },
+  "readinessNotificationsOff": "Notifications are off, so you won't get a reminder before a check-in is due.",
+  "@readinessNotificationsOff": {
+    "description": "Readiness banner: notification permission is off."
+  },
+  "readinessTimezone": "Your phone's timezone is different from the one in your profile. Check-in times follow your profile.",
+  "@readinessTimezone": {
+    "description": "Readiness banner: timezone mismatch."
+  },
+  "readinessOpenPeople": "Open People",
+  "@readinessOpenPeople": {
+    "description": "Readiness banner action."
+  },
+  "readinessOpenContact": "Open contact",
+  "@readinessOpenContact": {
+    "description": "Readiness banner action."
+  },
+  "readinessOpenNotifications": "Notification settings",
+  "@readinessOpenNotifications": {
+    "description": "Readiness banner action."
+  },
+  "readinessOpenProfile": "Review timezone",
+  "@readinessOpenProfile": {
+    "description": "Readiness banner action."
+  },
+  "checklistChange": "Change",
+  "@checklistChange": {
+    "description": "Checklist action for an item that is done."
+  },
+  "settingsSectionCheckIns": "Check-ins",
+  "@settingsSectionCheckIns": {
+    "description": "Settings section heading."
+  },
+  "settingsCheckInSchedule": "Check-in schedule",
+  "@settingsCheckInSchedule": {
+    "description": "Settings row and screen title."
+  },
+  "settingsCheckInScheduleSubtitle": "How often, what time and when to remind you",
+  "@settingsCheckInScheduleSubtitle": {
+    "description": "Subtitle of the schedule row in Settings."
+  },
+  "settingsCheckInHistory": "Check-in history",
+  "@settingsCheckInHistory": {
+    "description": "Settings row and screen title."
+  },
+  "settingsCheckInHistorySubtitle": "When you checked in",
+  "@settingsCheckInHistorySubtitle": {
+    "description": "Subtitle of the history row in Settings."
+  },
+  "scheduleStatusOn": "Check-ins are on",
+  "@scheduleStatusOn": {
+    "description": "Status line on the schedule screen."
+  },
+  "scheduleStatusOff": "Check-ins are off",
+  "@scheduleStatusOff": {
+    "description": "Status line on the schedule screen."
+  },
+  "scheduleStatusOverdue": "A check-in is overdue",
+  "@scheduleStatusOverdue": {
+    "description": "Status line on the schedule screen while an incident is open."
+  },
+  "scheduleStatusUnknown": "Check-in status unavailable",
+  "@scheduleStatusUnknown": {
+    "description": "Status line on the schedule screen for a status this app does not know."
+  },
+  "scheduleNextDue": "Next check-in: {when}",
+  "@scheduleNextDue": {
+    "description": "Line on the schedule screen.",
+    "placeholders": {
+      "when": {
+        "type": "String",
+        "example": "Tomorrow · 8:00 PM"
+      }
+    }
+  },
+  "scheduleReminderHeading": "Remind me",
+  "@scheduleReminderHeading": {
+    "description": "Heading above the reminder choices."
+  },
+  "reminderChoiceOff": "No reminder",
+  "@reminderChoiceOff": {
+    "description": "Reminder choice."
+  },
+  "reminderChoiceBefore": "{duration} before",
+  "@reminderChoiceBefore": {
+    "description": "Reminder choice.",
+    "placeholders": {
+      "duration": {
+        "type": "String",
+        "example": "1 hour"
+      }
+    }
+  },
+  "scheduleSave": "Save changes",
+  "@scheduleSave": {
+    "description": "Schedule screen primary action."
+  },
+  "scheduleSaved": "Schedule saved.",
+  "@scheduleSaved": {
+    "description": "Confirmation after saving the schedule."
+  },
+  "scheduleRestartNote": "Saving starts your clock again: your next check-in is worked out from now.",
+  "@scheduleRestartNote": {
+    "description": "Note on the schedule screen while check-ins are on."
+  },
+  "scheduleLengthenNote": "Making the interval longer asks for your password when you save.",
+  "@scheduleLengthenNote": {
+    "description": "Note on the schedule screen while check-ins are on: lengthening the interval needs a recent password confirmation."
+  },
+  "scheduleStale": "This was changed somewhere else, so we've loaded the latest version. Look it over and save again if you still want to.",
+  "@scheduleStale": {
+    "description": "Message after a 412 on the schedule."
+  },
+  "scheduleTurnOn": "Turn on check-ins",
+  "@scheduleTurnOn": {
+    "description": "Schedule screen action."
+  },
+  "scheduleTurnOff": "Turn off check-ins",
+  "@scheduleTurnOff": {
+    "description": "Schedule screen action."
+  },
+  "scheduleTurnOffTitle": "Turn off check-ins?",
+  "@scheduleTurnOffTitle": {
+    "description": "Confirmation title."
+  },
+  "scheduleTurnOffBody": "You won't get reminders, and your plan won't act on a missed check-in while check-ins are off. You can turn them on again at any time.",
+  "@scheduleTurnOffBody": {
+    "description": "Confirmation body."
+  },
+  "scheduleTurnOffConfirm": "Turn off",
+  "@scheduleTurnOffConfirm": {
+    "description": "Confirmation action."
+  },
+  "scheduleTurnedOn": "Check-ins are on.",
+  "@scheduleTurnedOn": {
+    "description": "Confirmation after turning check-ins on."
+  },
+  "scheduleTurnedOff": "Check-ins are off.",
+  "@scheduleTurnedOff": {
+    "description": "Confirmation after turning check-ins off."
+  },
+  "scheduleReminderOff": "We won't send a reminder.",
+  "@scheduleReminderOff": {
+    "description": "Schedule step note when the reminder is off."
+  },
+  "scheduleReminderBefore": "We'll remind you {duration} before.",
+  "@scheduleReminderBefore": {
+    "description": "Schedule step note.",
+    "placeholders": {
+      "duration": {
+        "type": "String",
+        "example": "30 minutes"
+      }
+    }
+  },
+  "historyEmptyTitle": "No check-ins yet",
+  "@historyEmptyTitle": {
+    "description": "Empty state of the history screen."
+  },
+  "historyEmptyBody": "When you check in, it will appear here.",
+  "@historyEmptyBody": {
+    "description": "Empty state of the history screen."
+  },
+  "historySourceApp": "From the app",
+  "@historySourceApp": {
+    "description": "Where a check-in came from."
+  },
+  "historySourceWeb": "From the web",
+  "@historySourceWeb": {
+    "description": "Where a check-in came from."
+  },
+  "historySourceUnknown": "From another place",
+  "@historySourceUnknown": {
+    "description": "Where a check-in came from, when unknown."
+  },
+  "historyKindOk": "Checked in",
+  "@historyKindOk": {
+    "description": "What a history row is."
+  },
+  "historyKindSafe": "Confirmed safe",
+  "@historyKindSafe": {
+    "description": "What a history row is."
+  },
+  "historyKindUnknown": "Check-in",
+  "@historyKindUnknown": {
+    "description": "What a history row is, when unknown."
+  },
+  "historyLoadMore": "Show more",
+  "@historyLoadMore": {
+    "description": "Loads the next page of history."
+  },
+  "historyRowSemantics": "{kind}, {when}, {source}",
+  "@historyRowSemantics": {
+    "description": "Screen reader label of a history row.",
+    "placeholders": {
+      "kind": {
+        "type": "String",
+        "example": "Checked in"
+      },
+      "when": {
+        "type": "String",
+        "example": "Oct 14, 7:31 PM"
+      },
+      "source": {
+        "type": "String",
+        "example": "From the app"
+      }
+    }
+  }
+}

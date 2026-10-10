@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<title>{% block title %}AfterMe{% endblock %}</title>
+<link rel="stylesheet" href="/a/assets/web.css">
+</head>
+<body>
+<main>
+<p class="brand">AfterMe</p>
+{% block content %}{% endblock %}
+<p class="footnote">AfterMe is not an emergency service.</p>
+</main>
+{% block script %}{% endblock %}
+</body>
+</html>

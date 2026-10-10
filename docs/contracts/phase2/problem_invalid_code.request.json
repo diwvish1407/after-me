@@ -1,0 +1,11 @@
+{
+  "email": "asha@example.com",
+  "code": "000000",
+  "password": "correct horse battery staple",
+  "device": {
+    "platform": "android",
+    "app_version": "1.0.0+12",
+    "os_version": "15",
+    "locale": "en-IN"
+  }
+}

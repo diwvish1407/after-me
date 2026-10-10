@@ -1,0 +1,8 @@
+{
+  "type": "https://afterme.test/problems/email-unverified",
+  "title": "Email not verified",
+  "status": 403,
+  "code": "email_unverified",
+  "detail": "Enter the code we sent to your email to finish creating your account.",
+  "request_id": "req_0123456789abcdef0123456789abcdef"
+}

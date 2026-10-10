@@ -1,0 +1,8 @@
+{
+  "type": "https://afterme.test/problems/precondition-failed",
+  "title": "Out of date",
+  "status": 412,
+  "code": "precondition_failed",
+  "detail": "This was changed somewhere else. Reload it and try again.",
+  "request_id": "req_0123456789abcdef0123456789abcdef"
+}

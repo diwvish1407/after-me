@@ -1,0 +1,127 @@
+name: backend
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend.yml"
+  pull_request:
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  secrets:
+    name: Secret scan (gitleaks)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out (full history)
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Scan for committed secrets
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  checks:
+    name: Lint, types, migrations, tests, audit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: backend
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      # Superuser connection for scripts/dev_db_setup.sh (throwaway CI container credentials).
+      PGHOST: localhost
+      PGPORT: "5432"
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      # Role passwords for this ephemeral database only; not secrets.
+      AFTERME_OWNER_DB_PASSWORD: ci_owner_password
+      AFTERME_API_DB_PASSWORD: ci_api_password
+      AFTERME_WORKER_DB_PASSWORD: ci_worker_password
+      AFTERME_TEST_DB_NAME: afterme_test
+      AFTERME_TEST_PG_HOST: localhost
+      AFTERME_TEST_PG_PORT: "5432"
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v10
+        with:
+          version: "0.9.26"
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+
+      - name: Check that uv.lock matches pyproject.toml
+        run: uv lock --check
+
+      - name: Install dependencies (locked)
+        run: uv sync --frozen
+
+      - name: Create database roles and databases
+        run: ./scripts/dev_db_setup.sh
+
+      - name: Format
+        run: uv run ruff format --check .
+
+      - name: Lint
+        run: uv run ruff check .
+
+      - name: Type-check
+        run: uv run mypy app
+
+      - name: Migrations (upgrade, downgrade, upgrade)
+        env:
+          AFTERME_MIGRATION_DATABASE_URL: postgresql+psycopg://afterme_owner:ci_owner_password@localhost:5432/afterme_dev
+        run: |
+          uv run alembic upgrade head
+          uv run alembic downgrade base
+          uv run alembic upgrade head
+
+      - name: Tests (with coverage gate)
+        run: uv run pytest --cov=app --cov-report=term-missing:skip-covered --cov-report=xml
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: backend-coverage
+          path: backend/coverage.xml
+          if-no-files-found: ignore
+
+      - name: Dependency audit
+        run: uv run python scripts/audit_deps.py
