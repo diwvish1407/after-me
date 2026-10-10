@@ -135,7 +135,7 @@ The server **can** decrypt instruction content, because it must deliver that con
 | Refresh token | Opaque, rotated on every use; 30 s network-retry grace; otherwise reuse revokes the session |
 | App session | Idle 60 days, absolute 365 days |
 | Web session | 1 h; `__Host-` cookie; counts as re-auth for 5 min after password login |
-| Re-auth (step-up) | Password, valid 5 min: I'M SAFE, deactivate check-ins, **lengthen the interval of an active schedule** (Phase 4, owner decision 2026-10-10), export, delete account, change email |
+| Re-auth (step-up) | Password, valid 5 min: I'M SAFE, deactivate check-ins, **lengthen the interval of an active schedule** (Phase 4, owner decision 2026-10-10), **change the plan while the schedule is active, remove or deactivate a contact who is in a plan stage, or change that contact's email** (Phase 5 review F-12, owner decision 2026-10-10), export, delete account, change email |
 | Lockout | 10 consecutive failures → 15 min lock + security email |
 | Security emails | New-device login, password changed/reset, email changed, refresh reuse detected, all sessions revoked, deletion requested |
 | Planned (1.1) | TOTP / passkeys; Google Sign-In; device-bound biometric key as an alternative step-up for I'M SAFE (evaluate in Phase 9) |

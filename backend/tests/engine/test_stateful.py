@@ -73,6 +73,16 @@ def check_invariants(world: World, people: list[Person], model: Model) -> None:
     ).fetchall()
     assert early == [], "INV-8: a stage before the end of grace"
 
+    # F-03: a contact-facing stage never runs when it is found late (the worker was down): it
+    # is put back and the person warned again, so it runs within the tolerance of its time.
+    tolerance = timedelta(seconds=world.engine.settings.late_tolerance_seconds)
+    late = db.execute(
+        "SELECT a.id FROM incident_actions a WHERE a.kind = 'execute_stage' "
+        "AND a.executed_at IS NOT NULL AND a.executed_at > a.scheduled_for + %s",
+        (tolerance,),
+    ).fetchall()
+    assert late == [], "F-03: a stage ran long after its time, with no further warning"
+
     # INV-6: nobody was messaged after they stopped being eligible
     for row in db.execute(
         "SELECT contact_id, coalesce(sent_at, updated_at) AS at, status FROM notifications "
@@ -168,7 +178,10 @@ async def operate(  # noqa: PLR0911, PLR0912 - a flat menu of operations
     if roll < 0.68 and person.contacts:
         label = rng.choice(sorted(person.contacts))
         contact_id = person.contacts.pop(label)
-        response = await world.call(person, "DELETE", f"/v1/contacts/{contact_id}")
+        # removing someone who would be told needs the password (F-12), as for a real person
+        await world.login(person)
+        assert (await world.h.reauth(person.tokens)).status_code == 204
+        response = await world.h.client.delete(f"/v1/contacts/{contact_id}", headers=person.headers)
         assert response.status_code == 204
         model.invalid_since[contact_id] = world.clock.current
         return "delete-contact"
@@ -202,6 +215,10 @@ async def operate(  # noqa: PLR0911, PLR0912 - a flat menu of operations
                 world.engine.services, operator="sim", incident_id=incident["id"]
             )
         return "void"
+    if roll < 0.95:  # the worker is down for hours and then comes back (FS-08)
+        world.clock.set(world.clock.current + timedelta(hours=rng.choice((1, 3, 8))))
+        await world.tick()
+        return "outage"
     await world.advance(seconds=1)
     return "nudge"
 

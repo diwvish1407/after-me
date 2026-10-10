@@ -7,6 +7,7 @@ import '../../../core/api/failures/app_failure.dart';
 import '../../../core/design_system/design_system.dart';
 import '../../../core/time/time_format.dart';
 import '../../../l10n/gen/app_localizations.dart';
+import '../../auth/presentation/reauth_sheet.dart';
 import '../../checkin/data/schedule_repository.dart';
 import '../../plan/data/plan_repository.dart';
 import '../../plan/presentation/plan_labels.dart';
@@ -17,7 +18,9 @@ import 'onboarding_scaffold.dart';
 
 /// Step 6: the plan. The "Standard" preset is pre-filled; changing the delay is optional.
 /// "Use this plan" saves it through the plan API (`PUT /v1/plan`): the server checks it,
-/// and what it says about the choices is explained here.
+/// and what it says about the choices is explained here. Opened again later (from the
+/// Plan tab or the Home banner) while check-ins are on, a changed plan needs the password
+/// again (403 `reauth_required`): the sheet is shown once and the same save repeated.
 class PlanStepScreen extends ConsumerStatefulWidget {
   const PlanStepScreen({super.key});
 
@@ -36,12 +39,24 @@ class _PlanStepScreenState extends ConsumerState<PlanStepScreen> {
       _failure = null;
     });
     try {
-      await ref
-          .read(setupControllerProvider.notifier)
-          .savePlan(_draft(setup, grace));
-      if (mounted) {
-        await advanceFrom(context, ref, OnboardingStep.plan);
+      final controller = ref.read(setupControllerProvider.notifier);
+      // Built once: when the server asks for the password the very same plan is sent
+      // again, with the same If-Match (nothing changed meanwhile). While check-ins are
+      // off (onboarding) it never asks.
+      final draft = _draft(setup, grace);
+      final saved = await withReauth(context, () async {
+        await controller.savePlan(draft);
+        return true;
+      }, reason: ReauthReason.plan);
+      if (!mounted) {
+        return;
       }
+      if (saved == null) {
+        // The sheet was closed: nothing was saved, the choices stay and nothing is said.
+        setState(() => _busy = false);
+        return;
+      }
+      await advanceFrom(context, ref, OnboardingStep.plan);
     } on AppFailure catch (failure) {
       if (mounted) {
         setState(() {

@@ -13,7 +13,7 @@ import uuid
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.container import AppServices
-from app.api.deps import CurrentUser, RequestContext
+from app.api.deps import CurrentUser, RequestContext, has_fresh_reauth
 from app.audit import writer as audit
 from app.auth.base import AuthServiceBase
 from app.checkins.repository import CheckinConfigRepository
@@ -24,6 +24,7 @@ from app.core.errors import (
     PlanLimitReached,
     PreconditionFailed,
     PreconditionRequired,
+    ReauthRequired,
     StageInUse,
     ValidationFailed,
 )
@@ -182,6 +183,12 @@ class PlanService(AuthServiceBase):
             )
         )
         if not unchanged:
+            # Step-up (review F-12): the plan decides who is told and when, so changing it while
+            # the safety net is on needs the password, like turning the net off does. While the
+            # schedule is off (onboarding) there is nothing to neutralise yet. A stolen access
+            # token alone must not be able to empty the stages.
+            if config.status == "active" and not has_fresh_reauth(current, now):
+                raise ReauthRequired
             await self._apply(current, plan, body, existing, now)
             plan.version += 1
             plan.updated_at = now

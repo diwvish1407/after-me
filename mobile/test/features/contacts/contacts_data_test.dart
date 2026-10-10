@@ -398,6 +398,30 @@ void main() {
         },
       );
 
+      test('403 reauth_required on a removal or a change keeps its code and '
+          'is not repeated', () async {
+        for (final call in <Future<Object?> Function(ContactsWire)>[
+          (w) => w.repository.delete('c-1'),
+          (w) =>
+              w.repository.update('c-1', const ContactPatch(email: 'a@b.co')),
+          (w) =>
+              w.repository.update('c-1', const ContactPatch(isActive: false)),
+        ]) {
+          final wire = await contactsWire(
+            always(FakeReply.problem(403, 'reauth_required')),
+          );
+          await expectLater(
+            call(wire),
+            throwsA(
+              isA<ForbiddenFailure>()
+                  .having((f) => f.code, 'code', 'reauth_required')
+                  .having((f) => f is PlanLimitFailure, 'plan', false),
+            ),
+          );
+          expect(wire.adapter.requests, hasLength(1), reason: 'not repeated');
+        }
+      });
+
       test('a plain 403 stays a ForbiddenFailure', () async {
         expect(
           await failure(FakeReply.problem(403, 'forbidden')),

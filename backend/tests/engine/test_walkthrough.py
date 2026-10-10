@@ -66,7 +66,8 @@ def mails(world: World, person: Person) -> str:
             "all_clear_confirmation",
         )
     ]
-    return ", ".join(sent[-3:]) if sent else ""
+    # the last three, in a fixed order: messages queued together leave in no particular order
+    return ", ".join(sorted(sent[-3:])) if sent else ""
 
 
 async def test_write_the_walkthrough(world: World) -> None:

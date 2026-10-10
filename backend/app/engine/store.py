@@ -211,6 +211,55 @@ class EngineStore:
         return list((await session.execute(stmt)).scalars())
 
     @staticmethod
+    async def late_stage_actions(
+        session: AsyncSession, user_id: uuid.UUID, cutoff: datetime
+    ) -> list[IncidentAction]:
+        """Contact-facing stages of open incidents that were due before ``cutoff``."""
+        stmt = (
+            select(IncidentAction)
+            .join(EscalationIncident, EscalationIncident.id == IncidentAction.incident_id)
+            .where(
+                IncidentAction.user_id == user_id,
+                IncidentAction.kind == "execute_stage",
+                IncidentAction.status == "pending",
+                IncidentAction.scheduled_for < cutoff,
+                EscalationIncident.status.in_(OPEN_STATUSES),
+            )
+            .order_by(IncidentAction.scheduled_for, IncidentAction.id)
+        )
+        return list((await session.execute(stmt)).scalars())
+
+    @staticmethod
+    async def pending_contact_actions(
+        session: AsyncSession, incident_id: uuid.UUID
+    ) -> list[IncidentAction]:
+        """Lock order step 3, for the stages and final warnings still ahead of an incident."""
+        stmt = (
+            select(IncidentAction)
+            .where(
+                IncidentAction.incident_id == incident_id,
+                IncidentAction.status == "pending",
+                IncidentAction.kind.in_(("execute_stage", "user_final_warning")),
+            )
+            .order_by(IncidentAction.scheduled_for, IncidentAction.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        return list((await session.execute(stmt)).scalars())
+
+    @staticmethod
+    async def stage_action_time(
+        session: AsyncSession, incident_id: uuid.UUID, step_id: uuid.UUID
+    ) -> datetime | None:
+        """When the stage will actually run (its action may have been shifted)."""
+        stmt = select(IncidentAction.scheduled_for).where(
+            IncidentAction.incident_id == incident_id,
+            IncidentAction.kind == "execute_stage",
+            IncidentAction.step_id == step_id,
+        )
+        return (await session.execute(stmt)).scalars().first()
+
+    @staticmethod
     async def pending_stage_count(session: AsyncSession, incident_id: uuid.UUID) -> int:
         stmt = (
             select(func.count())

@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | Phase 0 approved 2026-10-08 · Phases 1–3 built, reviewed and signed off · Phase 4 built, owner decisions applied (sign-off implied by the Phase 5 instruction, 2026-10-10) · Phase 5 built and independently reviewed (17 findings: 13 fixed, one of them in part; 1 not a defect; 1 documented; 3 owner decisions open, see ESCALATION_ENGINE §13.2); awaiting owner review (the engine walkthrough is part of it) |
+| **Status** | Phase 0 approved 2026-10-08 · Phases 1–3 built, reviewed and signed off · Phase 4 built, owner decisions applied (sign-off implied by the Phase 5 instruction, 2026-10-10) · Phase 5 built and independently reviewed (17 findings: all dispositioned, 16 fixed or by owner decision implemented, 1 not a defect, see ESCALATION_ENGINE §13.2; the owner's decisions of 2026-10-10 on F-03, F-12, F-05a and the Home gap banner are implemented); awaiting owner review (the engine walkthrough is part of it) |
 | **Working agreement** | One phase at a time. Each phase ends with format, lint, tests and a written report (commands run, structure, open issues, how to run). The next phase starts **only** on the product owner's instruction. |
 | **Related** | [PRD](PRD.md) · [TEST_PLAN §12](TEST_PLAN.md#12-release-acceptance-criteria) · [PLAY_STORE §1](PLAY_STORE.md#1-critical-path-and-timeline) |
 

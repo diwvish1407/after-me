@@ -21,9 +21,10 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.container import AppServices
-from app.api.deps import CurrentUser, RequestContext
+from app.api.deps import CurrentUser, RequestContext, has_fresh_reauth
 from app.audit import writer as audit
 from app.auth.base import AuthServiceBase
+from app.checkins.repository import CheckinConfigRepository
 from app.contacts.models import PRIORITY_MAX, TrustedContact
 from app.contacts.repository import ContactRepository, SuppressionRepository
 from app.contacts.schemas import (
@@ -47,6 +48,7 @@ from app.core.errors import (
     InvalidState,
     NotFound,
     PlanLimitReached,
+    ReauthRequired,
     SessionRevoked,
     ValidationFailed,
 )
@@ -213,6 +215,12 @@ class ContactService(AuthServiceBase):
             await self._check_address(
                 user.email_normalized, current.user_id, new_email, except_contact_id=contact.id
             )
+        if email_changed or changes.get("is_active") is False:
+            # Taking a contact out of the safety net (or pointing it at another address, which
+            # starts again from "pending") is what a thief with a stolen token would do first.
+            # Asked after ownership and validation, and before anything is spent or changed.
+            await self._require_step_up(current, contact, now)
+        if email_changed:
             # An email change sends a new invitation: it counts against the daily budget, and
             # nothing may change if the budget is used up.
             await self._limit_many([(INVITATION_PER_USER, str(current.user_id))], now)
@@ -255,6 +263,22 @@ class ContactService(AuthServiceBase):
         await self.session.commit()
         return contact_out(contact), outbox
 
+    async def _require_step_up(
+        self, current: CurrentUser, contact: TrustedContact, now: datetime
+    ) -> None:
+        """A fresh password (SECURITY §7) is needed to take a contact **who would be told** out
+        of a safety net that is on. Contacts in no stage, and any change while the schedule is
+        off (onboarding), need nothing more: they cannot make anyone miss an alert. Ownership and
+        validation were answered before this is asked (a stranger still gets 404)."""
+        config = await CheckinConfigRepository(self.session).get(owner_id=current.user_id)
+        if config is None or config.status == "inactive":
+            return
+        in_plan = await PlanRepository(self.session).contact_in_plan(
+            owner_id=current.user_id, contact_id=contact.id
+        )
+        if in_plan and not has_fresh_reauth(current, now):
+            raise ReauthRequired
+
     @staticmethod
     def _effective_changes(
         contact: TrustedContact, changes: dict[str, object]
@@ -287,6 +311,7 @@ class ContactService(AuthServiceBase):
         )
         if contact is None:
             raise NotFound
+        await self._require_step_up(current, contact, now)
         await self.contacts.invalidate_invitations(
             owner_id=current.user_id, contact_id=contact.id, now=now
         )

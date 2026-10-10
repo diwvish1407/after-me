@@ -266,11 +266,15 @@ async def test_a_contact_switched_off_or_deleted_after_opening_is_not_messaged(
     person = await world.ready(contacts=("Mom", "Dad"), stages=((180, ("Mom", "Dad")),))
     await world.advance_to(DUE + timedelta(seconds=20))
     assert world.open_incident(person) is not None
-    away = await world.call(
-        person, "PATCH", f"/v1/contacts/{person.contacts['Mom']}", json={"is_active": False}
+    await world.login(person)  # taking people out of a live plan needs the password (F-12)
+    assert (await world.h.reauth(person.tokens)).status_code == 204
+    away = await world.h.client.patch(
+        f"/v1/contacts/{person.contacts['Mom']}", json={"is_active": False}, headers=person.headers
     )
     assert away.status_code == 200
-    gone = await world.call(person, "DELETE", f"/v1/contacts/{person.contacts['Dad']}")
+    gone = await world.h.client.delete(
+        f"/v1/contacts/{person.contacts['Dad']}", headers=person.headers
+    )
     assert gone.status_code == 204
     await world.advance_to(DUE + timedelta(minutes=181))
     assert world.notifications(person, template_key="contact_alert") == []
@@ -316,6 +320,7 @@ async def test_a_suppressed_address_is_never_messaged(world: World) -> None:
 async def test_a_stage_with_nobody_left_runs_as_a_recorded_no_op(world: World) -> None:
     """ENG-LC-06: an empty stage is allowed and simply does nothing."""
     person = await world.ready()
+    assert (await world.h.reauth(person.tokens)).status_code == 204  # F-12
     gone = await world.h.client.delete(
         f"/v1/contacts/{person.contacts['Mom']}", headers=person.headers
     )

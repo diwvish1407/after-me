@@ -313,8 +313,11 @@ follows the wording rules in §15, targets are 48 dp, and every screen is tested
 * **Forgotten password:** the app only requests the link (`POST /auth/password/forgot`, always
   "check your email"). The reset itself happens on the web page `/a/reset`, never in the app.
 * **ReauthSheet:** `showReauthSheet(context)` or `withReauth(context, action)` (retries once after
-  the server asks for a recent password, `403 reauth_required`). Used by *Change email*; any
-  feature can use it. A wrong password (`401 invalid_credentials`) keeps the session.
+  the server asks for a recent password, `403 reauth_required`). Used by *Change email*, the
+  schedule and, since the plan step-up, by saving the plan and removing or re-addressing a contact
+  who is in a plan stage (see [the plan](#the-plan-phase-5)); any feature can use it. An optional
+  `ReauthReason` replaces the generic body with why that action needs the password. A wrong
+  password (`401 invalid_credentials`) keeps the session.
 * **Settings:** Profile (name, phone, country, timezone with a device-mismatch suggestion,
   language), Security (change password, change email with its code step, active sessions with
   revoke, *Log out everywhere*, app lock), Notifications, About, Terms/Privacy links
@@ -425,6 +428,29 @@ does not exist). The full plan editor, the incident timeline and I'M SAFE are Ph
   switched on); the step says which in words and offers the step that fixes it.
 * **Plan tab** shows the grace period, who is told at each stage (names from the contacts list)
   and the worked preview, read-only; with no stages it offers *Set up your plan* (the plan step).
+* **Step-up for changes that weaken the safety net** ([SECURITY §7](../docs/SECURITY.md)). The server
+  answers `403 reauth_required`, before it changes anything and after ownership and validation
+  (404/422), for `PUT /v1/plan` when check-ins are on and the body really changes the plan, for
+  `DELETE /v1/contacts/{id}` and for `PATCH /v1/contacts/{id}` (email changed, or `is_active`
+  false) when check-ins are not off and the contact is in a plan stage. The app does what the
+  schedule does: `withReauth` shows the existing password sheet with a one-line reason of its own
+  (`ReauthReason.plan`, `.removeContact`, `.contactEmail`), calls `POST /auth/reauth` and sends the
+  **same request again, once** (same body, same `If-Match`). Closing the sheet, or a wrong
+  password, sends nothing and says nothing more than the sheet does; the controllers
+  (`PlanController.save`, `ContactsController.removeContact` / `updateContact`) leave their state
+  untouched on that 403. Nothing is asked pre-emptively and nothing during onboarding.
+  Callers: the plan step (also opened from the Plan tab and the Home banner), Remove on the
+  contact detail and Save on the contact edit form. There is no switch for `is_active` in the app
+  yet; when there is one it needs its own reason string.
+* **Home banner for a gap.** With check-ins on (Active, Due soon, Overdue; not Not active, where the
+  checklist says it, and not during an incident, when the plan is read-only) and `no_contacts`,
+  `no_stages` or `stage_empty` in `readiness.issues`, Home shows a persistent, non-dismissible
+  attention banner above the status: what is wrong and what it means in one sentence, and one action
+  that opens the step that fixes it (contact first: *Add a trusted contact*; otherwise *Review your
+  plan*, the plan step). It sits with the readiness banner, the offline banner and the pending or
+  expired check-in notice without hiding any of them or I'M OK, and goes when Home reads the
+  aggregate again after the fix. Per-contact issues (declined, bounced, opted out, pending) keep
+  their own banner; they are not a gap.
 
 ## Trusted contacts (Phase 3)
 
@@ -442,10 +468,12 @@ Flows follow [USER_FLOWS §8, §3 step 4](../docs/USER_FLOWS.md); the wire contr
   mapped onto fields (`cannot_be_own_email` and `contact_duplicate` on the email field, field
   errors of a 422 on their fields), `plan_limit_reached` opens the limit sheet, anything else a
   calm notice. Editing sends only the changed fields; changing the email warns first and the
-  server resets the status to Pending and re-invites.
+  server resets the status to Pending and re-invites (and, while check-ins are on, asks for the
+  password when the contact is in a plan stage; closing that sheet leaves the form as it was).
 * **Detail:** invitation history, *Resend invitation* (pending/bounced only; off with the reason
   otherwise; a 429 shows when to try again and keeps the button off until then), *Edit*, *Remove*
-  (confirmation sheet: "They will no longer be notified").
+  (confirmation sheet: "They will no longer be notified"; while check-ins are on, removing someone
+  who is in a plan stage then asks for the password, see [the plan](#the-plan-phase-5)).
 * **Limits:** `GET /me/entitlements` is read by the People tab so *Add contact* can open the
   Premium explanation at the limit (free: 1 trusted contact). There is no purchase UI (billing
   arrives later); the server stays authoritative.
@@ -562,10 +590,8 @@ logcat only, so confirm the Welcome screen visually (`adb shell screencap`).
 * Instructions are a temporary in-memory fake (table above). The plan is real, but only the
   Standard preset can be saved and the Plan tab is read-only: the plan editor (stages, offsets,
   who is told), the incident timeline and I'M SAFE arrive in Phase 7; web check-in and push
-  reminders in the later phases. Home shows no readiness banner for `no_stages` / `stage_empty`
-  (USER_FLOWS §4 defines none; the checklist and the activation message cover them) and does not
-  list `recent_activity` yet; the battery-optimisation readiness banner needs a check that does
-  not exist yet.
+  reminders in the later phases. Home does not list `recent_activity` yet; the
+  battery-optimisation readiness banner needs a check that does not exist yet.
 * A tap that was not confirmed is replayed whenever the app next runs, however much later; the
   server stamps it with the time it receives it, and the screen shows when it was tapped
   ("You tapped I'M OK at 5:30 PM") until then.

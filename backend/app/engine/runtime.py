@@ -49,6 +49,7 @@ class TickReport:
     executed: int = 0
     cancelled: int = 0
     held: int = 0
+    deferred: int = 0
     left_pending: int = 0
     locked_out: int = 0
     messages_queued: int = 0
@@ -66,6 +67,7 @@ class TickReport:
         self.executed += unit.executed
         self.cancelled += unit.cancelled
         self.held += unit.held
+        self.deferred += unit.deferred
         self.left_pending += unit.left_pending
         self.messages_queued += unit.messages_queued
         self.locked_out += 1 if unit.skipped_locked else 0

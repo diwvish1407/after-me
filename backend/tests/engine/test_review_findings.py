@@ -146,7 +146,11 @@ async def test_f01_a_void_never_says_nobody_was_contacted_when_someone_was(
     incident = world.open_incident(person)
     assert incident is not None
     assert len(world.mail.to(address(person, "Mom"), "contact_alert")) == 1
-    response = await world.call(person, "DELETE", f"/v1/contacts/{person.contacts['Mom']}")
+    await world.login(person)
+    assert (await world.h.reauth(person.tokens)).status_code == 204  # F-12
+    response = await world.h.client.delete(
+        f"/v1/contacts/{person.contacts['Mom']}", headers=person.headers
+    )
     assert response.status_code == 204  # the only person who was told is gone
 
     assert await admin.void_incident(
@@ -178,7 +182,14 @@ async def test_f02_a_stage_does_not_run_while_hold_cannot_be_evaluated(
     assert "hold evaluation failing" in status.pages
 
     monkeypatch.undo()  # Hold evaluation works again
-    await world.advance_to(STAGE_1 + timedelta(minutes=45))
+    # Our own fail-safe kept it back for half an hour: it is put back once more and the person
+    # warned again (F-03), then it runs on time.
+    world.clock.set(STAGE_1 + timedelta(minutes=45))
+    await world.tick()
+    stage = world.actions(person, kind="execute_stage")[0]
+    assert stage["status"] == "pending"
+    assert stage["scheduled_for"] == world.clock.current + timedelta(minutes=30)
+    await world.advance_to(stage["scheduled_for"] + timedelta(minutes=6))
     assert world.actions(person, kind="execute_stage")[0]["status"] == "executed"
     assert len(world.mail.to(address(person, "Mom"), "contact_alert")) == 1
     assert "hold evaluation failing" not in (await admin.engine_status(world.engine.services)).pages

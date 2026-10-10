@@ -4,6 +4,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../../../core/design_system/design_system.dart';
 import '../../../l10n/gen/app_localizations.dart';
+import '../../auth/presentation/reauth_sheet.dart';
 import '../application/contacts_controller.dart';
 import '../data/contacts_repository.dart';
 import 'contact_by_id_view.dart';
@@ -41,7 +42,9 @@ ContactPatch? contactPatchFor(
 }
 
 /// Edit a trusted contact. Changing the email address warns first and, once saved,
-/// re-invites the new address.
+/// re-invites the new address. While check-ins are on, changing the address of someone
+/// who is in the plan needs the password again (403 `reauth_required`): the sheet is
+/// shown once and the same change repeated; closing it leaves the form as it was.
 class EditContactScreen extends ConsumerWidget {
   const EditContactScreen({required this.contactId, super.key});
 
@@ -56,10 +59,17 @@ class EditContactScreen extends ConsumerWidget {
     final l10n = AppLocalizations.of(context);
     final patch = contactPatchFor(contact, values);
     if (patch != null) {
-      final updated = await ref
-          .read(contactsControllerProvider.notifier)
-          .updateContact(contact.id, patch);
+      final controller = ref.read(contactsControllerProvider.notifier);
+      final updated = await withReauth(
+        context,
+        () => controller.updateContact(contact.id, patch),
+        reason: ReauthReason.contactEmail,
+      );
       if (!context.mounted) {
+        return;
+      }
+      if (updated == null) {
+        // The sheet was closed: nothing was saved, the edits stay and nothing is said.
         return;
       }
       ScaffoldMessenger.of(context).showSnackBar(

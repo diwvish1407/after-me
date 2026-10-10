@@ -23,6 +23,7 @@ USER_PRE_REMINDER: Final = "checkin_pre_reminder"
 USER_MISSED: Final = "incident_missed"
 USER_MIDPOINT: Final = "incident_midpoint"
 USER_LAST_CHANCE: Final = "incident_last_chance"
+USER_STAGE_DEFERRED: Final = "incident_delayed"
 USER_STAGE_EXECUTED: Final = "stage_executed"
 USER_FINAL_WARNING: Final = "release_final_warning"
 USER_ALL_CLEAR: Final = "all_clear_confirmation"
@@ -36,6 +37,7 @@ USER_CHANNELS: Final[dict[str, tuple[str, ...]]] = {
     USER_MISSED: ("push", "email"),
     USER_MIDPOINT: ("push",),
     USER_LAST_CHANCE: ("push", "email"),
+    USER_STAGE_DEFERRED: ("push", "email"),
     USER_STAGE_EXECUTED: ("push", "email"),
     USER_FINAL_WARNING: ("push", "email"),
     USER_ALL_CLEAR: ("push", "email"),

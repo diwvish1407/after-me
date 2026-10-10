@@ -161,6 +161,11 @@ SAMPLE_CONTEXT: dict[EmailTemplate, dict[str, Any]] = {
         "first_stage_at": "11:00 PM",
     },
     EmailTemplate.INCIDENT_LAST_CHANCE: {"user_name": "Asha", "who": "Mom"},
+    EmailTemplate.INCIDENT_DELAYED: {
+        "user_name": "Asha",
+        "who": "Mom",
+        "first_stage_at": "11:30 PM",
+    },
     EmailTemplate.STAGE_EXECUTED: {"user_name": "Asha", "notified_phrase": "Mom has been notified"},
     EmailTemplate.RELEASE_FINAL_WARNING: {
         "user_name": "Asha",

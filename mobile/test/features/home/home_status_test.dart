@@ -140,6 +140,71 @@ void main() {
     });
   });
 
+  group('pickSafetyNetGap (a hole in a safety net that is on)', () {
+    Readiness readiness(List<ReadinessIssue> issues) =>
+        Readiness(ready: issues.isEmpty, issues: issues);
+
+    test('nothing to say', () {
+      expect(pickSafetyNetGap(readiness(const [])), isNull);
+    });
+
+    test('each of the three codes is its own gap', () {
+      expect(
+        pickSafetyNetGap(readiness([issue(ReadinessCode.noContacts)])),
+        SafetyNetGap.noContacts,
+      );
+      expect(
+        pickSafetyNetGap(readiness([issue(ReadinessCode.noStages)])),
+        SafetyNetGap.noStages,
+      );
+      expect(
+        pickSafetyNetGap(readiness([issue(ReadinessCode.stageEmpty)])),
+        SafetyNetGap.stageEmpty,
+      );
+    });
+
+    test('contact first, then the plan, whatever the order the server '
+        'listed them in', () {
+      expect(
+        pickSafetyNetGap(
+          readiness([
+            issue(ReadinessCode.stageEmpty),
+            issue(ReadinessCode.noStages),
+            issue(ReadinessCode.noContacts),
+          ]),
+        ),
+        SafetyNetGap.noContacts,
+      );
+      expect(
+        pickSafetyNetGap(
+          readiness([
+            issue(ReadinessCode.stageEmpty),
+            issue(ReadinessCode.noStages),
+          ]),
+        ),
+        SafetyNetGap.noStages,
+      );
+    });
+
+    test('per-contact issues, the inactive schedule and unknown codes are '
+        'not a gap', () {
+      expect(
+        pickSafetyNetGap(
+          readiness([
+            issue(ReadinessCode.scheduleInactive),
+            issue(ReadinessCode.contactPending, 'c-1'),
+            issue(ReadinessCode.contactDeclined, 'c-2'),
+            issue(ReadinessCode.contactBounced, 'c-3'),
+            issue(ReadinessCode.contactOptedOut, 'c-4'),
+            issue(ReadinessCode.releaseContactUnverified),
+            issue(ReadinessCode.unknown),
+          ]),
+        ),
+        isNull,
+      );
+    });
+  });
+
   group('pickReadinessBanner (one at a time, highest priority first)', () {
     Readiness readiness(List<ReadinessIssue> issues) =>
         Readiness(ready: issues.isEmpty, issues: issues);

@@ -373,11 +373,14 @@ class FakeCheckInServer
     _enter('home');
     await homeGate;
     final people = contacts();
+    // Like the server: only contacts that are switched on are judged, and with none the
+    // issue is no_contacts.
+    final live = people.where((c) => c.isActive).toList();
     final issues = <ReadinessIssue>[
       if (status == CheckInStatus.inactive)
         const ReadinessIssue(code: ReadinessCode.scheduleInactive),
-      if (people.isEmpty) const ReadinessIssue(code: ReadinessCode.noContacts),
-      for (final contact in people)
+      if (live.isEmpty) const ReadinessIssue(code: ReadinessCode.noContacts),
+      for (final contact in live)
         ...switch (contact.verificationStatus) {
           VerificationStatus.verified => const <ReadinessIssue>[],
           VerificationStatus.pending => [

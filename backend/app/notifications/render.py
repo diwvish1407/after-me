@@ -26,6 +26,10 @@ PUSH_COPY: Final[dict[str, tuple[str, str]]] = {
         "Your contacts will be notified in 15 minutes",
         "Tap to check in now.",
     ),
+    outbox.USER_STAGE_DEFERRED: (
+        "We gave you more time",
+        "We had an interruption. Open AfterMe and check in.",
+    ),
     outbox.USER_STAGE_EXECUTED: (
         "Your contacts have been notified",
         "If you're safe, open AfterMe and tap I'M SAFE.",

@@ -18,6 +18,7 @@ shifted by ``(window length + recovery buffer)``, and the user is told to check 
 
 from __future__ import annotations
 
+import math
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
@@ -30,6 +31,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.container import AppServices
 from app.audit import writer as audit
 from app.audit.writer import AuditEvent
+from app.checkins.models import CheckinConfiguration
 from app.core.logging import get_logger
 from app.core.models import SystemFlag
 from app.engine.store import EngineStore
@@ -50,9 +52,15 @@ WATERMARK_KEY = "probe_watermark"
 # enter (or record the same window of) a Hold: the check and the insert are one critical section.
 HOLD_LOCK_KEY = 0x41667465724D65  # "AfterMe"
 ANOMALY_WINDOW = timedelta(hours=1)
-ANOMALY_HISTORY = timedelta(days=14)
+# How "far more incidents than normal" is judged (ESCALATION_ENGINE §7.2). Many people share a
+# due time, so the same hour on earlier days is the baseline, not the average hour; and what is
+# normal grows with the number of people, so the fractions below are of the active users.
+ANOMALY_BASELINE_DAYS = 14
+ANOMALY_MIN_HISTORY = timedelta(days=7)
 ANOMALY_MULTIPLIER = 4
-P95 = 0.95
+ANOMALY_LEARNING_FRACTION = 0.5  # no history yet: half of everyone in an hour
+ANOMALY_MIN_FRACTION = 0.10  # with history: never below a tenth of everyone
+ANOMALY_CAP_FRACTION = 0.9  # ... and above nine tenths is abnormal whatever the baseline
 
 
 @dataclass
@@ -243,30 +251,66 @@ class HoldMonitor:
             ).scalar_one()
         )
         if recent <= self.settings.anomaly_floor_per_hour:
-            return False  # cannot exceed the floor: skip the history query
-        threshold = max(
-            self.settings.anomaly_floor_per_hour, ANOMALY_MULTIPLIER * await self._p95(session, now)
-        )
-        if recent <= threshold:
+            return False  # cannot exceed the floor: skip the rest
+        if recent <= await self._anomaly_threshold(session, now):
             return False
         await self._enter(session, "anomaly", since, now, "system", f"{recent} in an hour")
         return True
 
-    async def _p95(self, session: AsyncSession, now: datetime) -> float:
-        rows = (
+    async def _anomaly_threshold(self, session: AsyncSession, now: datetime) -> int:
+        """How many incidents opened in an hour are still normal.
+
+        * Without a week of history: the floor, or half of all active users, whichever is more.
+        * With it: four times the most that opened in this same hour on any of the last 14
+          days, held between a tenth and nine tenths of all active users and never below the
+          floor. (A due time shared by many people makes one hour of every day busy; that
+          must not be an anomaly, and a bad release that stops check-ins still is, because it
+          takes nearly everyone who is due.)
+        """
+        active = await self._active_users(session)
+        floor = self.settings.anomaly_floor_per_hour
+        if not await self._has_history(session, now):
+            return max(floor, math.ceil(ANOMALY_LEARNING_FRACTION * active))
+        learned = min(
+            ANOMALY_MULTIPLIER * await self._same_hour_baseline(session, now),
+            math.ceil(ANOMALY_CAP_FRACTION * active),
+        )
+        return max(floor, math.ceil(ANOMALY_MIN_FRACTION * active), learned)
+
+    @staticmethod
+    async def _active_users(session: AsyncSession) -> int:
+        """People whose safety net is on: the population that can open an incident."""
+        stmt = select(func.count()).where(
+            CheckinConfiguration.status.in_(("active", "incident_open"))
+        )
+        return int((await session.execute(stmt)).scalar_one())
+
+    @staticmethod
+    async def _has_history(session: AsyncSession, now: datetime) -> bool:
+        oldest: datetime | None = (
+            await session.execute(select(func.min(EscalationIncident.opened_at)))
+        ).scalar_one()
+        return oldest is not None and now - oldest >= ANOMALY_MIN_HISTORY
+
+    @staticmethod
+    async def _same_hour_baseline(session: AsyncSession, now: datetime) -> int:
+        """The largest number of incidents opened in the hour ending at this time of day, over
+        the last ``ANOMALY_BASELINE_DAYS`` days (the current hour is not part of it)."""
+        row = (
             await session.execute(
                 text(
-                    "SELECT date_trunc('hour', opened_at) AS h, count(*) AS n "
-                    "FROM escalation_incidents "
-                    "WHERE opened_at > :since AND opened_at <= :until GROUP BY 1"
+                    "SELECT coalesce(max(n), 0) FROM ("
+                    "  SELECT d, count(i.id) AS n "
+                    "  FROM generate_series(1, :days) AS d "
+                    "  LEFT JOIN escalation_incidents i "
+                    "    ON i.opened_at > :now - d * interval '1 day' - interval '1 hour' "
+                    "   AND i.opened_at <= :now - d * interval '1 day' "
+                    "  GROUP BY d) q"
                 ),
-                {"since": now - ANOMALY_HISTORY, "until": now - ANOMALY_WINDOW},
+                {"days": ANOMALY_BASELINE_DAYS, "now": now},
             )
-        ).all()
-        hours = int(ANOMALY_HISTORY / timedelta(hours=1))
-        counts = sorted([int(r[1]) for r in rows] + [0] * max(hours - len(rows), 0))
-        index = min(len(counts) - 1, int(P95 * len(counts)))
-        return float(counts[index])
+        ).scalar_one()
+        return int(row)
 
     # ------------------------------------------------------------------ enter and exit
 

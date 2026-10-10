@@ -822,6 +822,18 @@
   "@reauthWrongPassword": {
     "description": "Shown after a wrong password in a re-authentication prompt."
   },
+  "reauthReasonPlan": "Changing your plan needs your password because it decides who is told.",
+  "@reauthReasonPlan": {
+    "description": "Body of the re-authentication sheet when saving the plan while check-ins are on (SECURITY 7)."
+  },
+  "reauthReasonRemoveContact": "Removing a trusted contact from your plan needs your password because it changes who is told.",
+  "@reauthReasonRemoveContact": {
+    "description": "Body of the re-authentication sheet when removing a contact who is in the plan while check-ins are on."
+  },
+  "reauthReasonContactEmail": "Changing the email address of someone in your plan needs your password because it changes who is told.",
+  "@reauthReasonContactEmail": {
+    "description": "Body of the re-authentication sheet when changing the email address of a contact who is in the plan while check-ins are on."
+  },
   "settingsSectionAccount": "Account",
   "@settingsSectionAccount": {
     "description": "Section heading in settings."
@@ -2591,6 +2603,18 @@
   "readinessOpenProfile": "Review timezone",
   "@readinessOpenProfile": {
     "description": "Readiness banner action."
+  },
+  "homeGapNoContacts": "You have no trusted contact. If you miss a check-in, nobody is told.",
+  "@homeGapNoContacts": {
+    "description": "Home banner while check-ins are on and no trusted contact is switched on (readiness no_contacts). Says what is wrong; the action (checklistContact) is the one thing to do."
+  },
+  "homeGapNoStages": "Your plan has no stage. If you miss a check-in, nobody is told.",
+  "@homeGapNoStages": {
+    "description": "Home banner while check-ins are on and the plan has no stage (readiness no_stages). The action (checklistPlan) opens the plan."
+  },
+  "homeGapStageEmpty": "A stage in your plan has nobody to tell, so it wouldn't reach anyone.",
+  "@homeGapStageEmpty": {
+    "description": "Home banner while check-ins are on and a plan stage notifies nobody who is switched on (readiness stage_empty). The action (checklistPlan) opens the plan."
   },
   "checklistChange": "Change",
   "@checklistChange": {

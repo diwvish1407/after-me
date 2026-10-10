@@ -42,6 +42,7 @@ class EmailTemplate(StrEnum):
     INCIDENT_MISSED = "incident_missed"
     INCIDENT_MIDPOINT = "incident_midpoint"
     INCIDENT_LAST_CHANCE = "incident_last_chance"
+    INCIDENT_DELAYED = "incident_delayed"
     STAGE_EXECUTED = "stage_executed"
     RELEASE_FINAL_WARNING = "release_final_warning"
     ALL_CLEAR_CONFIRMATION = "all_clear_confirmation"
@@ -71,6 +72,7 @@ _SUBJECTS: Final[dict[EmailTemplate, str]] = {
     EmailTemplate.INCIDENT_MISSED: "You missed your {due_time} check-in",
     EmailTemplate.INCIDENT_MIDPOINT: "Still waiting for your check-in",
     EmailTemplate.INCIDENT_LAST_CHANCE: "{who} will be notified in 15 minutes",
+    EmailTemplate.INCIDENT_DELAYED: "We gave you more time to check in",
     EmailTemplate.STAGE_EXECUTED: "{notified_phrase}",
     EmailTemplate.RELEASE_FINAL_WARNING: "In 1 hour, information will be shared with {names}",
     EmailTemplate.ALL_CLEAR_CONFIRMATION: "All clear sent",

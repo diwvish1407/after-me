@@ -310,6 +310,17 @@ Contact-facing escalation messages and releases wait `SETTLE_DELAY` (5 min) befo
 - gives a last-moment check-in the chance to stop them before anyone sees them (§4.2);
 - is longer than Hold detection (`INGESTION_STALE` = 3 min), so a stage that ran during an undetected outage can be rolled back before anything leaves the system (§7.3).
 
+### 6.7 Late stages (the worker was down, or the clock jumped)
+
+*Owner decision 2026-10-10, resolving review finding F-03.* A worker that was running executes a stage within a tick of its time. A contact-facing stage found **more than `LATE_TOLERANCE_SECONDS` (300) overdue** was not found by a running worker, and the person has meanwhile received none of the reminders that come before it, so running it at once would contact someone with no warning at all. Instead, in the same transaction and before anything is executed (and never during a Hold, which has its own shift, §7.3):
+
+1. The earliest overdue stage `S` is put back to `now + max(LATE_SHIFT_MINUTES, …)`, and **every stage from `S` onwards moves by the same amount**, so their spacing (≥ 30 min) and order are kept. If a moved stage releases instructions, the amount is raised so that it is still a full `FINAL_WARNING_LEAD` (60 min) after now: its final warning, if already due, runs in this tick and the stage can never run in the same tick as its warning (INV-9).
+2. Final warnings that are still ahead move with their stage; one that is already due runs now, as it should.
+3. The person gets **one** `incident_delayed` message (push and email) saying who will be notified at what time, with the real time. It uses its own dedupe key (`late:{action}:{scheduled epoch}:{channel}`) and is cancelled if the incident closes first.
+4. `escalation.stage_deferred` is audited with how late it was and how far it moved.
+
+It can only delay an alert, never advance one: every moved action ends strictly later than it was. Reminders are unaffected (they are superseded after the end of grace, §13.1 note 3). If the outage repeats, the stage is put back again and the person warned again.
+
 ## 7. System Hold (the circuit breaker)
 
 ### 7.1 Why
@@ -321,7 +332,7 @@ If users **can't** check in (API down, network or ingress failure, a broken app 
 | Trigger | Detection | Exit |
 |---|---|---|
 | **Ingestion outage** | An external uptime monitor calls `POST /internal/probe` through the **public ingress** every 60 s. The API records each probe in `ingestion_probes`. Hold starts if the latest probe is older than `INGESTION_STALE` (3 min). The Hold is **backdated** to the last good probe. On each tick the worker also scans probe history since its watermark for gaps > 3 min that happened while it was down, and records them as closed Hold windows. | Automatic, after probes have been fresh for 10 continuous minutes. |
-| **Anomaly** | Incidents opened in the last 60 min > `max(ANOMALY_FLOOR = 25, 4 × p95 hourly rate over 14 days)`. This suggests a systemic cause (app bug, push outage). | **Manual only**, after an operator investigates. |
+| **Anomaly** | Incidents opened in the last 60 min (counting only those since the last anomaly Hold ended) exceed a threshold that follows **how many people there are and what this hour of the day normally has**: without a week of history, `max(ANOMALY_FLOOR = 25, ½ × active users)`; with it, `max(floor, ⅒ × active users, min(4 × the most that opened in this same hour on any of the last 14 days, 0.9 × active users))`. A due time that many people share makes one hour of every day busy, which is not an anomaly; a bad release that stops check-ins takes nearly everyone who is due, which is. | **Manual only**, after an operator investigates. |
 | **Operator** | `afterme-admin hold enter --reason "…"` (audited). | Manual: `afterme-admin hold exit`. |
 
 ### 7.3 Behaviour
@@ -456,7 +467,7 @@ Each scenario has an automated test (prefix `ENG-FS`, see [TEST_PLAN §4.3](TEST
 | FS-05 | The worker crashes mid-transaction | Rollback; the action stays `pending`; retried next tick. |
 | FS-06 | The worker crashes after commit, before dispatch | The outbox persists; the dispatcher sends later (subject to its own re-checks). |
 | FS-07 | The dispatcher crashes after the provider accepted the message | Possible duplicate message; never a wrongful one. Provider idempotency key used where supported. |
-| FS-08 | All workers down for hours, API up | No incidents opened, no actions. On restart: `anchor = now`, so full grace. Overdue stages of already-open incidents run late; the user could check in the whole time, so this is correct. **Open owner decision (review F-03, §13.2):** the user also received no reminders during the outage, so a late stage can run with no warning at all. |
+| FS-08 | All workers down for hours, API up | No incidents opened, no actions. On restart: `anchor = now`, so full grace. A stage of an already-open incident that is **more than `LATE_TOLERANCE` overdue is not run**: it is put back to at least `LATE_SHIFT` from now (with every later stage, by the same amount) and the person is warned again with the real time (§6.7). A stage that is only slightly late runs as usual. |
 | FS-09 | API/ingress down, worker up | Probes stop → Hold (backdated) → nothing contact-facing. On recovery: rollback inside the window, then shift. |
 | FS-10 | Database down | Nothing runs. On recovery, the probe gap → closed Hold window → rollback/shift. Anchor rule gives full grace. |
 | FS-11 | FCM down | User reminders also go by email. No effect on escalation timing. |
@@ -512,11 +523,13 @@ Structured log events carry `user_id` (pseudonymous UUID), `incident_id`, `actio
 | `INGESTION_STALE_SECONDS` | 180 | |
 | `HOLD_EXIT_FRESH_SECONDS` | 600 | |
 | `HOLD_RECOVERY_BUFFER_MINUTES` | 30 | |
-| `ANOMALY_FLOOR_PER_HOUR` | 25 | |
+| `ANOMALY_FLOOR_PER_HOUR` | 25 | The absolute floor; the fractions of §7.2 are constants |
+| `LATE_TOLERANCE_SECONDS` | 300 | A contact-facing stage found later than this is put back (§6.7); at least two ticks |
+| `LATE_SHIFT_MINUTES` | 30 | How far from now it is put back; at least 30 in production |
 | `ACTION_MAX_ATTEMPTS` | 5 | Then `held` |
 | `API_LOCK_TIMEOUT_MS` | 5000 | |
 
-Startup validation refuses to run if `SETTLE_DELAY_SECONDS ≤ INGESTION_STALE_SECONDS` or `MIN_RELEASE_OFFSET_MINUTES < 1440` in production.
+Startup validation refuses to run if `SETTLE_DELAY_SECONDS ≤ INGESTION_STALE_SECONDS + 2 × TICK_SECONDS`, `LATE_TOLERANCE_SECONDS < 2 × TICK_SECONDS` or `MIN_RELEASE_OFFSET_MINUTES < 1440` in production.
 
 ### 13.1 Phase 5 implementation notes
 
@@ -545,6 +558,9 @@ Startup validation refuses to run if `SETTLE_DELAY_SECONDS ≤ INGESTION_STALE_S
 18. **Paging** (F-14): opening, executing and reminding take up to 10 pages of 200 users per tick, skipping users already seen this tick, so rows that cannot be opened (no plan, inconsistent) never starve those behind them; a full last page makes the worker go straight into the next cycle instead of sleeping.
 19. **Hold decisions are serialised** (F-06) by one advisory lock, so two workers cannot both enter, or record the same window of, a Hold; entering an operator Hold twice is one Hold; an operator exit is not followed by re-entry over the incidents that Hold already covered (F-05b, only incidents opened since the last anomaly Hold ended count).
 20. **`contacts_messaged_at` is set only once a message was actually built** (a row that cannot be built is cancelled and leaves the incident saying nobody was told), and **`SETTLE_DELAY_SECONDS` must exceed `INGESTION_STALE_SECONDS` plus two ticks** (the old rule allowed a margin of zero).
+21. **Late stages are put back, not run** (F-03, §6.7), with their own message `incident_delayed` (new copy: USER_FLOWS §13.1). The final warning's "stage at" is now the stage action's real time, not `anchor + offset`, which a Hold or this shift may have moved.
+22. **A fresh password is needed to weaken a safety net that is on** (F-12): `PUT /v1/plan` when the schedule is `active` and the plan changes; `DELETE /contacts/{id}` and `PATCH` that deactivates or changes the email of a contact **who is in a plan stage**, while the schedule is not `inactive`. Changing a contact's email is included because it re-points an alert (and a thief controls the new inbox).
+23. **The anomaly threshold follows people and the hour** (F-05a, §7.2), and the Home screen shows a persistent banner when check-ins are on but nobody would be told (USER_FLOWS §4).
 
 *Observability.* `python -m cli.admin status` prints the §12 table as one snapshot and exits `1` when anything would page (stale heartbeat, Hold active or not evaluable, held actions of open incidents, messages given up on, consistency violations, an action due or a message queued for more than 5 minutes). Structured events: `incident.opened`, `engine.action_held`, `engine.unit_failed`, `engine.consistency_violation`, `system.hold_entered`, `dispatch.failed`; none carries a name, an address or a token.
 
@@ -556,33 +572,34 @@ An adversarial review read the engine, the migration, the API surface and the te
 |---|---|---|---|
 | F-01 | S1 missed alert | `incident void` left the schedule `incident_open` with no incident: nobody watched that person again | **Fixed** (note 10) |
 | F-02 | S2 wrongful contact | A failing Hold evaluation was logged and the tick went on to execute stages | **Fixed** (note 11) |
-| F-03 | S2 wrongful contact | After a worker outage an overdue stage runs with no warning to the person, who also got no reminders (FS-08 says "runs late, correct") | **Owner decision**, below |
+| F-03 | S2 wrongful contact | After a worker outage an overdue stage runs with no warning to the person, who also got no reminders (FS-08 said "runs late, correct") | **Fixed** by owner decision (§6.7, note 21) |
 | F-04 | S2 defence in depth | API role could forge a `contact_escalation` row, or reopen a closed incident; the dispatcher believed the row | **Fixed** (note 12) |
-| F-05 | S3 | (a) a daily spike makes p95 = 0, so the floor is the threshold: a large user base trips it nightly; (b) re-entry after an operator exit | (b) **Fixed**; (a) **owner/ops tuning**, below |
+| F-05 | S3 | (a) a daily spike makes p95 = 0, so the floor is the threshold: a large user base trips it nightly; (b) re-entry after an operator exit | **Fixed** (b: note 19; a: by owner decision, §7.2, note 23) |
 | F-06 | S3 | two workers could both enter, or both record, a Hold; shift applied twice | **Fixed** (note 19) |
 | F-07 | S3 | during a Hold more than 100 queued alerts starved every other message | **Fixed** |
 | F-08 | S3 | "Mom has been notified" sent when the incident was closed inside the settle delay | **Fixed** (note 13); also found: the summary ignored Hold |
 | F-09 | S3 | a contact whose message may have been delivered (ambiguous error) got no all-clear | **Fixed** (note 14) |
 | F-10 | S3 | a stage inside its settle delay when an outage began was not rolled back | **Fixed** (note 15) |
 | F-11 | S3 | giving up after 24 h was silent; measured from creation | **Fixed** (note 16). The person is still not told that a contact message failed: needs a new template (Phase 8, with real providers) |
-| F-12 | S3 security | step-up re-auth is required to deactivate or lengthen the interval, but not to edit the plan, deactivate a contact or delete one: a stolen 15-minute token can neutralise escalation | **Owner decision**, below |
+| F-12 | S3 security | step-up re-auth is required to deactivate or lengthen the interval, but not to edit the plan, deactivate a contact or delete one: a stolen 15-minute token can neutralise escalation | **Fixed** by owner decision (note 22) |
 | F-13 | S3 | five failed ticks (75 s of database flapping) held a stage for ever, and there was no un-hold | **Fixed** (note 17) |
 | F-14 | S3 | batches of 200 with no paging, and a fixed sleep | **Fixed** (note 18) |
 | F-15 | — | "read skew in tx A" on the contact | **Not a defect**: both reads go through one session's identity map, so the second sees the first's values; taking `FOR SHARE` would add a lock-order inversion with the contact paths, so it was deliberately not added |
 | F-16 | S3 | the probe route is rate limited per IP *before* the token check | **Documented**: only matters if the monitor shares an address with hostile clients; see DEPLOYMENT |
 | F-17 | S3 | G8 was never called; this document claimed it was | **Fixed** (note 9) |
 
-*Owner decisions needed*
+*Owner decisions (taken 2026-10-10: "do the needful using your research and best understanding")*
 
-1. **F-03: what should a stage that is overdue because the worker was down do?** Today it runs at once. Recommended: if an action is more than a tolerance late (suggest 2 × `TICK_SECONDS` + the settle delay), treat it like a Hold window: re-send the last-chance reminder, and shift the contact-facing stages by at least 30 minutes, so the person always gets one reminder, and one full settle delay, before anyone is contacted. It can only delay an alert, never advance one. Not implemented because it changes FS-08 as approved and the timeline of a real outage.
-2. **F-12: require the password for plan edits, contact deactivation and contact deletion?** It is consistent with the decision already taken for deactivating check-ins, at the cost of a password prompt in the plan editor (Phase 7).
-3. **F-05a: the anomaly threshold** is `max(floor, 4 × p95 of hourly incidents)` and p95 is 0 until there is a history. With a few hundred people sharing a due time most of whom check in during grace, the floor (25) will trip. Suggest normalising by active users and setting the floor in production from the first weeks of real data.
+1. **F-03** was implemented as recommended (§6.7). Two choices were left to the implementer and are worth a second look: the tolerance is 5 minutes (a busy worker is two ticks, a restart a few minutes), and the person gets a new message `incident_delayed` rather than a re-send of "in 15 minutes" (which would be false).
+2. **F-12** was implemented for plan edits, contact deactivation and deletion, **and contact email change** (a thief who re-points Mom's address and verifies it from their own inbox receives the alerts), each only where it weakens a live safety net.
+3. **F-05a** was implemented as a seasonal baseline plus fractions of the active users (§7.2). The fractions are constants chosen without data; **review them against the first weeks of real data** (`afterme-admin status` shows `incidents_opened_last_hour`).
+4. **The Home gap banner**: shown for check-ins on with no live contact, no stage, or only stages that tell no one (mobile; the server already reported it).
 
 *Known limits that remain*
 
 * One user whose Hold-exit processing keeps raising leaves the Hold unprocessed (fail-safe, but nobody's alerts go out until it is looked at: it pages as *Hold active*).
 * The Hold notice is email only (push copy exists).
-* The stateful simulation moves the clock tick by tick through every due instant, so it cannot find a *late* engine; the failure tests cover worker death and outages individually. It now includes operator voids.
+* The stateful simulation moves the clock tick by tick through every due instant, except for its `outage` step (hours with no tick), which is what lets it check that no stage runs late. It also includes operator voids.
 
 ## 14. Worked example (the T0–T8 lifecycle)
 

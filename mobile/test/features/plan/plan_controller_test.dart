@@ -1,5 +1,6 @@
 import 'package:afterme/core/api/failures/app_failure.dart';
 import 'package:afterme/core/auth/auth_controller.dart';
+import 'package:afterme/features/checkin/data/models/checkin_models.dart';
 import 'package:afterme/features/contacts/application/contacts_controller.dart';
 import 'package:afterme/features/contacts/data/contacts_repository.dart';
 import 'package:afterme/features/home/application/home_controller.dart';
@@ -342,6 +343,169 @@ void main() {
       expect(fakes.plan.calls.where((c) => c == 'get'), hasLength(reads));
     });
   });
+
+  group(
+    'Step-up: a changed plan while check-ins are on needs the password',
+    () {
+      /// An account whose check-ins are on, with a one-stage plan for Mom.
+      Future<(TestFakes, ProviderContainer)> active({
+        String tier = 'free',
+      }) async {
+        final fakes = _withContacts(tier: tier);
+        fakes.plan.seedStandard(['c1']);
+        fakes.server.activateNow();
+        final container = _container(fakes);
+        await container.read(planControllerProvider.future);
+        return (fakes, container);
+      }
+
+      Matcher reauthRequired() => isA<ForbiddenFailure>().having(
+        (f) => f.code,
+        'code',
+        'reauth_required',
+      );
+
+      test('a real change is refused with reauth_required; nothing changes and '
+          'the same call works after re-authenticating', () async {
+        final (fakes, container) = await active();
+        final before = _plan(container)!;
+        // Both contacts are told now: a real change.
+        final change = _draft(
+          contacts: const ['c1', 'c2'],
+          id: before.stages.single.id,
+        );
+
+        await expectLater(
+          _controller(container).save(change),
+          throwsA(reauthRequired()),
+        );
+        expect(fakes.plan.version, before.version, reason: 'not saved');
+        expect(_plan(container), before, reason: 'the snapshot is untouched');
+        expect(
+          fakes.plan.calls.where((c) => c == 'get'),
+          hasLength(1),
+          reason: 'nothing was read again: it is not a conflict',
+        );
+
+        fakes.auth.reauthenticated = true;
+        final saved = await _controller(container).save(change);
+        expect(saved.stages.single.contactIds, ['c1', 'c2']);
+        expect(saved.version, before.version + 1);
+        expect(fakes.plan.ifMatches, [
+          before.ifMatch,
+          before.ifMatch,
+        ], reason: 'the retry is the very same request');
+        expect(fakes.plan.saved[0], fakes.plan.saved[1]);
+      });
+
+      test('the same body again is not a change: no password', () async {
+        final (fakes, container) = await active();
+        final before = _plan(container)!;
+        final saved = await _controller(container).save(before.toDraft());
+        expect(saved.version, before.version);
+        expect(fakes.auth.reauthenticated, isFalse);
+      });
+
+      test('emptying the only stage is a change like any other', () async {
+        final (fakes, container) = await active();
+        await expectLater(
+          _controller(container).save(
+            _draft(contacts: const [], id: _plan(container)!.stages.single.id),
+          ),
+          throwsA(reauthRequired()),
+          reason: 'a stage that tells nobody weakens the net',
+        );
+        expect(fakes.plan.stages.single.contactIds, ['c1']);
+      });
+
+      test('a changed delay is a change', () async {
+        final (fakes, container) = await active();
+        final before = _plan(container)!;
+        await expectLater(
+          _controller(container)
+              .save(_draft(grace: 360, id: before.stages.single.id)),
+          throwsA(reauthRequired()),
+        );
+        expect(fakes.plan.graceMinutes, 180);
+      });
+
+      test('while check-ins are off (onboarding) nothing asks', () async {
+        final fakes = _withContacts();
+        fakes.plan.seedStandard(['c1']);
+        final container = _container(fakes);
+        final before = (await container.read(planControllerProvider.future))!;
+        final saved = await _controller(container).save(
+          _draft(contacts: const ['c1', 'c2'], id: before.stages.single.id),
+        );
+        expect(saved.stages.single.contactIds, ['c1', 'c2']);
+        expect(fakes.server.status, CheckInStatus.inactive);
+      });
+
+      test(
+        'a password given recently is enough for the next change too',
+        () async {
+          final (fakes, container) = await active(tier: 'premium');
+          fakes.auth.reauthenticated = true;
+          final first = await _controller(container)
+              .save(_draft(grace: 360, id: _plan(container)!.stages.single.id));
+          final second = await _controller(container).save(
+            _draft(
+              grace: 720,
+              contacts: const ['c1', 'c2'],
+              id: first.stages.single.id,
+            ),
+          );
+          expect(second.version, first.version + 1);
+        },
+      );
+
+      test(
+        'is answered after the stale version, the incident, the stranger and '
+        'the validation, like the server',
+        () async {
+          final (fakes, container) = await active();
+          final before = _plan(container)!;
+          final id = before.stages.single.id;
+
+          // A contact that is not yours: 404, not the password.
+          await expectLater(
+            _controller(container)
+                .save(_draft(contacts: const ['ghost'], id: id)),
+            throwsA(isA<NotFoundFailure>()),
+          );
+          // A field that is wrong: 422.
+          await expectLater(
+            _controller(container).save(_draft(grace: 90, id: id)),
+            throwsA(isA<ValidationFailure>()),
+          );
+          // Changed on another device: 412.
+          fakes.plan.seedStandard(['c1'], offsetMinutes: 720);
+          await expectLater(
+            _controller(container).save(_draft(contacts: const ['c2'], id: id)),
+            throwsA(
+              isA<ConflictFailure>().having(
+                (f) => f.code,
+                'code',
+                'precondition_failed',
+              ),
+            ),
+          );
+          // An open incident: 409.
+          fakes.server.openIncident();
+          await expectLater(
+            _controller(container).save(_draft(contacts: const ['c2'], id: id)),
+            throwsA(
+              isA<ConflictFailure>().having(
+                (f) => f.code,
+                'code',
+                'incident_open',
+              ),
+            ),
+          );
+        },
+      );
+    },
+  );
 
   group('Home follows the plan', () {
     ProviderContainer homeContainer(TestFakes fakes) {

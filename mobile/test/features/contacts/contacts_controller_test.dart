@@ -273,6 +273,210 @@ void main() {
     });
   });
 
+  group('Step-up: taking someone who is told out of a safety net that is on', () {
+    /// Check-ins on; Mom (c1) is in the plan's one stage, Bro (c2) is in none.
+    (TestFakes, ProviderContainer, ContactsController) active() {
+      final fakes = TestFakes();
+      fakes.contacts = InMemoryContactsRepository(
+        tier: 'premium',
+        initial: [
+          testContact(),
+          testContact(id: 'c2', name: 'Bro', email: 'bro@example.com'),
+        ],
+      );
+      fakes.plan.seedStandard(['c1']);
+      fakes.server.activateNow();
+      final container = _container(fakes);
+      return (
+        fakes,
+        container,
+        container.read(contactsControllerProvider.notifier),
+      );
+    }
+
+    Matcher reauthRequired() => isA<ForbiddenFailure>().having(
+      (f) => f.code,
+      'code',
+      'reauth_required',
+    );
+
+    List<String> ids(ProviderContainer c) => [
+      for (final contact in c.read(contactsControllerProvider).value!)
+        contact.id,
+    ];
+
+    test('removing a contact who is in a stage is refused; the list stays and '
+        'the same call works after re-authenticating', () async {
+      final (fakes, container, controller) = active();
+      await container.read(contactsControllerProvider.future);
+
+      await expectLater(
+        controller.removeContact('c1'),
+        throwsA(reauthRequired()),
+      );
+      expect(ids(container), ['c1', 'c2']);
+      expect(fakes.contacts.contacts, hasLength(2));
+
+      fakes.auth.reauthenticated = true;
+      await controller.removeContact('c1');
+      expect(ids(container), ['c2']);
+      expect(fakes.contacts.calls.where((c) => c == 'delete'), hasLength(2));
+    });
+
+    test('removing a contact who is in no stage never asks', () async {
+      final (fakes, container, controller) = active();
+      await container.read(contactsControllerProvider.future);
+      await controller.removeContact('c2');
+      expect(ids(container), ['c1']);
+      expect(fakes.auth.reauthenticated, isFalse);
+    });
+
+    test('while check-ins are off (onboarding) removing never asks', () async {
+      final fakes = TestFakes();
+      fakes.contacts = InMemoryContactsRepository(initial: [testContact()]);
+      fakes.plan.seedStandard(['c1']);
+      final container = _container(fakes);
+      await container.read(contactsControllerProvider.future);
+      await container
+          .read(contactsControllerProvider.notifier)
+          .removeContact('c1');
+      expect(ids(container), isEmpty);
+    });
+
+    test(
+      'changing the email of a contact who is in a stage is refused',
+      () async {
+        final (fakes, container, controller) = active();
+        await container.read(contactsControllerProvider.future);
+        const change = ContactPatch(email: 'mum@example.com');
+
+        await expectLater(
+          controller.updateContact('c1', change),
+          throwsA(reauthRequired()),
+        );
+        final unchanged = container
+            .read(contactsControllerProvider)
+            .value!
+            .firstWhere((c) => c.id == 'c1');
+        expect(unchanged.email, 'mom@example.com');
+        expect(unchanged.verificationStatus, VerificationStatus.verified);
+        expect(
+          fakes.contacts.invitations,
+          isEmpty,
+          reason: 'nobody was invited',
+        );
+
+        fakes.auth.reauthenticated = true;
+        final updated = await controller.updateContact('c1', change);
+        expect(updated.email, 'mum@example.com');
+        expect(updated.verificationStatus, VerificationStatus.pending);
+      },
+    );
+
+    test('switching a contact who is in a stage off is refused; switching '
+        'on, or any other edit, never asks', () async {
+      final (fakes, container, controller) = active();
+      await container.read(contactsControllerProvider.future);
+
+      await expectLater(
+        controller.updateContact('c1', const ContactPatch(isActive: false)),
+        throwsA(reauthRequired()),
+      );
+      expect(fakes.contacts.contacts.first.isActive, isTrue);
+
+      // Everything else about Mom is fine without the password.
+      await controller.updateContact('c1', const ContactPatch(name: 'Mum'));
+      await controller.updateContact(
+        'c1',
+        const ContactPatch(relationship: ContactRelationship.parent),
+      );
+      await controller.updateContact(
+        'c1',
+        const ContactPatch(phone: '+14155550123'),
+      );
+      await controller.updateContact('c1', const ContactPatch(priority: 2));
+      await controller.updateContact('c1', const ContactPatch(isActive: true));
+      expect(fakes.auth.reauthenticated, isFalse);
+
+      fakes.auth.reauthenticated = true;
+      final off = await controller.updateContact(
+        'c1',
+        const ContactPatch(isActive: false),
+      );
+      expect(off.isActive, isFalse);
+    });
+
+    test('a contact who is in no stage may be re-addressed or switched off '
+        'freely', () async {
+      final (fakes, container, controller) = active();
+      await container.read(contactsControllerProvider.future);
+      await controller.updateContact(
+        'c2',
+        const ContactPatch(email: 'brother@example.com'),
+      );
+      await controller.updateContact('c2', const ContactPatch(isActive: false));
+      expect(fakes.auth.reauthenticated, isFalse);
+      expect(fakes.contacts.contacts.last.isActive, isFalse);
+    });
+
+    test('while check-ins are off (onboarding) no change asks', () async {
+      final fakes = TestFakes();
+      fakes.contacts = InMemoryContactsRepository(initial: [testContact()]);
+      fakes.plan.seedStandard(['c1']);
+      final container = _container(fakes);
+      final controller = container.read(contactsControllerProvider.notifier);
+      await container.read(contactsControllerProvider.future);
+      await controller.updateContact(
+        'c1',
+        const ContactPatch(email: 'mum@example.com'),
+      );
+      await controller.updateContact('c1', const ContactPatch(isActive: false));
+      expect(fakes.auth.reauthenticated, isFalse);
+    });
+
+    test('ownership and validation are answered before the password', () async {
+      final (fakes, container, controller) = active();
+      await container.read(contactsControllerProvider.future);
+
+      await expectLater(
+        controller.removeContact('stranger'),
+        throwsA(isA<NotFoundFailure>()),
+      );
+      await expectLater(
+        controller.updateContact(
+          'stranger',
+          const ContactPatch(isActive: false),
+        ),
+        throwsA(isA<NotFoundFailure>()),
+      );
+      await expectLater(
+        controller.updateContact(
+          'c1',
+          const ContactPatch(email: 'Diwakar@Example.com'),
+        ),
+        throwsA(isA<CannotBeOwnEmailFailure>()),
+      );
+      await expectLater(
+        controller.updateContact(
+          'c1',
+          const ContactPatch(email: 'bro@example.com'),
+        ),
+        throwsA(isA<ContactDuplicateFailure>()),
+      );
+      expect(fakes.auth.reauthenticated, isFalse);
+    });
+
+    test('a refused removal leaves the plan as it was', () async {
+      final (fakes, container, controller) = active();
+      await container.read(contactsControllerProvider.future);
+      await expectLater(
+        controller.removeContact('c1'),
+        throwsA(reauthRequired()),
+      );
+      expect(fakes.plan.stages.single.contactIds, ['c1']);
+    });
+  });
+
   group('sortContacts', () {
     test('orders by priority, then creation time, then the given order', () {
       final a = testContact(id: 'a', priority: 2);

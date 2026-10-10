@@ -86,6 +86,13 @@ class PlanController extends AsyncNotifier<Plan?> {
   /// the contacts and the plan again and rethrows. A 409 `incident_open`, a 403
   /// `plan_limit_reached` and a 422 `validation_failed` (with its field errors) are
   /// rethrown as they are.
+  ///
+  /// A 403 `reauth_required` is rethrown too, with nothing re-read and nothing changed:
+  /// the server asks for the password when check-ins are on and [draft] really changes
+  /// the plan (SECURITY.md §7), after it checked ownership and validation. Wrap the call
+  /// in `withReauth` (reason `ReauthReason.plan`): the same call, made again, sends the
+  /// same `If-Match`. An unchanged plan, or any save while check-ins are off
+  /// (onboarding), never asks.
   Future<Plan> save(PlanDraft draft) async {
     final base = await _base();
     try {

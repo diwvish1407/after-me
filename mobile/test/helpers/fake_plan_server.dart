@@ -8,14 +8,18 @@ import 'package:afterme/features/plan/data/plan_repository.dart';
 /// The plan "server" for tests: `GET` and `PUT /v1/plan` behaving like the contract in
 /// `docs/contracts/phase5` and the backend's rules (ETag / If-Match, stage 1 at the end
 /// of the grace period, ordering and gaps, the free tier's presets and stage limit, 404
-/// for a contact that is not yours, 409 during an incident). It implements
-/// [PlanRepository], so the app's real controllers and screens run against it. The app
-/// itself talks to the real API; this lives in `test/`.
+/// for a contact that is not yours, 409 during an incident, and the step-up: a plan that
+/// really changes while check-ins are on needs a fresh password, 403 `reauth_required`,
+/// asked only after everything else was checked). It implements [PlanRepository], so
+/// the app's real controllers and screens run against it. The app itself talks to the
+/// real API; this lives in `test/`.
 class FakePlanServer implements PlanRepository {
   FakePlanServer({
     required this.contacts,
     required this.tier,
     this.incidentOpen,
+    this.scheduleActive,
+    this.reauthenticated,
   });
 
   /// The person's contacts (every id a stage names must be one of them).
@@ -26,6 +30,14 @@ class FakePlanServer implements PlanRepository {
 
   /// Whether an incident is open (a change is then 409 `incident_open`).
   final bool Function()? incidentOpen;
+
+  /// Whether the check-in schedule is on. While it is, a save that changes the plan
+  /// needs [reauthenticated] (SECURITY.md §7); while it is off (onboarding) nothing does.
+  final bool Function()? scheduleActive;
+
+  /// Whether the session entered its password recently (the same switch the check-in
+  /// server uses for deactivating). Null counts as yes.
+  final bool Function()? reauthenticated;
 
   // --- the plan row -------------------------------------------------------------------
   String id = '00000000-0000-4000-8000-0000000000a1';
@@ -182,6 +194,12 @@ class FakePlanServer implements PlanRepository {
                     (draft.stages[i].contactIds.toList()..sort()).join(','),
         ].every((same) => same);
     if (!unchanged) {
+      // Last, like the server: a stranger's id (404), a field that is wrong (422) or a
+      // stale version (412) is answered before the password is asked for.
+      if ((scheduleActive?.call() ?? false) &&
+          !(reauthenticated?.call() ?? true)) {
+        throw const ForbiddenFailure(code: 'reauth_required');
+      }
       _apply(draft);
       version++;
     }

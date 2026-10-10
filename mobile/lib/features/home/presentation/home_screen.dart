@@ -24,8 +24,9 @@ import '../application/home_controller.dart';
 import '../application/home_status.dart';
 import '../data/models/home_models.dart';
 
-/// Home (USER_FLOWS.md §4, §5): the status, I'M OK, the next and last check-in, the plan
-/// and the one readiness banner that matters most.
+/// Home (USER_FLOWS.md §4, §5): the status, I'M OK, the next and last check-in, the plan,
+/// a persistent banner while the safety net has a gap, and the one readiness banner that
+/// matters most.
 ///
 /// Everything time-related is decided from the server's `server_time` (kept as an
 /// offset from the phone's clock), and shown in the profile's timezone. The screen
@@ -245,6 +246,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                   : null,
             ),
           );
+    // Check-ins are on but nobody would be told: not dismissible, and it never replaces
+    // the status, I'M OK or the other banners below it. An account that is not active has
+    // the checklist, and during an incident the plan is read-only.
+    final gap = switch (status) {
+      HomeStatus.active ||
+      HomeStatus.dueSoon ||
+      HomeStatus.overdue => pickSafetyNetGap(snapshot.readiness),
+      _ => null,
+    };
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -263,6 +273,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           ),
           Gap.md,
         ],
+        if (gap != null) ...[_SafetyNetGapBanner(gap: gap), Gap.md],
         if (banner != null) ...[_ReadinessBannerView(banner: banner), Gap.md],
         _statusHeader(context, data, checkIn, status, now, timezone),
         if (status == HomeStatus.notActive)
@@ -730,6 +741,47 @@ class _PlanCard extends StatelessWidget {
           const SizedBox(height: AppSpacing.xxs),
           Text(l10n.homePlanInstructions(summary.instructionsActive)),
         ],
+      ),
+    );
+  }
+}
+
+/// The banner for a hole in the safety net (USER_FLOWS.md §4): what is wrong and what it
+/// means in one sentence, and the one thing to do as its action, which opens the step
+/// that fixes it, contact first (a stage needs someone to tell), like the checklist and
+/// the last onboarding step. Kept short on purpose: it sits above I'M OK, which must stay
+/// within reach on a small phone.
+class _SafetyNetGapBanner extends StatelessWidget {
+  const _SafetyNetGapBanner({required this.gap});
+
+  final SafetyNetGap gap;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final (String message, String action, String path) = switch (gap) {
+      SafetyNetGap.noContacts => (
+        l10n.homeGapNoContacts,
+        l10n.checklistContact,
+        OnboardingStep.contact.path,
+      ),
+      SafetyNetGap.noStages => (
+        l10n.homeGapNoStages,
+        l10n.checklistPlan,
+        OnboardingStep.plan.path,
+      ),
+      SafetyNetGap.stageEmpty => (
+        l10n.homeGapStageEmpty,
+        l10n.checklistPlan,
+        OnboardingStep.plan.path,
+      ),
+    };
+    return StatusBanner(
+      kind: StatusBannerKind.attention,
+      message: message,
+      action: AppButton.text(
+        label: action,
+        onPressed: () => context.push(path),
       ),
     );
   }

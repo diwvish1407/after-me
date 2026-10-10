@@ -65,6 +65,42 @@ HomeStatus homeStatus(HomeSnapshot snapshot, {required DateTime serverNow}) {
   }
 }
 
+/// A hole in the safety net of an account whose check-ins are on: if a check-in were
+/// missed, nobody would be told, or nobody at one stage of the plan. It is more than a
+/// readiness hint, so Home shows it as its own persistent banner (USER_FLOWS.md §4).
+enum SafetyNetGap {
+  /// No trusted contact is switched on (`no_contacts`). The fix is a contact.
+  noContacts,
+
+  /// The plan has no stage (`no_stages`). The fix is the plan.
+  noStages,
+
+  /// A plan stage notifies nobody who is switched on (`stage_empty`). The fix is the
+  /// plan.
+  stageEmpty,
+}
+
+/// The gap to tell the person about, or null. Contact first: a stage needs someone to
+/// tell, so adding a contact is what makes the plan fixable. Per-contact issues
+/// (declined, bounced, opted out, pending) are not gaps here: they have their own
+/// readiness banner, and a contact who is switched on keeps the plan from being empty.
+///
+/// The caller shows it only while check-ins are on; an account that is not active has
+/// the checklist, and an open incident makes the plan read-only.
+SafetyNetGap? pickSafetyNetGap(Readiness readiness) {
+  final codes = {for (final issue in readiness.issues) issue.code};
+  if (codes.contains(ReadinessCode.noContacts)) {
+    return SafetyNetGap.noContacts;
+  }
+  if (codes.contains(ReadinessCode.noStages)) {
+    return SafetyNetGap.noStages;
+  }
+  if (codes.contains(ReadinessCode.stageEmpty)) {
+    return SafetyNetGap.stageEmpty;
+  }
+  return null;
+}
+
 /// Which readiness banner Home shows. One at a time, highest priority first
 /// (USER_FLOWS.md §4): a contact that declined or cannot be reached, a contact that
 /// has not answered, notifications off, timezone mismatch.

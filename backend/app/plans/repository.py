@@ -127,6 +127,18 @@ class PlanRepository:
         )
         return [(row[0], row[1]) for row in (await self._session.execute(stmt)).all()]
 
+    async def contact_in_plan(self, *, owner_id: uuid.UUID, contact_id: uuid.UUID) -> bool:
+        """Whether the contact is listed in at least one stage (it would be told)."""
+        stmt = select(
+            select(EscalationStepContact.step_id)
+            .where(
+                EscalationStepContact.user_id == owner_id,
+                EscalationStepContact.contact_id == contact_id,
+            )
+            .exists()
+        )
+        return bool((await self._session.execute(stmt)).scalar_one())
+
     async def remove_contact(self, *, owner_id: uuid.UUID, contact_id: uuid.UUID) -> int:
         """Drop a contact from every stage (the contact was deleted). Returns the rows removed."""
         result = await self._session.execute(

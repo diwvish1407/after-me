@@ -400,6 +400,38 @@ void main() {
       expect(find.text('Add a first instruction'), findsOneWidget);
     });
 
+    testWidgets('403 reauth_required: the password sheet, then the very same '
+        'PUT (same If-Match, same body) once', (tester) async {
+      var puts = 0;
+      final (container, adapter) = await _openStep(tester, 'plan', {
+        'PUT /v1/plan': (r) {
+          puts++;
+          return puts == 1
+              ? FakeReply.problem(403, 'reauth_required')
+              : _saved()(r);
+        },
+      });
+      await tapText(tester, 'Use this plan');
+      for (var i = 0; i < 10; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      expect(find.text("Confirm it's you"), findsOneWidget);
+      expect(_to(adapter, 'PUT', '/v1/plan'), hasLength(1));
+
+      await typeInto(tester, 'Password', authOf(container).password);
+      await tapText(tester, 'Confirm');
+      for (var i = 0; i < 10; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      await tester.pumpAndSettle();
+
+      final sent = _to(adapter, 'PUT', '/v1/plan');
+      expect(sent, hasLength(2));
+      expect(sent.map((r) => r.header('If-Match')), ['"plan-1"', '"plan-1"']);
+      expect(sent[0].data, sent[1].data);
+      expect(find.text('Add a first instruction'), findsOneWidget);
+    });
+
     testWidgets('a grace period the server refuses is said next to the '
         'choices', (tester) async {
       await _openStep(tester, 'plan', {

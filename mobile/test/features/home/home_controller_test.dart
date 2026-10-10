@@ -13,6 +13,8 @@ import 'package:afterme/features/contacts/data/contacts_repository.dart';
 import 'package:afterme/features/home/application/client_checks.dart';
 import 'package:afterme/features/home/application/home_controller.dart';
 import 'package:afterme/features/home/application/home_status.dart';
+import 'package:afterme/features/plan/application/plan_controller.dart';
+import 'package:afterme/features/plan/data/plan_repository.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -355,6 +357,63 @@ void main() {
           .patchProfile(const ProfilePatch(timezone: 'Europe/London'));
       await pumpEventQueue();
       expect(_homeCalls(fakes), start + 3, reason: 'timezone');
+    });
+
+    test('a gap in a safety net that is on follows the fix: contact, then '
+        'plan', () async {
+      final fakes = TestFakes();
+      fakes.server.activateNow();
+      final container = _container(fakes);
+      container
+        ..listen(contactsControllerProvider, (_, _) {})
+        ..listen(planControllerProvider, (_, _) {});
+      await container.read(contactsControllerProvider.future);
+      await container.read(planControllerProvider.future);
+
+      SafetyNetGap? gap() => pickSafetyNetGap(
+        container.read(homeControllerProvider).value!.snapshot.readiness,
+      );
+
+      await _home(container);
+      expect(gap(), SafetyNetGap.noContacts, reason: 'nobody to tell');
+
+      await container
+          .read(contactsControllerProvider.notifier)
+          .addContact(
+            const ContactDraft(
+              name: 'Mom',
+              relationship: ContactRelationship.mother,
+              email: 'mom@example.com',
+            ),
+          );
+      await pumpEventQueue();
+      expect(gap(), SafetyNetGap.noStages, reason: 'Home read again');
+
+      // The password is asked for: check-ins are on and the plan changes.
+      const draft = PlanDraft(
+        graceMinutes: 180,
+        stages: [
+          PlanStageDraft(offsetMinutes: 180, contactIds: ['contact-1']),
+        ],
+      );
+      await expectLater(
+        container.read(planControllerProvider.notifier).save(draft),
+        throwsA(isA<ForbiddenFailure>()),
+      );
+      expect(gap(), SafetyNetGap.noStages, reason: 'nothing was saved');
+      fakes.auth.reauthenticated = true;
+      await container.read(planControllerProvider.notifier).save(draft);
+      await pumpEventQueue();
+      expect(gap(), isNull, reason: 'Home read again after the plan');
+
+      // The same contact removed (password still fresh): the gap is back.
+      await container
+          .read(contactsControllerProvider.notifier)
+          .removeContact('contact-1');
+      fakes.plan.forgetContact('contact-1');
+      await pumpEventQueue();
+      await container.read(homeControllerProvider.notifier).refresh();
+      expect(gap(), SafetyNetGap.noContacts);
     });
 
     test('signing out empties it', () async {

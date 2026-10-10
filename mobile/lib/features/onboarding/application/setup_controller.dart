@@ -175,7 +175,9 @@ class SetupController extends AsyncNotifier<SetupState> {
 
   /// Saves the plan through the plan API (`PUT /v1/plan`, `If-Match`). The server
   /// validates it; a failure (412 after the latest plan was read, 422 with field
-  /// errors, 404, 409 `incident_open`) is thrown as an `AppFailure`.
+  /// errors, 404, 409 `incident_open`) is thrown as an `AppFailure`. So is a 403
+  /// `reauth_required` (check-ins are on and the plan changes): wrap the call in
+  /// `withReauth`, the screen's own copy of [draft] is what is sent again.
   Future<void> savePlan(PlanDraft draft) async {
     final saved = await ref.read(planControllerProvider.notifier).save(draft);
     state = AsyncData(_current.copyWith(plan: saved));

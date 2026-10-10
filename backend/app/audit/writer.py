@@ -65,6 +65,7 @@ INCIDENT_VOIDED: Final = "incident.voided"
 REMINDER_SENT: Final = "escalation.reminder_sent"
 FINAL_WARNING_SENT: Final = "escalation.final_warning_sent"
 STAGE_EXECUTED: Final = "escalation.stage_executed"
+STAGE_DEFERRED: Final = "escalation.stage_deferred"
 ACTION_HELD: Final = "escalation.action_held"
 NOTIFICATION_SENT: Final = "notification.sent"
 NOTIFICATION_FAILED: Final = "notification.failed"
@@ -127,6 +128,7 @@ PHASE5_ACTIONS: Final = frozenset(
         REMINDER_SENT,
         FINAL_WARNING_SENT,
         STAGE_EXECUTED,
+        STAGE_DEFERRED,
         ACTION_HELD,
         NOTIFICATION_SENT,
         NOTIFICATION_FAILED,

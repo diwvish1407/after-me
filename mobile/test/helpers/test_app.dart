@@ -76,7 +76,9 @@ class TestFakes {
     FakeNotificationPermissionGateway? notifications,
   }) : auth = auth ?? FakeAuthRepository(),
        localAuth = localAuth ?? FakeLocalAuthGateway(),
-       notifications = notifications ?? FakeNotificationPermissionGateway();
+       notifications = notifications ?? FakeNotificationPermissionGateway() {
+    contacts = InMemoryContactsRepository();
+  }
 
   final FakeAuthRepository auth;
   final FakeLocalAuthGateway localAuth;
@@ -87,8 +89,21 @@ class TestFakes {
   final FakeDeviceInfoSource device = FakeDeviceInfoSource();
   final FakeClock clock = FakeClock();
 
-  /// The contacts "server" (tests script it; the app itself uses the real API).
-  InMemoryContactsRepository contacts = InMemoryContactsRepository();
+  /// The contacts "server" (tests script it; the app itself uses the real API). Whatever
+  /// instance a test assigns is wired to the plan and the schedule below, so removing or
+  /// re-addressing a contact who is in a stage while check-ins are on asks for the
+  /// password like the real server does.
+  InMemoryContactsRepository get contacts => _contacts;
+  set contacts(InMemoryContactsRepository value) {
+    _contacts = value
+      ..stepUp = ContactStepUp(
+        scheduleOff: () => server.status == CheckInStatus.inactive,
+        inPlan: (id) => plan.stages.any((s) => s.contactIds.contains(id)),
+        reauthenticated: () => auth.reauthenticated,
+      );
+  }
+
+  late InMemoryContactsRepository _contacts;
 
   /// Use the production [contactsRepositoryProvider] (the Dio one) instead of
   /// [contacts]. Only the wiring tests do this.
@@ -111,6 +126,8 @@ class TestFakes {
     contacts: () => contacts.contacts,
     tier: () => contacts.tier,
     incidentOpen: () => server.status == CheckInStatus.incidentOpen,
+    scheduleActive: () => server.status == CheckInStatus.active,
+    reauthenticated: () => auth.reauthenticated,
   );
 
   /// Use the production [planRepositoryProvider] (the Dio one) instead of [plan]. Only

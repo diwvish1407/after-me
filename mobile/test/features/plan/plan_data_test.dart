@@ -269,6 +269,14 @@ void main() {
         expect(f, isA<NotFoundFailure>());
       });
 
+      test('403 reauth_required keeps the code the password sheet reacts '
+          'to, and is not a stage limit', () async {
+        final f = await failure(FakeReply.problem(403, 'reauth_required'));
+        expect(f, isA<ForbiddenFailure>());
+        expect(f, isNot(isA<PlanLimitFailure>()));
+        expect((f as ForbiddenFailure).code, 'reauth_required');
+      });
+
       test('403 plan_limit_reached names the stages and the limit', () async {
         final f = await failure(
           FakeReply.problem(

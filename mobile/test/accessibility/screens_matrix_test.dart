@@ -146,9 +146,30 @@ Future<void> _toTop(WidgetTester tester) async {
   }
 }
 
-/// Home with an accepted contact and check-ins turned on at the test clock.
+/// Home with an accepted contact, a plan that tells them and check-ins turned on at the
+/// test clock (the server only turns them on with a plan like that).
 void _activeHome(TestFakes fakes) {
   _withContacts(fakes, [testContact()]);
+  fakes.plan.seedStandard(['c1']);
+  fakes.server.activateNow();
+}
+
+/// Check-ins on and the plan has a hole: [contacts] and no stage, or with
+/// [emptyStage] a stage that tells nobody.
+void _gapHome(
+  TestFakes fakes, {
+  List<TrustedContact> contacts = const [],
+  bool emptyStage = false,
+}) {
+  _withContacts(fakes, contacts);
+  if (emptyStage) {
+    fakes.plan.seed(
+      const PlanDraft(
+        graceMinutes: 180,
+        stages: [PlanStageDraft(offsetMinutes: 180, contactIds: [])],
+      ),
+    );
+  }
   fakes.server.activateNow();
 }
 
@@ -167,6 +188,17 @@ void _staleTap(TestFakes fakes) {
     ),
   );
 }
+
+const _gapNoContacts =
+    'You have no trusted contact. If you miss a check-in, nobody is told.';
+const _gapNoStages =
+    'Your plan has no stage. If you miss a check-in, nobody is told.';
+const _gapStageEmpty =
+    "A stage in your plan has nobody to tell, so it wouldn't reach anyone.";
+
+/// The screen really is in the state it is named for (the gap banner is there).
+void _expectGap(String message) =>
+    expect(find.text(message), findsOneWidget, reason: 'the gap banner');
 
 /// The screen really is in the state it is named for (the seeded tap was restored).
 void _expectExpiredNotice() =>
@@ -528,6 +560,7 @@ final _screens = <_Screen>[
     route: AppRoutes.home,
     configure: (fakes) {
       _withContacts(fakes, [testContact(status: VerificationStatus.pending)]);
+      fakes.plan.seedStandard(['c1']);
       fakes.server
         ..activateNow()
         ..nextDueAt = fakes.server.now.add(const Duration(minutes: 45));
@@ -550,7 +583,83 @@ final _screens = <_Screen>[
     route: AppRoutes.home,
     configure: (fakes) {
       _withContacts(fakes, _everyone());
+      fakes.plan.seedStandard(['c1']);
       fakes.server.activateNow();
+    },
+  ),
+  _Screen(
+    'home (no trusted contact: nobody would be told)',
+    signedIn: true,
+    route: AppRoutes.home,
+    configure: (fakes) => _gapHome(fakes, emptyStage: true),
+    prepare: (tester, _) async => _expectGap(_gapNoContacts),
+  ),
+  _Screen(
+    'home (plan has no stage)',
+    signedIn: true,
+    route: AppRoutes.home,
+    configure: (fakes) => _gapHome(fakes, contacts: [testContact()]),
+    prepare: (tester, _) async => _expectGap(_gapNoStages),
+  ),
+  _Screen(
+    'home (a stage tells nobody)',
+    signedIn: true,
+    route: AppRoutes.home,
+    configure: (fakes) =>
+        _gapHome(fakes, contacts: [testContact()], emptyStage: true),
+    prepare: (tester, _) async => _expectGap(_gapStageEmpty),
+  ),
+  _Screen(
+    'home (gap, contact pending, due soon)',
+    signedIn: true,
+    route: AppRoutes.home,
+    configure: (fakes) {
+      _gapHome(
+        fakes,
+        contacts: [testContact(status: VerificationStatus.pending)],
+      );
+      fakes.server.nextDueAt = fakes.server.now.add(
+        const Duration(minutes: 45),
+      );
+    },
+  ),
+  _Screen(
+    'home (gap, contact declined, offline, not received yet)',
+    signedIn: true,
+    route: AppRoutes.home,
+    configure: (fakes) {
+      _gapHome(
+        fakes,
+        contacts: [testContact(status: VerificationStatus.declined)],
+      );
+      fakes.server.failures['checkIn'] = [const NetworkFailure()];
+    },
+    prepare: (tester, container) async {
+      // A tap that is not received, then a refresh that fails: every banner at once.
+      await _tapCheckIn(tester);
+      final server =
+          container.read(checkInRepositoryProvider) as FakeCheckInServer;
+      server.failures['home'] = [const NetworkFailure()];
+      await container.read(homeControllerProvider.notifier).refresh();
+      await tester.pumpAndSettle();
+      await _toTop(tester);
+      _expectGap(_gapNoStages);
+      expect(find.text('Offline — showing last known status'), findsOneWidget);
+      expect(find.text("Not received yet — we'll keep trying"), findsOneWidget);
+    },
+  ),
+  _Screen(
+    'home (gap, earlier check-in expired)',
+    signedIn: true,
+    route: AppRoutes.home,
+    prefs: _signedInAsUser1,
+    configure: (fakes) {
+      _gapHome(fakes, contacts: [testContact()]);
+      _staleTap(fakes);
+    },
+    prepare: (tester, _) async {
+      _expectExpiredNotice();
+      _expectGap(_gapNoStages);
     },
   ),
   _Screen(
@@ -729,6 +838,43 @@ final _screens = <_Screen>[
       await tapText(tester, 'Every week');
       await tapText(tester, 'Save changes');
       await _frames(tester);
+    },
+  ),
+  _Screen(
+    'plan step: password sheet (active account)',
+    signedIn: true,
+    route: OnboardingStep.plan.path,
+    configure: _activeHome,
+    prepare: (tester, _) async {
+      await tapText(tester, '6 hours');
+      await tapText(tester, 'Use this plan');
+      await _frames(tester);
+      expect(find.text("Confirm it's you"), findsOneWidget);
+    },
+  ),
+  _Screen(
+    'contact detail: password sheet (remove someone who is told)',
+    signedIn: true,
+    route: AppRoutes.contactDetail('c1'),
+    configure: _activeHome,
+    prepare: (tester, _) async {
+      await tapText(tester, 'Remove');
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Remove'));
+      await _frames(tester);
+      expect(find.text("Confirm it's you"), findsOneWidget);
+    },
+  ),
+  _Screen(
+    'edit contact: password sheet (email of someone who is told)',
+    signedIn: true,
+    route: AppRoutes.contactEdit('c1'),
+    configure: _activeHome,
+    prepare: (tester, _) async {
+      await typeInto(tester, 'Their email', 'mum@example.com');
+      await tapText(tester, 'Save changes');
+      await _frames(tester);
+      expect(find.text("Confirm it's you"), findsOneWidget);
     },
   ),
   _Screen(

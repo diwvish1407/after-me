@@ -31,6 +31,7 @@ MIN_PEPPER_BYTES = 32
 # Fail-safe floors for production-like environments (ESCALATION_ENGINE §13).
 _MIN_RELEASE_OFFSET_FLOOR = 1_440
 _SETTLE_DELAY_FLOOR_SECONDS = 300
+_LATE_SHIFT_FLOOR_MINUTES = 30
 # Providers that only exist for development and tests; refused in staging/prod. A module-level
 # set so the production validators can be exercised end to end in tests (Phase 8 adds the real
 # provider and this set then stops being the only gate).
@@ -125,6 +126,10 @@ class Settings(BaseSettings):
     hold_exit_fresh_seconds: Annotated[int, Field(ge=1, le=7_200)] = 600
     hold_recovery_buffer_minutes: Annotated[int, Field(ge=0, le=1_440)] = 30
     anomaly_floor_per_hour: Annotated[int, Field(ge=1, le=100_000)] = 25
+    # A contact-facing stage found more than this late (the worker was down, or the clock
+    # jumped) is not run: the person is warned again and the stage is put back (§6.7).
+    late_tolerance_seconds: Annotated[int, Field(ge=1, le=3_600)] = 300
+    late_shift_minutes: Annotated[int, Field(ge=1, le=1_440)] = 30
     action_max_attempts: Annotated[int, Field(ge=1, le=20)] = 5
     probe_token: SecretStr | None = None
 
@@ -247,6 +252,11 @@ class Settings(BaseSettings):
                 "stage that ran during an undetected outage must be rolled back before "
                 "anything leaves"
             )
+        if self.late_tolerance_seconds < 2 * self.tick_seconds:
+            problems.append(
+                "LATE_TOLERANCE_SECONDS must be at least two ticks: a worker that is merely "
+                "busy must not be mistaken for one that was down"
+            )
         if self.grace_min_minutes > self.grace_max_minutes:
             problems.append("GRACE_MIN_MINUTES must not exceed GRACE_MAX_MINUTES")
         if self.stage_max_offset_minutes < self.grace_max_minutes:
@@ -258,6 +268,8 @@ class Settings(BaseSettings):
                 problems.append(
                     f"MIN_RELEASE_OFFSET_MINUTES must be at least {_MIN_RELEASE_OFFSET_FLOOR}"
                 )
+            if self.late_shift_minutes < _LATE_SHIFT_FLOOR_MINUTES:
+                problems.append(f"LATE_SHIFT_MINUTES must be at least {_LATE_SHIFT_FLOOR_MINUTES}")
             if self.settle_delay_seconds < _SETTLE_DELAY_FLOOR_SECONDS:
                 problems.append(
                     f"SETTLE_DELAY_SECONDS must be at least {_SETTLE_DELAY_FLOOR_SECONDS}"

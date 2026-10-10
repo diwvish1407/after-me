@@ -54,7 +54,13 @@ BACKOFF_MINUTES: Final = (1, 2, 4, 8, 16, 32, 60)  # then hourly (§8.3)
 ESCALATION_TEMPLATES: Final = frozenset({outbox.CONTACT_ALERT})
 # A reminder for an incident is only true while it is open.
 INCIDENT_BOUND_USER_TEMPLATES: Final = frozenset(
-    {outbox.USER_MISSED, outbox.USER_MIDPOINT, outbox.USER_LAST_CHANCE, outbox.USER_FINAL_WARNING}
+    {
+        outbox.USER_MISSED,
+        outbox.USER_MIDPOINT,
+        outbox.USER_LAST_CHANCE,
+        outbox.USER_STAGE_DEFERRED,
+        outbox.USER_FINAL_WARNING,
+    }
 )
 
 
@@ -471,7 +477,12 @@ class Dispatcher:
         key = row.template_key
         if key == outbox.USER_PRE_REMINDER:
             context["due_at"] = clock_time(datetime.fromisoformat(params["due_at"]), timezone)
-        elif key in (outbox.USER_MISSED, outbox.USER_MIDPOINT, outbox.USER_LAST_CHANCE):
+        elif key in (
+            outbox.USER_MISSED,
+            outbox.USER_MIDPOINT,
+            outbox.USER_LAST_CHANCE,
+            outbox.USER_STAGE_DEFERRED,
+        ):
             ids = [uuid.UUID(c) for c in params.get("first_stage_contact_ids", [])]
             names = await _names(session, row.user_id, ids)
             context["who"] = join_names(names) or "Your contacts"

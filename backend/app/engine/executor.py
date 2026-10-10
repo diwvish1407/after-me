@@ -45,6 +45,7 @@ class UnitReport:
     executed: int = 0
     cancelled: int = 0
     held: int = 0
+    deferred: int = 0
     left_pending: int = 0
     skipped_locked: bool = False
     messages_queued: int = 0
@@ -68,6 +69,9 @@ class ActionExecutor:
         self._pepper = pepper
         self._releases = releases
         self._settle = timedelta(seconds=settings.settle_delay_seconds)
+        self._late_tolerance = timedelta(seconds=settings.late_tolerance_seconds)
+        self._late_shift = timedelta(minutes=settings.late_shift_minutes)
+        self._warning_lead = timedelta(minutes=settings.final_warning_lead_minutes)
 
     # ------------------------------------------------------------------ the unit of work
 
@@ -90,6 +94,11 @@ class ActionExecutor:
             report.skipped_locked = True
             return report
 
+        hold_active = force_hold or await EngineStore.open_hold(session) is not None
+        if not hold_active:
+            # Before looking at what is due: a stage found too late is put back first, so it is
+            # not among the candidates (and the person is warned again, §6.7).
+            await self._defer_late_stages(session, user_id=user_id, now=now, report=report)
         candidates = await EngineStore.due_actions(session, user_id, now)
         if not candidates:
             return report
@@ -97,7 +106,6 @@ class ActionExecutor:
             session, sorted({a.incident_id for a in candidates})
         )
         actions = await EngineStore.lock_actions(session, [a.id for a in candidates])
-        hold_active = force_hold or await EngineStore.open_hold(session) is not None
         user = await EngineStore.user(session, user_id)
         user_active = user is not None and user.status == "active"
 
@@ -131,6 +139,134 @@ class ActionExecutor:
             )
         current.clear()
         return report
+
+    # ------------------------------------------------------------------ late stages (§6.7)
+
+    async def _defer_late_stages(
+        self, session: AsyncSession, *, user_id: uuid.UUID, now: datetime, report: UnitReport
+    ) -> None:
+        """A contact-facing stage that is more than ``LATE_TOLERANCE`` overdue was not found by
+        a worker that was running (it was down, or the clock jumped), and the person did not get
+        the reminders that come before it. It is not run. The stage, and every stage after it,
+        is put back by the same amount (so their spacing is kept) to at least ``LATE_SHIFT``
+        from now, final warnings that are still ahead move with their stages, and the person is
+        told again, with the real time. This can only delay an alert, never advance one."""
+        cutoff = now - self._late_tolerance
+        late = await EngineStore.late_stage_actions(session, user_id, cutoff)
+        if not late:
+            return
+        incidents = await EngineStore.lock_incidents(session, sorted({a.incident_id for a in late}))
+        for incident_id in sorted(incidents):
+            incident = incidents[incident_id]
+            snapshot, recognised = self._parse(incident)
+            if snapshot is None or not recognised:  # the gate holds it (G6); nothing to shift
+                continue
+            pending = await EngineStore.pending_contact_actions(session, incident_id)
+            overdue = [a for a in pending if a.kind == "execute_stage" and a.scheduled_for < cutoff]
+            deferrable = await self._deferrable(session, incident_id, snapshot, pending, overdue)
+            if not deferrable:
+                continue
+            first = deferrable[0]
+            delta, moved = self._put_back(pending, snapshot, first, now)
+            first_stage = snapshot.stage(first.step_id) if first.step_id else None
+            drafts = await self._user_drafts(
+                session,
+                incident=incident,
+                action=first,
+                template=outbox.USER_STAGE_DEFERRED,
+                now=now,
+                params={
+                    "incident_id": str(incident.id),
+                    "missed_due_at": incident.missed_due_at.isoformat(),
+                    "first_stage_at": first.scheduled_for.isoformat(),
+                    "first_stage_contact_ids": (
+                        [str(c) for c in first_stage.notify_contact_ids] if first_stage else []
+                    ),
+                },
+                key="late",
+            )
+            report.messages_queued += await outbox.enqueue(session, drafts, now=now)
+            report.deferred += 1
+            late_by = int((now - (first.scheduled_for - delta)).total_seconds())
+            _log.warning(
+                "engine.stage_deferred",
+                user_id=str(user_id),
+                incident_id=str(incident.id),
+                late_seconds=late_by,
+            )
+            await self._record(
+                session,
+                audit.STAGE_DEFERRED,
+                incident,
+                first,
+                now,
+                {
+                    "late_seconds": late_by,
+                    "shift_minutes": int(delta.total_seconds() // 60),
+                    "stages": moved,
+                },
+            )
+
+    @staticmethod
+    async def _deferrable(
+        session: AsyncSession,
+        incident_id: uuid.UUID,
+        snapshot: PlanSnapshot,
+        pending: list[IncidentAction],
+        overdue: list[IncidentAction],
+    ) -> list[IncidentAction]:
+        """The overdue stages that are late because of an outage. A releasing stage whose final
+        warning is neither done nor still ahead is not: something removed the warning, and
+        pushing it back again and again would hide that. It is left for gate G9, which holds
+        it and alerts."""
+        warned = {a.step_id for a in pending if a.kind == "user_final_warning"}
+        result: list[IncidentAction] = []
+        for action in overdue:
+            stage = snapshot.stage(action.step_id) if action.step_id else None
+            needs_warning = stage is not None and bool(stage.releases)
+            if needs_warning and action.step_id is not None and action.step_id not in warned:
+                done = await EngineStore.final_warning_executed(
+                    session, incident_id, action.step_id
+                )
+                if not done:
+                    continue
+            result.append(action)
+        return result
+
+    def _put_back(
+        self,
+        pending: list[IncidentAction],
+        snapshot: PlanSnapshot,
+        first: IncidentAction,
+        now: datetime,
+    ) -> tuple[timedelta, int]:
+        """Move ``first`` and everything after it by one amount. Returns it and the number of
+        stages moved."""
+        stages = [a for a in pending if a.kind == "execute_stage"]
+        # Far enough that every stage that moves is at least LATE_SHIFT from now, and that a
+        # releasing stage is still a full warning lead away (INV-9).
+        delta = now + self._late_shift - first.scheduled_for
+        for action in stages:
+            if action.scheduled_for < first.scheduled_for:
+                continue
+            stage = snapshot.stage(action.step_id) if action.step_id else None
+            if stage is not None and stage.releases:
+                delta = max(delta, now + self._warning_lead - action.scheduled_for)
+        moved_steps: set[uuid.UUID | None] = set()
+        for action in stages:
+            if action.scheduled_for >= first.scheduled_for:
+                moved_steps.add(action.step_id)
+                action.scheduled_for = action.scheduled_for + delta
+                action.updated_at = now
+        for action in pending:
+            if (
+                action.kind == "user_final_warning"
+                and action.step_id in moved_steps
+                and action.scheduled_for > now  # one that is already due runs now, as it should
+            ):
+                action.scheduled_for = action.scheduled_for + delta
+                action.updated_at = now
+        return delta, len(moved_steps)
 
     # ------------------------------------------------------------------ the facts
 
@@ -264,6 +400,7 @@ class ActionExecutor:
         now: datetime,
         params: dict[str, Any],
         send_after: datetime | None = None,
+        key: str = "notif",
     ) -> list[Draft]:
         # The dedupe keys carry the instant the action was scheduled for. A Hold exit shifts a
         # rolled-back stage, so its second execution gets keys the first (cancelled) one does
@@ -282,7 +419,7 @@ class ActionExecutor:
                             channel="push",
                             template_key=template,
                             send_after=due,
-                            dedupe_key=f"notif:{action.id}:{stamp}:push:{device_id}",
+                            dedupe_key=f"{key}:{action.id}:{stamp}:push:{device_id}",
                             device_id=device_id,
                             incident_id=incident.id,
                             action_id=action.id,
@@ -298,7 +435,7 @@ class ActionExecutor:
                         channel=channel,
                         template_key=template,
                         send_after=due,
-                        dedupe_key=f"notif:{action.id}:{stamp}:{channel}",
+                        dedupe_key=f"{key}:{action.id}:{stamp}:{channel}",
                         incident_id=incident.id,
                         action_id=action.id,
                         params=params,
@@ -371,6 +508,12 @@ class ActionExecutor:
             action.updated_at = now
             report.cancelled += 1
             return
+        # When the stage will really run: a Hold or a late worker may have moved it.
+        stage_at = (
+            await EngineStore.stage_action_time(session, incident.id, stage.stage_id)
+            if action.step_id
+            else None
+        ) or incident.anchor_at + timedelta(minutes=stage.offset_minutes)
         drafts = await self._user_drafts(
             session,
             incident=incident,
@@ -380,9 +523,7 @@ class ActionExecutor:
             params={
                 "incident_id": str(incident.id),
                 "stage_position": stage.position,
-                "stage_at": (
-                    incident.anchor_at + timedelta(minutes=stage.offset_minutes)
-                ).isoformat(),
+                "stage_at": stage_at.isoformat(),
                 "release_count": len(stage.releases),
                 "contact_ids": sorted({str(r.contact_id) for r in stage.releases}),
             },

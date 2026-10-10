@@ -12,30 +12,62 @@ import '../../../l10n/gen/app_localizations.dart';
 import '../application/me_controller.dart';
 import '../data/auth_repository.dart';
 
+/// Why the password is asked for, when the generic "for your security" line would leave
+/// the person guessing. Each reason says plainly what the change decides: the safety net
+/// is what tells people when a check-in is missed (SECURITY.md §7).
+enum ReauthReason {
+  /// Saving the escalation plan while check-ins are on (`PUT /plan`).
+  plan,
+
+  /// Removing a trusted contact who is in the plan (`DELETE /contacts/{id}`).
+  removeContact,
+
+  /// Changing the email address of a trusted contact who is in the plan
+  /// (`PATCH /contacts/{id}`).
+  contactEmail,
+}
+
+/// The sentence of [reason] in the sheet's body.
+String reauthReasonText(AppLocalizations l10n, ReauthReason reason) =>
+    switch (reason) {
+      ReauthReason.plan => l10n.reauthReasonPlan,
+      ReauthReason.removeContact => l10n.reauthReasonRemoveContact,
+      ReauthReason.contactEmail => l10n.reauthReasonContactEmail,
+    };
+
 /// Asks for the password again before a sensitive action (USER_FLOWS.md §7). Returns
 /// true when `POST /auth/reauth` accepted it (the server remembers this for 5 minutes),
-/// false when the person dismissed the sheet.
+/// false when the person dismissed the sheet. [reason] replaces the generic body with
+/// why this action needs it.
 ///
 /// Any feature can use it directly, or through [withReauth].
-Future<bool> showReauthSheet(BuildContext context) async {
+Future<bool> showReauthSheet(
+  BuildContext context, {
+  ReauthReason? reason,
+}) async {
   final confirmed = await showModalBottomSheet<bool>(
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
     showDragHandle: true,
-    builder: (context) => const ReauthSheet(),
+    builder: (context) => ReauthSheet(reason: reason),
   );
   return confirmed ?? false;
 }
 
 /// Runs [action]; when the server asks for a recent re-authentication
 /// (`403 reauth_required`) shows the [ReauthSheet] and, once confirmed, runs [action]
-/// once more. Returns null when the person dismissed the sheet. Other failures are
-/// rethrown for the caller to show.
+/// once more. Returns null when the person dismissed the sheet: [action] was then run
+/// only once and changed nothing. Other failures are rethrown for the caller to show.
+///
+/// [action] must send the same request both times (build the body before calling this,
+/// not inside it): the server answers `reauth_required` before it changes anything, so
+/// the second run is the request the person asked for, once.
 Future<T?> withReauth<T>(
   BuildContext context,
-  Future<T> Function() action,
-) async {
+  Future<T> Function() action, {
+  ReauthReason? reason,
+}) async {
   try {
     return await action();
   } on ForbiddenFailure catch (failure) {
@@ -46,7 +78,7 @@ Future<T?> withReauth<T>(
   if (!context.mounted) {
     return null;
   }
-  if (!await showReauthSheet(context)) {
+  if (!await showReauthSheet(context, reason: reason)) {
     return null;
   }
   return action();
@@ -55,7 +87,10 @@ Future<T?> withReauth<T>(
 /// The bottom sheet itself. The password is held by the text field only for as long as
 /// the sheet is open and is never stored or logged.
 class ReauthSheet extends ConsumerStatefulWidget {
-  const ReauthSheet({super.key});
+  const ReauthSheet({this.reason, super.key});
+
+  /// Why the password is needed here; the generic line when null.
+  final ReauthReason? reason;
 
   @override
   ConsumerState<ReauthSheet> createState() => _ReauthSheetState();
@@ -127,7 +162,11 @@ class _ReauthSheetState extends ConsumerState<ReauthSheet> {
           children: [
             PageHeading(l10n.reauthTitle),
             Gap.xs,
-            BodyText(l10n.reauthBody),
+            BodyText(
+              widget.reason == null
+                  ? l10n.reauthBody
+                  : reauthReasonText(l10n, widget.reason!),
+            ),
             Gap.md,
             if (failure != null && !wrongPassword) ...[
               FailureNotice.of(context, failure),

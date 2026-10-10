@@ -85,13 +85,21 @@ class ContactsController extends AsyncNotifier<List<TrustedContact>> {
   }
 
   /// Changes a contact. Changing the email re-invites (the server resets the status).
+  ///
+  /// While check-ins are on, changing the email of a contact who is in a plan stage, or
+  /// switching such a contact off (`is_active` false), needs a recent password (403
+  /// `reauth_required`, SECURITY.md §7): wrap the call in `withReauth`. The list is left
+  /// as it was, so the same call can be made again. Other edits never ask.
   Future<TrustedContact> updateContact(String id, ContactPatch patch) async {
     final contact = await _run(() => _repository.update(id, patch));
     _replace(contact);
     return contact;
   }
 
-  /// Removes a contact.
+  /// Removes a contact. While check-ins are on, removing a contact who is in a plan
+  /// stage needs a recent password (403 `reauth_required`, SECURITY.md §7): wrap the
+  /// call in `withReauth`. The list is left as it was, so the same call can be made
+  /// again. Someone who is in no stage never asks.
   Future<void> removeContact(String id) async {
     await _run(() => _repository.delete(id));
     state = AsyncData([

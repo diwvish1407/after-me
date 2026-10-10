@@ -3,6 +3,35 @@ import 'dart:async';
 import 'package:afterme/core/api/failures/app_failure.dart';
 import 'package:afterme/features/contacts/data/contacts_repository.dart';
 
+/// What the server looks at before it lets a trusted contact be taken out of a safety
+/// net that is on (SECURITY.md §7): whether check-ins are switched on, whether the
+/// contact is in a plan stage, and whether the session entered its password recently.
+/// `TestFakes` wires it to the check-in and plan fakes.
+class ContactStepUp {
+  const ContactStepUp({
+    required this.scheduleOff,
+    required this.inPlan,
+    required this.reauthenticated,
+  });
+
+  /// Check-ins are `inactive` (onboarding): nothing needs the password.
+  final bool Function() scheduleOff;
+
+  /// The contact is in at least one plan stage.
+  final bool Function(String contactId) inPlan;
+
+  /// The session re-authenticated within the last 5 minutes.
+  final bool Function() reauthenticated;
+
+  /// Throws 403 `reauth_required` when this contact may not be removed, switched off or
+  /// pointed at another address right now.
+  void check(String contactId) {
+    if (!scheduleOff() && inPlan(contactId) && !reauthenticated()) {
+      throw const ForbiddenFailure(code: 'reauth_required');
+    }
+  }
+}
+
 /// A [ContactsRepository] for tests that behaves like the server: it validates the way
 /// the contract describes (own email, duplicates, the free-tier limit, resend rules),
 /// numbers contacts by priority, and lets a test script failures and recipient answers.
@@ -35,6 +64,10 @@ class InMemoryContactsRepository implements ContactsRepository {
 
   /// Failures thrown by the next calls to the named method, consumed in order.
   final Map<String, List<AppFailure>> failures = {};
+
+  /// The step-up rule (`TestFakes` sets it). Null: a change never asks for the password,
+  /// which is what the contact tests that have no plan or schedule need.
+  ContactStepUp? stepUp;
 
   /// Invitation sends per contact id (create, email change and resend each count).
   final Map<String, int> invitations = {};
@@ -141,6 +174,11 @@ class InMemoryContactsRepository implements ContactsRepository {
     if (patch.email != null) {
       _checkEmail(patch.email!, exceptId: id);
     }
+    // After ownership (404) and validation (422, 409), like the server: only a change of
+    // address, or switching the contact off, is taken as weakening the safety net.
+    if (emailChanged || patch.isActive == false) {
+      stepUp?.check(id);
+    }
     final relationship = patch.relationship ?? current.relationship;
     var updated = current.copyWith(
       displayName: patch.name?.trim() ?? current.displayName,
@@ -171,7 +209,9 @@ class InMemoryContactsRepository implements ContactsRepository {
   @override
   Future<void> delete(String id) async {
     _enter('delete');
-    _contacts.removeAt(_indexOf(id));
+    final index = _indexOf(id);
+    stepUp?.check(id);
+    _contacts.removeAt(index);
   }
 
   @override

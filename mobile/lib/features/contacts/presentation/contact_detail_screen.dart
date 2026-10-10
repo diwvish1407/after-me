@@ -12,6 +12,7 @@ import '../../../core/design_system/design_system.dart';
 import '../../../core/time/clock.dart';
 import '../../../core/time/time_format.dart';
 import '../../../l10n/gen/app_localizations.dart';
+import '../../auth/presentation/reauth_sheet.dart';
 import '../application/contacts_controller.dart';
 import '../data/contacts_repository.dart';
 import 'contact_by_id_view.dart';
@@ -108,10 +109,23 @@ class _ContactDetailState extends ConsumerState<_ContactDetail> {
       _removing = true;
       _failure = null;
     });
+    final controller = ref.read(contactsControllerProvider.notifier);
     try {
-      await ref
-          .read(contactsControllerProvider.notifier)
-          .removeContact(_contact.id);
+      // Taking someone who is in the plan out of it while check-ins are on asks for the
+      // password again (403 reauth_required): the sheet is shown once and the same
+      // removal repeated. Someone who is in no stage, or any removal while check-ins are
+      // off, never asks.
+      final removed = await withReauth(context, () async {
+        await controller.removeContact(_contact.id);
+        return true;
+      }, reason: ReauthReason.removeContact);
+      if (removed == null) {
+        // The sheet was closed: nothing was removed and nothing is said.
+        if (mounted) {
+          setState(() => _removing = false);
+        }
+        return;
+      }
       messenger.showSnackBar(
         SnackBar(content: Text(l10n.contactRemoved(_contact.displayName))),
       );

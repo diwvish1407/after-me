@@ -12,10 +12,10 @@ The person lives in Asia/Kolkata and checks in daily by 20:00. Their plan: a 3-h
 | Wed 14 Oct 20:00:00 IST | **deadline passes**: the worker opens an incident and writes its whole timeline | incident **grace**, nobody told; 'You missed your 8:00 PM check-in' to the user |
 | Wed 14 Oct 22:45:00 IST | last-chance reminder (15 minutes before grace ends) | incident **grace**, nobody told |
 | Wed 14 Oct 23:00:00 IST | grace ends: **stage 1 runs** | incident **escalating**, nobody told; Mom's message is queued behind the 5-minute settle delay; nothing has left |
-| Wed 14 Oct 23:05:00 IST | settle delay over: Mom is emailed, the incident now counts as 'contacts messaged' | incident **escalating**, contacts told; incident_last_chance → the user, contact_alert → Mom, stage_executed → the user |
-| Thu 15 Oct 20:05:00 IST | 24 h after the start: **stage 2 runs**, Brother is emailed | incident **escalated**, contacts told; stage_executed → the user, stage_executed → the user, contact_alert → Brother |
+| Wed 14 Oct 23:05:00 IST | settle delay over: Mom is emailed, the incident now counts as 'contacts messaged' | incident **escalating**, contacts told; contact_alert → Mom, incident_last_chance → the user, stage_executed → the user |
+| Thu 15 Oct 20:05:00 IST | 24 h after the start: **stage 2 runs**, Brother is emailed | incident **escalated**, contacts told; contact_alert → Brother, stage_executed → the user, stage_executed → the user |
 | Thu 15 Oct 21:00:00 IST | the user returns and taps I'M OK | incident **escalated**, contacts told; **refused** (`safe_required`): contacts were told, so I'M SAFE is required |
-| Thu 15 Oct 21:01:00 IST | password, then **I'M SAFE** | last incident **cancelled** (user_safe); contact_all_clear → Brother, contact_all_clear → Mom, all_clear_confirmation → the user |
+| Thu 15 Oct 21:01:00 IST | password, then **I'M SAFE** | last incident **cancelled** (user_safe); all_clear_confirmation → the user, contact_all_clear → Brother, contact_all_clear → Mom |
 | Fri 16 Oct 19:00:00 IST | a day of ticks later | last incident **cancelled** (user_safe); no further contact-facing message for that incident (0 new) |
 
 ## Things to notice
