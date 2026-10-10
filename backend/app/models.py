@@ -11,10 +11,18 @@ from app.contacts.models import ContactVerification, EmailSuppression, TrustedCo
 from app.core.db import Base
 from app.core.models import SystemFlag
 from app.incidents.models import EscalationIncident, IncidentAction
+from app.instructions.models import Instruction, InstructionCategory, InstructionRecipient
 from app.notifications.models import Notification, NotificationLog
 from app.ops.models import IngestionProbe, ServiceHeartbeat, SystemHold
 from app.plans.models import EscalationPlan, EscalationStep, EscalationStepContact
-from app.security.models import RateLimitCounter
+from app.releases.models import (
+    PortalAccess,
+    PortalOtpChallenge,
+    PortalSession,
+    PortalToken,
+    ReleaseEvent,
+)
+from app.security.models import RateLimitCounter, UserKey
 from app.users.models import UserProfile
 
 __all__ = [
@@ -32,15 +40,24 @@ __all__ = [
     "EscalationStepContact",
     "IncidentAction",
     "IngestionProbe",
+    "Instruction",
+    "InstructionCategory",
+    "InstructionRecipient",
     "Notification",
     "NotificationLog",
+    "PortalAccess",
+    "PortalOtpChallenge",
+    "PortalSession",
+    "PortalToken",
     "RateLimitCounter",
     "RefreshToken",
+    "ReleaseEvent",
     "ServiceHeartbeat",
     "SystemFlag",
     "SystemHold",
     "TrustedContact",
     "User",
+    "UserKey",
     "UserProfile",
     "metadata",
 ]
@@ -83,4 +100,19 @@ PHASE5_TABLES: tuple[str, ...] = (
     "ingestion_probes",
     "service_heartbeats",
 )
-ALL_TABLES: tuple[str, ...] = PHASE1_TABLES + PHASE3_TABLES + PHASE4_TABLES + PHASE5_TABLES
+
+# Phase 6: the wrapped keys, instructions and recipients, releases and the recipient portal.
+PHASE6_TABLES: tuple[str, ...] = (
+    "user_keys",
+    "instruction_categories",
+    "instructions",
+    "instruction_recipients",
+    "release_events",
+    "portal_access",
+    "portal_tokens",
+    "portal_sessions",
+    "portal_otp_challenges",
+)
+ALL_TABLES: tuple[str, ...] = (
+    PHASE1_TABLES + PHASE3_TABLES + PHASE4_TABLES + PHASE5_TABLES + PHASE6_TABLES
+)

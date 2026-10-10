@@ -29,6 +29,9 @@ enum FieldIssue {
   labelTooLong,
   labelInvalid,
   labelHasLink,
+  titleTooLong,
+  bodyTooLong,
+  textInvalid,
 }
 
 /// Maps a [FieldIssue] to the calm copy in the ARB.
@@ -55,6 +58,9 @@ String issueMessage(AppLocalizations l10n, FieldIssue issue) => switch (issue) {
   FieldIssue.labelTooLong => l10n.fieldLabelTooLong,
   FieldIssue.labelInvalid => l10n.fieldLabelInvalid,
   FieldIssue.labelHasLink => l10n.fieldLabelHasLink,
+  FieldIssue.titleTooLong => l10n.fieldTitleTooLong,
+  FieldIssue.bodyTooLong => l10n.fieldBodyTooLong,
+  FieldIssue.textInvalid => l10n.fieldTextInvalid,
 };
 
 /// Maps a server field error code (API_SPEC.md §1.1) to a [FieldIssue], or null for
@@ -64,6 +70,11 @@ FieldIssue? issueFromFieldError(ApiFieldError error) {
   final isPassword = field.endsWith('password');
   return switch (error.code) {
     'required' => FieldIssue.required,
+    // An instruction's title and text (API_SPEC.md §10).
+    'too_long' when field == 'title' => FieldIssue.titleTooLong,
+    'too_long' when field == 'body' => FieldIssue.bodyTooLong,
+    'invalid_characters' when field == 'title' || field == 'body' =>
+      FieldIssue.textInvalid,
     'invalid_email' => FieldIssue.invalidEmail,
     'too_long' when field.contains('label') => FieldIssue.labelTooLong,
     'invalid_characters' when field.contains('label') =>
@@ -110,6 +121,8 @@ abstract final class Validators {
   static const int displayNameMax = 80;
   static const int emailMax = 254;
   static const int relationshipLabelMax = 40;
+  static const int instructionTitleMax = 120;
+  static const int instructionBodyMax = 20000;
 
   static final RegExp _email = RegExp(
     r'^[A-Za-z0-9.!#$%&*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?'
@@ -201,6 +214,57 @@ abstract final class Validators {
     }
     if (_link.hasMatch(label)) {
       return FieldIssue.labelHasLink;
+    }
+    return null;
+  }
+
+  /// Reordering and invisible characters that can make text read differently than it is
+  /// (embeddings, overrides, isolates, directional marks, word joiner, BOM): refused by
+  /// the server in instructions.
+  static const Set<int> _textDirection = {
+    0x202A, 0x202B, 0x202C, 0x202D, 0x202E, 0x2066, 0x2067, 0x2068, 0x2069, //
+    0x200E, 0x200F, 0x061C, 0x2060, 0xFEFF,
+  };
+
+  /// Plain text rules of an instruction (API_SPEC.md §10): no control characters (the
+  /// body may have line breaks and tabs) and no text-direction characters.
+  static bool _hasForbiddenCharacters(String text, {required bool multiline}) =>
+      text.runes.any((r) {
+        if (_textDirection.contains(r)) {
+          return true;
+        }
+        final control = r < 0x20 || (r >= 0x7f && r < 0xa0);
+        final allowed = multiline && (r == 0x0a || r == 0x09 || r == 0x0d);
+        return control && !allowed;
+      });
+
+  /// An instruction's title: 1-120 characters, one line, plain text.
+  static FieldIssue? instructionTitle(String value) {
+    final title = value.trim();
+    if (title.isEmpty) {
+      return FieldIssue.required;
+    }
+    if (title.runes.length > instructionTitleMax) {
+      return FieldIssue.titleTooLong;
+    }
+    if (_hasForbiddenCharacters(title, multiline: false)) {
+      return FieldIssue.textInvalid;
+    }
+    return null;
+  }
+
+  /// An instruction's text: 1-20,000 characters (code points, like the server), plain
+  /// text with line breaks.
+  static FieldIssue? instructionBody(String value) {
+    final body = value.replaceAll('\r\n', '\n').trim();
+    if (body.isEmpty) {
+      return FieldIssue.required;
+    }
+    if (body.runes.length > instructionBodyMax) {
+      return FieldIssue.bodyTooLong;
+    }
+    if (_hasForbiddenCharacters(body, multiline: true)) {
+      return FieldIssue.textInvalid;
     }
     return null;
   }

@@ -44,6 +44,7 @@ from app.notifications import outbox
 from app.notifications.models import Notification
 from app.notifications.outbox import Draft
 from app.ops.models import IngestionProbe, SystemHold
+from app.releases.repository import ReleaseRepository
 
 _log = get_logger("afterme.hold")
 
@@ -523,6 +524,9 @@ class HoldMonitor:
                     # Nothing left the system: take the stage back, as if it never ran.
                     cancelled = await self._cancel_messages(session, action, now)
                     report.cancelled_messages += cancelled
+                    await ReleaseRepository(session).rollback_action(
+                        owner_id=user_id, action_id=action.id, now=now
+                    )
                     action.status = "pending"
                     action.executed_at = None
                     action.outcome = None

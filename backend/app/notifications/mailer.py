@@ -48,7 +48,10 @@ class EmailTemplate(StrEnum):
     ALL_CLEAR_CONFIRMATION = "all_clear_confirmation"
     SERVICE_INTERRUPTION = "service_interruption"
     CONTACT_ALERT = "contact_alert"
+    CONTACT_ALERT_WITH_RELEASE = "contact_alert_with_release"
+    CONTACT_RELEASE = "contact_release"
     CONTACT_ALL_CLEAR = "contact_all_clear"
+    PORTAL_CODE = "portal_code"
 
 
 _SUBJECTS: Final[dict[EmailTemplate, str]] = {
@@ -78,6 +81,9 @@ _SUBJECTS: Final[dict[EmailTemplate, str]] = {
     EmailTemplate.ALL_CLEAR_CONFIRMATION: "All clear sent",
     EmailTemplate.SERVICE_INTERRUPTION: "We had a service interruption. Please check in",
     EmailTemplate.CONTACT_ALERT: "{user_name} hasn't checked in",
+    EmailTemplate.CONTACT_ALERT_WITH_RELEASE: "{user_name} hasn't checked in",
+    EmailTemplate.CONTACT_RELEASE: "{user_name} left information for you",
+    EmailTemplate.PORTAL_CODE: "Your AfterMe code",
     EmailTemplate.CONTACT_ALL_CLEAR: "{user_name} has checked in. All clear.",
 }
 

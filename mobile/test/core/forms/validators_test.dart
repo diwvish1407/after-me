@@ -226,6 +226,115 @@ void main() {
     });
   });
 
+  group('instruction validators', () {
+    test('a title is 1 to 120 characters on one line', () {
+      expect(Validators.instructionTitle(''), FieldIssue.required);
+      expect(Validators.instructionTitle('   '), FieldIssue.required);
+      expect(Validators.instructionTitle('House emergency'), isNull);
+      expect(Validators.instructionTitle('x' * 120), isNull);
+      expect(Validators.instructionTitle('x' * 121), FieldIssue.titleTooLong);
+      expect(
+        Validators.instructionTitle('  ${'x' * 120}  '),
+        isNull,
+        reason: 'counted after trimming, like the server',
+      );
+      expect(Validators.instructionTitle('a\nb'), FieldIssue.textInvalid);
+      expect(Validators.instructionTitle('a\tb'), FieldIssue.textInvalid);
+      expect(Validators.instructionTitle('a\u0000b'), FieldIssue.textInvalid);
+      expect(Validators.instructionTitle('a\u007Fb'), FieldIssue.textInvalid);
+    });
+
+    test('characters are counted as code points, like the server', () {
+      // An emoji is one code point (two UTF-16 units).
+      expect(Validators.instructionTitle('\u{1F600}' * 120), isNull);
+      expect(
+        Validators.instructionTitle('\u{1F600}' * 121),
+        FieldIssue.titleTooLong,
+      );
+    });
+
+    test('the text is 1 to 20,000 characters with line breaks and tabs', () {
+      expect(Validators.instructionBody(''), FieldIssue.required);
+      expect(Validators.instructionBody(' \n\t '), FieldIssue.required);
+      expect(Validators.instructionBody('Keys\nare under the pot.'), isNull);
+      expect(Validators.instructionBody('a\n\tb'), isNull);
+      expect(Validators.instructionBody('a\r\nb'), isNull);
+      expect(Validators.instructionBody('x' * 20000), isNull);
+      expect(Validators.instructionBody('x' * 20001), FieldIssue.bodyTooLong);
+      expect(
+        Validators.instructionBody('${'x' * 9999}\r\n${'y' * 9999}'),
+        isNull,
+        reason: 'a Windows line break is one character',
+      );
+    });
+
+    test('control and text-direction characters are refused', () {
+      for (final bad in [
+        '\u0000',
+        '\u0007',
+        '\u001B',
+        '\u0085',
+        '\u202A',
+        '\u202B',
+        '\u202C',
+        '\u202D',
+        '\u202E',
+        '\u2066',
+        '\u2067',
+        '\u2068',
+        '\u2069',
+        '\u200E',
+        '\u200F',
+        '\u061C',
+        '\u2060',
+        '\uFEFF',
+      ]) {
+        expect(
+          Validators.instructionBody('a${bad}b'),
+          FieldIssue.textInvalid,
+          reason: bad.codeUnits.first.toRadixString(16),
+        );
+        expect(Validators.instructionTitle('a${bad}b'), FieldIssue.textInvalid);
+      }
+      expect(
+        Validators.instructionBody('Zero\u200Bwidth is only a space'),
+        isNull,
+      );
+      expect(Validators.instructionBody('e\u0301 and \u00E9 and 日本語'), isNull);
+    });
+
+    test('the server\'s codes land on the title and the text', () {
+      ApiFieldError e(String field, String code) =>
+          ApiFieldError(field: field, code: code);
+      expect(issueFromFieldError(e('title', 'required')), FieldIssue.required);
+      expect(
+        issueFromFieldError(e('title', 'too_long')),
+        FieldIssue.titleTooLong,
+      );
+      expect(
+        issueFromFieldError(e('body', 'too_long')),
+        FieldIssue.bodyTooLong,
+      );
+      expect(
+        issueFromFieldError(e('title', 'invalid_characters')),
+        FieldIssue.textInvalid,
+      );
+      expect(
+        issueFromFieldError(e('body', 'invalid_characters')),
+        FieldIssue.textInvalid,
+      );
+      // The existing mapping for names and labels is unchanged.
+      expect(
+        issueFromFieldError(e('display_name', 'invalid_characters')),
+        FieldIssue.nameInvalid,
+      );
+      expect(
+        issueFromFieldError(e('relationship_label', 'too_long')),
+        FieldIssue.labelTooLong,
+      );
+    });
+  });
+
   group('DigitsOnlyFormatter', () {
     TextEditingValue run(String text) => const DigitsOnlyFormatter()
         .formatEditUpdate(TextEditingValue.empty, TextEditingValue(text: text));

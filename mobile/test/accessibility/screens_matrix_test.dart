@@ -14,6 +14,7 @@ import 'package:afterme/features/checkin/application/pending_checkin_store.dart'
 import 'package:afterme/features/checkin/data/models/checkin_models.dart';
 import 'package:afterme/features/contacts/data/contacts_repository.dart';
 import 'package:afterme/features/home/application/home_controller.dart';
+import 'package:afterme/features/instructions/data/instructions_repository.dart';
 import 'package:afterme/features/onboarding/application/onboarding_controller.dart';
 import 'package:afterme/features/onboarding/application/setup_controller.dart';
 import 'package:afterme/features/plan/data/plan_repository.dart';
@@ -134,6 +135,100 @@ void _withContacts(
   String tier = 'premium',
 }) {
   fakes.contacts = InMemoryContactsRepository(tier: tier, initial: contacts);
+}
+
+/// Mom (accepted), Samantha (waiting), Dad (declined), Ann (opted out) and Joe (bounced),
+/// and a plan with stages after 3 hours, 1 day and 2 days: the two late ones are what an
+/// instruction can be released at. With [lateStages] 0 only the first stage exists.
+void _instructionWorld(
+  TestFakes fakes, {
+  String tier = 'premium',
+  int lateStages = 2,
+}) {
+  _withContacts(fakes, _everyone(), tier: tier);
+  fakes.plan.seed(
+    PlanDraft(
+      graceMinutes: 180,
+      stages: [
+        const PlanStageDraft(offsetMinutes: 180, contactIds: ['c1']),
+        if (lateStages >= 1)
+          const PlanStageDraft(offsetMinutes: 1440, contactIds: ['c1', 'c2']),
+        if (lateStages >= 2)
+          const PlanStageDraft(offsetMinutes: 2880, contactIds: ['c3']),
+      ],
+    ),
+  );
+}
+
+void _instructionWorld0(TestFakes fakes) =>
+    _instructionWorld(fakes, lateStages: 0);
+
+/// A world whose plan has exactly the stages [offsets] (minutes after the missed
+/// check-in, each telling Mom): a plan with only an early stage offers 1, 2 and 3 days as
+/// times to add; a free plan with two stages has no room for another.
+void _planOf(TestFakes fakes, List<int> offsets, {String tier = 'premium'}) {
+  _withContacts(fakes, _everyone(), tier: tier);
+  fakes.plan.seed(
+    PlanDraft(
+      graceMinutes: offsets.first,
+      stages: [
+        for (final offset in offsets)
+          PlanStageDraft(offsetMinutes: offset, contactIds: const ['c1']),
+      ],
+    ),
+  );
+}
+
+/// Chooses the radio with [label] (the [index]th with that text).
+Future<void> _time(WidgetTester tester, String label, {int index = 0}) async {
+  final finder = find.widgetWithText(RadioListTile<String>, label).at(index);
+  await tester.ensureVisible(finder);
+  await tester.pump();
+  await tester.tap(finder);
+  await tester.pumpAndSettle();
+}
+
+/// Instructions in three categories: one shared with two people at different times, one
+/// that is switched off, one nobody receives.
+void _someInstructions(TestFakes fakes) {
+  final stages = fakes.plan.stages;
+  fakes.instructions
+    ..seed(
+      title: 'House emergency',
+      body: 'The spare key is with Mrs. Sharma at flat 3B.\nCall her first.',
+      category: InstructionCategory.home,
+      recipients: {'c1': stages[1].id, 'c2': stages[2].id},
+    )
+    ..seed(
+      title: 'Where the original documents and the spare passport are kept at home',
+      category: InstructionCategory.documents,
+      status: InstructionStatus.inactive,
+      recipients: {'c3': stages[1].id},
+    )
+    ..seed(title: 'Goldfish', category: InstructionCategory.pets);
+}
+
+Future<void> _chip(WidgetTester tester, String label) async {
+  final finder = find.widgetWithText(ChoiceChip, label);
+  await tester.ensureVisible(finder.first);
+  await tester.pump();
+  await tester.tap(finder.first);
+  await tester.pump();
+}
+
+Future<void> _tick(WidgetTester tester, String name) async {
+  final finder = find.widgetWithText(CheckboxListTile, name);
+  await tester.ensureVisible(finder.first);
+  await tester.pump();
+  await tester.tap(finder.first);
+  await tester.pump();
+}
+
+/// Settles the scroll that follows typing (an animated scroll ignores taps) and goes
+/// back to the top.
+Future<void> _typed(WidgetTester tester) async {
+  await tester.pumpAndSettle();
+  await _toTop(tester);
 }
 
 /// Scrolls the page back to its top: the guidelines measure the visible slices of
@@ -382,6 +477,26 @@ final _screens = <_Screen>[
       await tester.pumpAndSettle();
     },
   ),
+  _Screen(
+    'onboarding: instruction editor (the plan has no stage a day out: times to add)',
+    signedIn: true,
+    step: OnboardingStep.instruction,
+    configure: _instructionWorld0,
+    prepare: (tester, _) async {
+      await tapText(tester, 'Pets');
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Choosing a time adds it'), findsOneWidget);
+    },
+  ),
+  _Screen(
+    'onboarding: instruction (saved)',
+    signedIn: true,
+    step: OnboardingStep.instruction,
+    configure: (fakes) {
+      _instructionWorld(fakes);
+      _someInstructions(fakes);
+    },
+  ),
   const _Screen(
     'onboarding: protect',
     signedIn: true,
@@ -521,6 +636,472 @@ final _screens = <_Screen>[
     step: OnboardingStep.contact,
     prepare: (tester, _) async {
       await tapText(tester, 'Other');
+      await _toTop(tester);
+    },
+  ),
+  const _Screen(
+    'instructions (empty)',
+    signedIn: true,
+    route: AppRoutes.instructions,
+    configure: _instructionWorld,
+  ),
+  _Screen(
+    'instructions (grouped, with notes)',
+    signedIn: true,
+    route: AppRoutes.instructions,
+    configure: (fakes) {
+      _instructionWorld(fakes);
+      _someInstructions(fakes);
+    },
+  ),
+  _Screen(
+    'instructions (one category)',
+    signedIn: true,
+    route: AppRoutes.instructions,
+    configure: (fakes) {
+      _instructionWorld(fakes);
+      _someInstructions(fakes);
+    },
+    prepare: (tester, _) async {
+      await _chip(tester, 'Pets');
+      await tester.pumpAndSettle();
+      await _toTop(tester);
+    },
+  ),
+  _Screen(
+    'instructions (error)',
+    signedIn: true,
+    route: AppRoutes.instructions,
+    configure: (fakes) =>
+        fakes.instructions.failures['list'] = [const NetworkFailure()],
+  ),
+  _Screen(
+    'instructions: free-plan limit sheet',
+    signedIn: true,
+    route: AppRoutes.instructions,
+    configure: (fakes) {
+      _instructionWorld(fakes, tier: 'free');
+      _someInstructions(fakes);
+    },
+    prepare: (tester, _) async {
+      await tapText(tester, 'Add instruction');
+      await tester.pumpAndSettle();
+      expect(
+        find.text('More instructions are part of Premium'),
+        findsOneWidget,
+      );
+    },
+  ),
+  const _Screen(
+    'add instruction',
+    signedIn: true,
+    route: AppRoutes.instructionNew,
+    configure: _instructionWorld,
+  ),
+  _Screen(
+    'add instruction (errors)',
+    signedIn: true,
+    route: AppRoutes.instructionNew,
+    configure: _instructionWorld,
+    prepare: (tester, _) async {
+      await tapText(tester, 'Save instruction');
+      await tester.pumpAndSettle();
+      await _toTop(tester);
+    },
+  ),
+  _Screen(
+    'add instruction (text too long)',
+    signedIn: true,
+    route: AppRoutes.instructionNew,
+    configure: _instructionWorld,
+    prepare: (tester, _) async {
+      await _chip(tester, 'Work');
+      await typeInto(tester, 'Title', 'x' * 125);
+      await tester.enterText(
+        find.widgetWithText(TextField, 'What should they know?'),
+        'y' * 20001,
+      );
+      await tester.pumpAndSettle();
+      await tapText(tester, 'Save instruction');
+      await _typed(tester);
+    },
+  ),
+  _Screen(
+    'add instruction (Digital accounts guidance)',
+    signedIn: true,
+    route: AppRoutes.instructionNew,
+    configure: _instructionWorld,
+    prepare: (tester, _) async {
+      await _chip(tester, 'Digital accounts');
+      await _typed(tester);
+      expect(find.textContaining("Don't paste passwords."), findsOneWidget);
+    },
+  ),
+  _Screen(
+    'add instruction (everyone listed, one time)',
+    signedIn: true,
+    route: AppRoutes.instructionNew,
+    configure: _instructionWorld,
+    prepare: (tester, _) async {
+      await _chip(tester, 'Family');
+      await _tick(tester, 'Mom');
+      await _tick(tester, 'Samantha Rao-Whitfield');
+      await tester.pumpAndSettle();
+      await _toTop(tester);
+    },
+  ),
+  _Screen(
+    'add instruction (a time for each person)',
+    signedIn: true,
+    route: AppRoutes.instructionNew,
+    configure: _instructionWorld,
+    prepare: (tester, _) async {
+      await _tick(tester, 'Mom');
+      await _tick(tester, 'Samantha Rao-Whitfield');
+      await tapText(tester, 'Choose a time for each person');
+      await tester.pumpAndSettle();
+      await _toTop(tester);
+    },
+  ),
+  const _Screen(
+    'add instruction (no stage a day out: only times to add)',
+    signedIn: true,
+    route: AppRoutes.instructionNew,
+    configure: _instructionWorld0,
+  ),
+  const _Screen(
+    'add instruction (no trusted contact)',
+    signedIn: true,
+    route: AppRoutes.instructionNew,
+  ),
+  _Screen(
+    'add instruction (the server refuses)',
+    signedIn: true,
+    route: AppRoutes.instructionNew,
+    configure: (fakes) {
+      _instructionWorld(fakes);
+      fakes.instructions.failures['create'] = [
+        const ValidationFailure(
+          code: 'validation_failed',
+          fieldErrors: [
+            ApiFieldError(field: 'title', code: 'invalid_characters'),
+            ApiFieldError(
+              field: 'recipients[0].release_stage_id',
+              code: 'release_stage_too_early',
+            ),
+          ],
+        ),
+      ];
+    },
+    prepare: (tester, _) async {
+      await _chip(tester, 'Home');
+      await typeInto(tester, 'Title', 'House emergency');
+      await tester.enterText(
+        find.widgetWithText(TextField, 'What should they know?'),
+        'The spare key is with a neighbour.',
+      );
+      await tester.pumpAndSettle();
+      await _tick(tester, 'Mom');
+      await tester.pumpAndSettle();
+      final radio = find.byType(RadioListTile<String>).first;
+      await tester.ensureVisible(radio);
+      await tester.pump();
+      await tester.tap(radio);
+      await tester.pump();
+      await tapText(tester, 'Save instruction');
+      await tester.pumpAndSettle();
+      await _toTop(tester);
+    },
+  ),
+  _Screen(
+    'add instruction: examples sheet',
+    signedIn: true,
+    route: AppRoutes.instructionNew,
+    configure: _instructionWorld,
+    prepare: (tester, _) async {
+      await tapText(tester, 'Start from an example');
+      await tester.pumpAndSettle();
+      expect(find.text('Password manager and emergency access'), findsOne);
+    },
+  ),
+  _Screen(
+    'add instruction: examples of one category',
+    signedIn: true,
+    route: AppRoutes.instructionNew,
+    configure: _instructionWorld,
+    prepare: (tester, _) async {
+      await _chip(tester, 'Insurance');
+      await tapText(tester, 'Start from an example');
+      await tester.pumpAndSettle();
+    },
+  ),
+  _Screen(
+    'add instruction (a draft was kept)',
+    signedIn: true,
+    route: AppRoutes.instructionNew,
+    configure: _instructionWorld,
+    prepare: (tester, container) async {
+      await _chip(tester, 'Pets');
+      await typeInto(tester, 'Title', 'Goldfish');
+      await tester.pumpAndSettle();
+      container.read(routerProvider).go(AppRoutes.instructions);
+      await tester.pumpAndSettle();
+      container.read(routerProvider).go(AppRoutes.instructionNew);
+      await tester.pumpAndSettle();
+      expect(find.text('We kept what you typed.'), findsOneWidget);
+    },
+  ),
+  _Screen(
+    'instruction detail (active)',
+    signedIn: true,
+    route: AppRoutes.instructionDetail('instruction-1'),
+    configure: (fakes) {
+      _instructionWorld(fakes);
+      _someInstructions(fakes);
+    },
+  ),
+  _Screen(
+    'instruction detail (inactive, long title)',
+    signedIn: true,
+    route: AppRoutes.instructionDetail('instruction-2'),
+    configure: (fakes) {
+      _instructionWorld(fakes);
+      _someInstructions(fakes);
+    },
+  ),
+  _Screen(
+    'instruction detail (nobody receives it)',
+    signedIn: true,
+    route: AppRoutes.instructionDetail('instruction-3'),
+    configure: (fakes) {
+      _instructionWorld(fakes);
+      _someInstructions(fakes);
+    },
+  ),
+  _Screen(
+    'instruction detail (cannot be loaded)',
+    signedIn: true,
+    route: AppRoutes.instructionDetail('instruction-1'),
+    configure: (fakes) {
+      _instructionWorld(fakes);
+      _someInstructions(fakes);
+      fakes.instructions.failures['get'] = [const NetworkFailure()];
+    },
+  ),
+  _Screen(
+    'instruction detail: delete sheet',
+    signedIn: true,
+    route: AppRoutes.instructionDetail('instruction-1'),
+    configure: (fakes) {
+      _instructionWorld(fakes);
+      _someInstructions(fakes);
+    },
+    prepare: (tester, _) async {
+      await tapText(tester, 'Delete');
+      await tester.pumpAndSettle();
+    },
+  ),
+  _Screen(
+    'instruction detail: password sheet (switching off)',
+    signedIn: true,
+    route: AppRoutes.instructionDetail('instruction-1'),
+    configure: (fakes) {
+      _instructionWorld(fakes);
+      _someInstructions(fakes);
+      fakes.server.activateNow();
+    },
+    prepare: (tester, _) async {
+      final toggle = find.byType(Switch);
+      await tester.ensureVisible(toggle);
+      await tester.pump();
+      await tester.tap(toggle);
+      await _frames(tester);
+      expect(find.text("Confirm it's you"), findsOneWidget);
+    },
+  ),
+  _Screen(
+    'add instruction: password sheet (choosing who receives it)',
+    signedIn: true,
+    route: AppRoutes.instructionNew,
+    configure: (fakes) {
+      _instructionWorld(fakes);
+      fakes.server.activateNow();
+    },
+    prepare: (tester, _) async {
+      await _chip(tester, 'Home');
+      await typeInto(tester, 'Title', 'House emergency');
+      await tester.enterText(
+        find.widgetWithText(TextField, 'What should they know?'),
+        'The spare key is with a neighbour.',
+      );
+      await tester.pumpAndSettle();
+      await _tick(tester, 'Mom');
+      await tester.pumpAndSettle();
+      final radio = find.byType(RadioListTile<String>).first;
+      await tester.ensureVisible(radio);
+      await tester.pump();
+      await tester.tap(radio);
+      await tester.pump();
+      await tapText(tester, 'Save instruction');
+      await _frames(tester);
+      expect(find.text("Confirm it's you"), findsOneWidget);
+    },
+  ),
+  _Screen(
+    'edit instruction',
+    signedIn: true,
+    route: AppRoutes.instructionEdit('instruction-1'),
+    configure: (fakes) {
+      _instructionWorld(fakes);
+      _someInstructions(fakes);
+    },
+  ),
+  _Screen(
+    'edit instruction (one that is gone)',
+    signedIn: true,
+    route: AppRoutes.instructionEdit('instruction-1'),
+    configure: (fakes) {
+      _instructionWorld(fakes);
+      _someInstructions(fakes);
+      fakes.instructions.failures['update'] = [const NotFoundFailure()];
+    },
+    prepare: (tester, _) async {
+      await typeInto(tester, 'Title', 'House emergency (updated)');
+      await tapText(tester, 'Save changes');
+      await tester.pumpAndSettle();
+      await _toTop(tester);
+    },
+  ),
+  _Screen(
+    'plan tab (stages that share instructions)',
+    signedIn: true,
+    route: AppRoutes.plan,
+    configure: (fakes) {
+      _instructionWorld(fakes);
+      _someInstructions(fakes);
+    },
+  ),
+  _Screen(
+    'add instruction (only times to add, one chosen)',
+    signedIn: true,
+    route: AppRoutes.instructionNew,
+    configure: (fakes) => _planOf(fakes, [180]),
+    prepare: (tester, _) async {
+      await _tick(tester, 'Mom');
+      expect(find.textContaining('Choosing a time adds it'), findsOneWidget);
+      await _time(tester, "If you haven't checked in for 2 days");
+      expect(find.textContaining('Saving adds this time'), findsOneWidget);
+      await _toTop(tester);
+    },
+  ),
+  _Screen(
+    'add instruction (stages of the plan and a time to add)',
+    signedIn: true,
+    route: AppRoutes.instructionNew,
+    configure: (fakes) => _planOf(fakes, [180, 1440, 2880]),
+    prepare: (tester, _) async {
+      await _tick(tester, 'Mom');
+      await _tick(tester, 'Samantha Rao-Whitfield');
+      await tapText(tester, 'Choose a time for each person');
+      await tester.pumpAndSettle();
+      await _time(tester, "If you haven't checked in for 3 days", index: 1);
+      await _toTop(tester);
+    },
+  ),
+  _Screen(
+    'add instruction (free plan, no room to add a time)',
+    signedIn: true,
+    route: AppRoutes.instructionNew,
+    configure: (fakes) => _planOf(fakes, [180, 360], tier: 'free'),
+  ),
+  _Screen(
+    'add instruction (free plan, two new times: the limit)',
+    signedIn: true,
+    route: AppRoutes.instructionNew,
+    configure: (fakes) => _planOf(fakes, [180], tier: 'free'),
+    prepare: (tester, _) async {
+      await _chip(tester, 'Home');
+      await typeInto(tester, 'Title', 'House emergency');
+      await tester.enterText(
+        find.widgetWithText(TextField, 'What should they know?'),
+        'The spare key is with a neighbour.',
+      );
+      await tester.pumpAndSettle();
+      await _tick(tester, 'Mom');
+      await _tick(tester, 'Samantha Rao-Whitfield');
+      await tapText(tester, 'Choose a time for each person');
+      await tester.pumpAndSettle();
+      await _time(tester, "If you haven't checked in for 1 day", index: 0);
+      await _time(tester, "If you haven't checked in for 2 days", index: 1);
+      await tapText(tester, 'Save instruction');
+      await tester.pumpAndSettle();
+      await _toTop(tester);
+      expect(
+        find.textContaining('The free plan has room for 2 stages'),
+        findsOne,
+      );
+    },
+  ),
+  _Screen(
+    'add instruction (the plan has the new time, the instruction was refused)',
+    signedIn: true,
+    route: AppRoutes.instructionNew,
+    configure: (fakes) {
+      _planOf(fakes, [180]);
+      fakes.instructions.failures['create'] = [const NetworkFailure()];
+    },
+    prepare: (tester, _) async {
+      await _chip(tester, 'Home');
+      await typeInto(tester, 'Title', 'House emergency');
+      await tester.enterText(
+        find.widgetWithText(TextField, 'What should they know?'),
+        'The spare key is with a neighbour.',
+      );
+      await tester.pumpAndSettle();
+      await _tick(tester, 'Mom');
+      await _time(tester, "If you haven't checked in for 1 day");
+      await tapText(tester, 'Save instruction');
+      await tester.pumpAndSettle();
+      await _toTop(tester);
+      expect(find.textContaining('Your plan now has the new time'), findsOne);
+    },
+  ),
+  _Screen(
+    'add instruction: password sheet (adding a time to the plan)',
+    signedIn: true,
+    route: AppRoutes.instructionNew,
+    configure: (fakes) {
+      _planOf(fakes, [180]);
+      fakes.server.activateNow();
+    },
+    prepare: (tester, _) async {
+      await _chip(tester, 'Home');
+      await typeInto(tester, 'Title', 'House emergency');
+      await tester.enterText(
+        find.widgetWithText(TextField, 'What should they know?'),
+        'The spare key is with a neighbour.',
+      );
+      await tester.pumpAndSettle();
+      await _tick(tester, 'Mom');
+      await _time(tester, "If you haven't checked in for 1 day");
+      await tapText(tester, 'Save instruction');
+      await _frames(tester);
+      expect(find.text("Confirm it's you"), findsOneWidget);
+      expect(find.textContaining('Adding this time to your plan'), findsOne);
+    },
+  ),
+  _Screen(
+    'onboarding: instruction editor (Standard plan, a time to add chosen)',
+    signedIn: true,
+    step: OnboardingStep.instruction,
+    configure: (fakes) {
+      _withContacts(fakes, [testContact()], tier: 'free');
+      fakes.plan.seedStandard(['c1']);
+    },
+    prepare: (tester, _) async {
+      await tapText(tester, 'Pets');
+      await tester.pumpAndSettle();
+      await _time(tester, "If you haven't checked in for 1 day");
       await _toTop(tester);
     },
   ),

@@ -30,6 +30,7 @@ from app.home.schemas import (
 )
 from app.incidents.repository import IncidentRepository
 from app.incidents.service import IncidentService
+from app.instructions.repository import InstructionRepository
 from app.plans.repository import PlanRepository
 
 RECENT_ACTIVITY_LIMIT: Final = 5
@@ -84,6 +85,9 @@ class HomeService(AuthServiceBase):
         activity = await ActivityRepository(self.session).recent_visible(
             owner_id=current.user_id, limit=RECENT_ACTIVITY_LIMIT
         )
+        instructions_active = await InstructionRepository(self.session).count_active(
+            owner_id=current.user_id
+        )
         open_incident = await IncidentRepository(self.session).get_open(owner_id=current.user_id)
         incident_view = None
         if open_incident is not None:
@@ -114,7 +118,7 @@ class HomeService(AuthServiceBase):
                 stages=len({step_id for step_id, _ in stage_rows}),
                 contacts_total=len(contacts),
                 contacts_verified=sum(1 for c in contacts if c.verification_status == "verified"),
-                instructions_active=0,
+                instructions_active=instructions_active,
             ),
             readiness=Readiness(ready=not issues, issues=issues),
             recent_activity=[

@@ -25,9 +25,16 @@ from app.engine.gate import ContactFacts, Decision, GateFacts, GateResult, conta
 from app.engine.releases import ReleaseSource
 from app.engine.store import EngineStore
 from app.incidents.models import OPEN_STATUSES, EscalationIncident, IncidentAction
-from app.incidents.snapshot import PlanSnapshot, SnapshotError, SnapshotStage, parse_snapshot
+from app.incidents.snapshot import (
+    PlanSnapshot,
+    SnapshotError,
+    SnapshotRelease,
+    SnapshotStage,
+    parse_snapshot,
+)
 from app.notifications import outbox
 from app.notifications.outbox import Draft
+from app.releases.repository import ReleaseRepository
 from app.security.hashing import Pepper
 
 _log = get_logger("afterme.engine")
@@ -53,6 +60,14 @@ class UnitReport:
 
     def note(self, gate: str) -> None:
         self.gates[gate] = self.gates.get(gate, 0) + 1
+
+
+def _contact_template(releases: int, already_alerted: bool) -> str:
+    """What a contact is sent for a stage: an alert, an alert that carries a release (their first
+    message in this incident), or only the release notice (they were alerted earlier)."""
+    if not releases:
+        return outbox.CONTACT_ALERT
+    return outbox.CONTACT_RELEASE if already_alerted else outbox.CONTACT_ALERT_WITH_RELEASE
 
 
 class ActionExecutor:
@@ -555,10 +570,11 @@ class ActionExecutor:
         # is no longer valid is skipped and recorded; its contact is still told if the stage
         # lists them to be notified, and not otherwise.
         releases: list[dict[str, Any]] = []
+        valid_releases: list[SnapshotRelease] = []
         valid_release_contacts: set[uuid.UUID] = set()
         for release in stage.releases:
             why = await self._releases.still_valid(
-                session, user_id=incident.user_id, release=release
+                session, user_id=incident.user_id, release=release, step_id=stage.stage_id
             )
             releases.append(
                 {
@@ -569,6 +585,7 @@ class ActionExecutor:
                 }
             )
             if why is None:
+                valid_releases.append(release)
                 valid_release_contacts.add(release.contact_id)
         contact_ids = sorted({*stage.notify_contact_ids, *valid_release_contacts})
         contacts = await EngineStore.contacts(session, incident.user_id, contact_ids)
@@ -584,6 +601,27 @@ class ActionExecutor:
                     {"contact_id": str(contact_id), "result": "skipped", "reason": reason}
                 )
 
+        # The releases themselves: one row per instruction and contact, hidden until the settle
+        # delay has passed (``visible_after``), and one portal access per contact that has any.
+        per_contact = await self._create_releases(
+            session, incident, action, stage.stage_id, valid_releases, set(messaged), now
+        )
+        # What is *in force* decides who is told what: a release that was revoked for a real
+        # reason (the owner switched the instruction off in the settle window, say) does not
+        # exist, and a contact who was only to receive it (not in the notify list) is not
+        # alerted at all (INV-7: narrowing only).
+        notify_ids = set(stage.notify_contact_ids)
+        for contact_id in [c for c in messaged if c not in notify_ids and c not in per_contact]:
+            messaged.remove(contact_id)
+            for target in targets:
+                if target["contact_id"] == str(contact_id):
+                    target.update(result="skipped", reason="release_revoked")
+        for target in targets:
+            count = per_contact.get(uuid.UUID(target["contact_id"]), 0)
+            if count and target["result"] == "messaged":
+                target["releases"] = count
+        alerted = await EngineStore.alerted_contacts(session, incident.id) if per_contact else set()
+
         last_checkin = await EngineStore.last_checkin_at(session, incident.user_id)
         drafts = [
             Draft(
@@ -591,7 +629,9 @@ class ActionExecutor:
                 audience="contact",
                 category=outbox.CATEGORY_ESCALATION,
                 channel="email",
-                template_key=outbox.CONTACT_ALERT,
+                template_key=_contact_template(
+                    per_contact.get(contact_id, 0), contact_id in alerted
+                ),
                 send_after=now + self._settle,  # §6.6: nobody sees it before the settle delay
                 dedupe_key=(
                     f"notif:{action.id}:{int(action.scheduled_for.timestamp())}"
@@ -604,6 +644,14 @@ class ActionExecutor:
                     "stage_position": stage.position,
                     "missed_due_at": incident.missed_due_at.isoformat(),
                     "last_checkin_at": last_checkin.isoformat() if last_checkin else None,
+                    **(
+                        {
+                            "release_count": per_contact[contact_id],
+                            "after_minutes": stage.offset_minutes,
+                        }
+                        if per_contact.get(contact_id)
+                        else {}
+                    ),
                 },
             )
             for contact_id in messaged
@@ -624,6 +672,7 @@ class ActionExecutor:
                 "stage_position": stage.position,
                 "notified_contact_ids": [str(c) for c in messaged],
                 "skipped_count": len(targets) - len(messaged),
+                "release_count": sum(per_contact.values()),
             },
         )
         report.messages_queued += await outbox.enqueue(session, summary, now=now)
@@ -649,6 +698,51 @@ class ActionExecutor:
                 "skipped": len(targets) - len(messaged),
             },
         )
+        if per_contact:
+            await self._record(
+                session,
+                audit.RELEASE_CREATED,
+                incident,
+                action,
+                now,
+                {"stage": stage.position, "releases": sum(per_contact.values())},
+            )
+
+    async def _create_releases(
+        self,
+        session: AsyncSession,
+        incident: EscalationIncident,
+        action: IncidentAction,
+        step_id: uuid.UUID,
+        valid_releases: list[SnapshotRelease],
+        messaged: set[uuid.UUID],
+        now: datetime,
+    ) -> dict[uuid.UUID, int]:
+        """Contact -> number of releases recorded. Only releases that passed G8 whose contact
+        passed G7; a release that was revoked for any reason but a Hold rollback stays revoked."""
+        repository = ReleaseRepository(session)
+        for release in valid_releases:
+            if release.contact_id not in messaged:
+                continue
+            await repository.create(
+                owner_id=incident.user_id,
+                incident_id=incident.id,
+                action_id=action.id,
+                instruction_id=release.instruction_id,
+                contact_id=release.contact_id,
+                step_id=step_id,
+                released_at=now,
+                visible_after=now + self._settle,
+            )
+        live = await repository.live_counts_for_action(
+            owner_id=incident.user_id, action_id=action.id
+        )
+        per_contact = {c: n for c, n in live.items() if c in messaged}
+        for contact_id in per_contact:
+            await repository.ensure_access(
+                owner_id=incident.user_id, incident_id=incident.id, contact_id=contact_id
+            )
+        return per_contact
 
     async def _contact_problem(
         self,

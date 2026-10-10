@@ -562,6 +562,12 @@ Startup validation refuses to run if `SETTLE_DELAY_SECONDS ≤ INGESTION_STALE_S
 22. **A fresh password is needed to weaken a safety net that is on** (F-12): `PUT /v1/plan` when the schedule is `active` and the plan changes; `DELETE /contacts/{id}` and `PATCH` that deactivates or changes the email of a contact **who is in a plan stage**, while the schedule is not `inactive`. Changing a contact's email is included because it re-points an alert (and a thief controls the new inbox).
 23. **The anomaly threshold follows people and the hour** (F-05a, §7.2), and the Home screen shows a persistent banner when check-ins are on but nobody would be told (USER_FLOWS §4).
 
+*Phase 6, implemented (releases).*
+24. **Releases are created inside the stage** (`ActionExecutor._stage`), after G8 (per release, against `instructions` and `instruction_recipients`, with the stage ID: the mapping must still exist *at this stage*) and G7 (per contact). One `release_events` row per instruction and contact, `visible_after = now + SETTLE_DELAY`, one `portal_access` per (incident, contact). The worker role never reads instruction content (no privilege on the column), so nothing the engine does can leak it.
+25. **Which message a contact gets:** `contact_alert` (no release), `contact_alert_with_release` (their first message in this incident, with a release), `contact_release` (they were alerted at an earlier stage). Same dedupe keys and settle delay as the alert. The user's summary says how many instructions were shared, never which.
+26. **The link is minted by the dispatcher in tx A** (`secrets.token_urlsafe(32)`, SHA-256 stored, 30 days) and the message is cancelled (`release_revoked`) if the access or every release was revoked by then. A fresh-link request is a `contact_other` message with its own dedupe key per access and hour; it needs a verified contact and a live release.
+27. **Revocation** (one way, idempotent): I'M OK, I'M SAFE and an operator void revoke the incident's releases and its access (`user_checkin`, `user_safe`, `operator`); deleting or opting out a contact revokes theirs (`contact_removed`, `contact_opted_out`); switching off or deleting an instruction, removing or moving a recipient revoke those (`instruction_removed`, `recipient_removed`); a Hold rollback revokes the stage's (`hold_rollback`), and the stage running again restores exactly those. The portal does not depend on any of this having been written: it looks at the state on every request.
+
 *Observability.* `python -m cli.admin status` prints the §12 table as one snapshot and exits `1` when anything would page (stale heartbeat, Hold active or not evaluable, held actions of open incidents, messages given up on, consistency violations, an action due or a message queued for more than 5 minutes). Structured events: `incident.opened`, `engine.action_held`, `engine.unit_failed`, `engine.consistency_violation`, `system.hold_entered`, `dispatch.failed`; none carries a name, an address or a token.
 
 ### 13.2 Independent review of the engine (Phase 5)
@@ -600,6 +606,31 @@ An adversarial review read the engine, the migration, the API surface and the te
 * One user whose Hold-exit processing keeps raising leaves the Hold unprocessed (fail-safe, but nobody's alerts go out until it is looked at: it pages as *Hold active*).
 * The Hold notice is email only (push copy exists).
 * The stateful simulation moves the clock tick by tick through every due instant, except for its `outage` step (hours with no tick), which is what lets it check that no stage runs late. It also includes operator voids.
+
+### 13.3 Independent review of Phase 6 (instructions, release, portal)
+
+A second adversarial review (read-only, nothing executed) of the crypto, the instructions API, the release path and the portal found **no S1**. Every finding below was checked against the code; each is covered by a test in `backend/tests/engine/test_release.py` (`test_r*`).
+
+| ID | Sev. | Finding | Disposition |
+|---|---|---|---|
+| F1 | S2 | the vault cached a new data key before its transaction committed: a rollback left content sealed under a key that was never stored | **Fixed**: the key row is created in its own committed transaction before anything is sealed; plus lone surrogates and every format character except ZWJ, ZWNJ and the soft hyphen are refused (422, not 500) |
+| F2 | S2 | the portal's Hold window was narrower than the rollback's: a stage inside the settle delay before a Hold began was readable until the Hold ended and took it back | **Fixed**: the portal hides exactly what a rollback would take back |
+| F3 | S2 | an alert that carried a release was cancelled whole when its release was revoked before sending: the contact got nothing, the person was told "notified" | **Fixed**: the alert is sent without the link when the contact is on the stage's notify list; a contact who was only to receive the release is not alerted at all (narrowing) |
+| F4 | S2 | the portal reported an unreadable item as "withdrawn" and counted it as viewed | **Fixed**: "we couldn't show this right now" (503), a partial page says how many items are missing, views are counted only for what was shown |
+| F5 | S2 | the step-up protected who is *told* but not who *receives*: a stolen token could reroute, switch off or delete releases, or re-address a release-only recipient | **Fixed**: password for a route to someone (create or change), switching off or deleting an instruction that has recipients, and removing/deactivating/re-addressing a contact who is only a recipient; text edits and switching on never ask. Reading content with a stolen token is not covered: **owner decision**, below |
+| F6 | S3 | an access had 15 code guesses an hour for 30 days | **Fixed**: 20 attempts a day per access, across codes |
+| F7 | S3 | a fresh-link row was not tied to its access's owner and contact | **Fixed** |
+| F8 | S3 | read skew between the visibility read and the response | **Fixed**: counted and re-checked in one statement; a release revoked since is neither shown nor counted |
+| F9 | S3 | a fresh link was sent during a Hold, for an inactive account, or for a closed incident | **Fixed**: gated like an escalation message |
+| F10 | S3 | `ON DELETE RESTRICT` on the stage could make deleting a whole account fail | **Fixed**: the key is deferred to commit; test deletes an account with instructions and releases |
+| F11 | S4 | the database guards are keyed on the role names | **Fixed**: production-like processes refuse to start as another role |
+| F12 | S4 | after I'M SAFE the contact saw "this link doesn't work" | **Fixed**: "no longer available, they have checked in", as the spec says |
+| F13 | S4 | `portal.access_denied` was never written | **Fixed**: a real link that is refused is on the record (reason code only) |
+| F15 | S4 | one unreadable instruction made the whole list a 500 | **Fixed**: the item is listed as "can't be opened", so it can be deleted |
+| F16 | S4 | contact delete/patch did not take the per-user lock; SECURITY §12 said "synchronizer token"; the BIDI list was incomplete; the dev KEK is used silently | **Fixed** (lock; doc; Cf rule; a startup warning) |
+| F14 | S4 | retries mint more tokens | **Documented** (a retry's earlier token still works; all are revoked together) |
+
+*Owner decision (open).* **Should reading an instruction in the app need a fresh password?** Today `GET /instructions/{id}` needs only a session, so a stolen access token (15 minutes, plus a refresh token if that was stolen too) reads everything. A password per read would be heavy for ordinary use; a short "recent password" window (say 5 minutes, the same as today) and a prompt on the *first* open of an instruction in a session is the middle way. Not implemented: it changes how the app feels, and the mobile screens are being built against the current rule.
 
 ## 14. Worked example (the T0–T8 lifecycle)
 

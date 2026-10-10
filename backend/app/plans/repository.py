@@ -127,6 +127,21 @@ class PlanRepository:
         )
         return [(row[0], row[1]) for row in (await self._session.execute(stmt)).all()]
 
+    async def stage_positions_by_contact(
+        self, *, owner_id: uuid.UUID
+    ) -> dict[uuid.UUID, list[int]]:
+        """Contact -> the positions of the stages that notify them, in order."""
+        stmt = (
+            select(EscalationStepContact.contact_id, EscalationStep.position)
+            .join(EscalationStep, EscalationStep.id == EscalationStepContact.step_id)
+            .where(EscalationStepContact.user_id == owner_id)
+            .order_by(EscalationStep.position)
+        )
+        grouped: dict[uuid.UUID, list[int]] = {}
+        for contact_id, position in (await self._session.execute(stmt)).all():
+            grouped.setdefault(contact_id, []).append(position)
+        return grouped
+
     async def contact_in_plan(self, *, owner_id: uuid.UUID, contact_id: uuid.UUID) -> bool:
         """Whether the contact is listed in at least one stage (it would be told)."""
         stmt = select(

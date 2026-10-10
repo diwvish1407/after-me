@@ -29,7 +29,7 @@ from app.core.errors import (
     ValidationFailed,
 )
 from app.plans.models import EscalationPlan, EscalationStep
-from app.plans.releases import NoReleases, ReleaseCatalog
+from app.plans.releases import InstructionCatalog, ReleaseCatalog
 from app.plans.repository import PlanRepository
 from app.plans.rules import PlanRules, StageDraft, plan_rules, validate_plan
 from app.plans.schemas import PlanOut, PlanPutRequest, RulesOut, StageOut
@@ -67,7 +67,7 @@ class PlanService(AuthServiceBase):
         self.plans = PlanRepository(self.session)
         self.configs = CheckinConfigRepository(self.session)
         self.contacts = ContactRepository(self.session)
-        self.releases: ReleaseCatalog = releases or NoReleases()
+        self.releases: ReleaseCatalog = releases or InstructionCatalog()
 
     # ------------------------------------------------------------------ helpers
 
@@ -80,7 +80,7 @@ class PlanService(AuthServiceBase):
     async def _out(self, current: CurrentUser, plan: EscalationPlan) -> PlanOut:
         steps = await self.plans.steps(owner_id=current.user_id, plan_id=plan.id)
         by_step = await self.plans.contacts_by_step(owner_id=current.user_id, plan_id=plan.id)
-        released = await self.releases.instructions_by_stage(self.session, owner_id=current.user_id)
+        released = await self.releases.active_by_stage(self.session, owner_id=current.user_id)
         return PlanOut(
             id=plan.id,
             version=plan.version,

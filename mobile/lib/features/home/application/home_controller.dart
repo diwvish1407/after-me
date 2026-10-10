@@ -13,6 +13,7 @@ import '../../checkin/application/checkin_controller.dart';
 import '../../checkin/application/schedule_controller.dart';
 import '../../checkin/data/models/checkin_models.dart';
 import '../../contacts/application/contacts_controller.dart';
+import '../../instructions/application/instructions_controller.dart';
 import '../../plan/application/plan_controller.dart';
 import '../data/home_repository.dart';
 
@@ -101,6 +102,15 @@ class HomeController extends AsyncNotifier<HomeData?> {
       ..listen(contactsControllerProvider, (previous, next) {
         final before = previous?.value;
         final after = next.value;
+        if (before != null && after != null && !listEquals(before, after)) {
+          unawaited(refresh());
+        }
+      })
+      ..listen(instructionsControllerProvider, (previous, next) {
+        final before = previous?.value;
+        final after = next.value;
+        // The aggregate counts the active instructions and judges recipients who have
+        // not accepted.
         if (before != null && after != null && !listEquals(before, after)) {
           unawaited(refresh());
         }

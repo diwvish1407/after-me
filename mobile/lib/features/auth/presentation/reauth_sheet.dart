@@ -14,7 +14,8 @@ import '../data/auth_repository.dart';
 
 /// Why the password is asked for, when the generic "for your security" line would leave
 /// the person guessing. Each reason says plainly what the change decides: the safety net
-/// is what tells people when a check-in is missed (SECURITY.md §7).
+/// is what tells people when a check-in is missed, and what each person is shown
+/// (SECURITY.md §7).
 enum ReauthReason {
   /// Saving the escalation plan while check-ins are on (`PUT /plan`).
   plan,
@@ -25,6 +26,26 @@ enum ReauthReason {
   /// Changing the email address of a trusted contact who is in the plan
   /// (`PATCH /contacts/{id}`).
   contactEmail,
+
+  /// Removing a trusted contact who is not in the plan but receives an active
+  /// instruction (`DELETE /contacts/{id}`).
+  removeRecipient,
+
+  /// Changing the email address of a contact who receives an active instruction and is
+  /// not in the plan (`PATCH /contacts/{id}`).
+  recipientEmail,
+
+  /// Choosing or changing who receives an instruction (`POST` with recipients, `PATCH`
+  /// that changes them) while check-ins are on.
+  instructionRecipients,
+
+  /// Switching off, or deleting, an instruction that has recipients while check-ins are
+  /// on (`PATCH` status `inactive`, `DELETE`).
+  instructionOff,
+
+  /// Saving an instruction whose time the plan has no stage for yet: the plan gets the
+  /// stage (`PUT /plan`) and the instruction its recipients, under one password.
+  instructionNewTime,
 }
 
 /// The sentence of [reason] in the sheet's body.
@@ -33,6 +54,12 @@ String reauthReasonText(AppLocalizations l10n, ReauthReason reason) =>
       ReauthReason.plan => l10n.reauthReasonPlan,
       ReauthReason.removeContact => l10n.reauthReasonRemoveContact,
       ReauthReason.contactEmail => l10n.reauthReasonContactEmail,
+      ReauthReason.removeRecipient => l10n.reauthReasonRemoveRecipient,
+      ReauthReason.recipientEmail => l10n.reauthReasonRecipientEmail,
+      ReauthReason.instructionRecipients =>
+        l10n.reauthReasonInstructionRecipients,
+      ReauthReason.instructionOff => l10n.reauthReasonInstructionOff,
+      ReauthReason.instructionNewTime => l10n.reauthReasonInstructionNewTime,
     };
 
 /// Asks for the password again before a sensitive action (USER_FLOWS.md §7). Returns

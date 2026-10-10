@@ -1,0 +1,17 @@
+{% extends "base.html.j2" %}
+{% block title %}Enter your code · AfterMe{% endblock %}
+{% block content %}
+<h1>Enter your code</h1>
+<p>We sent a six-digit code to <strong>{{ masked_email }}</strong>. It expires in 10 minutes.</p>
+{% if problem %}<p class="notice" role="alert">{{ problem }}</p>{% endif %}
+<form method="post" action="/c/release/verify" autocomplete="off">
+<input type="hidden" name="csrf" value="{{ csrf }}">
+<label for="code">Code</label>
+<input type="text" id="code" name="code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" required>
+<button type="submit">View</button>
+</form>
+<form method="post" action="/c/release/code">
+<input type="hidden" name="csrf" value="{{ csrf }}">
+<button type="submit" class="secondary">Send a new code</button>
+</form>
+{% endblock %}

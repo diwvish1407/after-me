@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
 
-import '../../../app/preview_banner.dart';
 import '../../../app/router.dart';
 import '../../../app/theme/dimens.dart';
 import '../../../app/theme/tokens.dart';
@@ -190,7 +189,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const PreviewBanner(),
         StatusBanner(
           kind: StatusBannerKind.attention,
           title: l10n.homeOfflineBanner,
@@ -258,7 +256,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const PreviewBanner(),
         if (data.stale) ...[
           StatusBanner(
             kind: StatusBannerKind.info,

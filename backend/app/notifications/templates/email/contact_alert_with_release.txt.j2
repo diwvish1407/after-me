@@ -1,0 +1,20 @@
+Hi {{ contact_name }},
+
+{{ user_name }} asked us to let you know if they miss a check-in on AfterMe. {% if last_checkin %}Their last check-in was {{ last_checkin }}. {% endif %}They were due by {{ due_at }} and haven't responded to our reminders.
+
+This doesn't necessarily mean anything is wrong. Phones get lost and batteries run out. You may want to try reaching {{ user_name }} or someone close to them.
+
+{{ user_name }} also prepared some information for you in case they couldn't be reached, and chose to share it with you now.
+
+View it securely: {{ release_link }}
+
+For your security we'll send a one-time code to this email address. The link works until {{ expires_on }}.
+
+If you believe someone is in danger, contact your local emergency services.
+
+We'll email you when {{ user_name }} checks in.
+
+--
+Sent by AfterMe because {{ user_name }} ({{ user_email }}) chose you as a trusted contact.
+Stop emails like this: {{ optout_link }}
+AfterMe is not an emergency service.

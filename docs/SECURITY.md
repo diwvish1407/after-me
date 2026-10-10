@@ -106,6 +106,12 @@ KMS KEK (never leaves KMS)
 - Rotation: KEK via KMS key versions (DEKs re-wrapped by a batch job); DEK per user on demand (re-encrypt that user's instructions).
 - Decryption happens only for: the owner's API requests, the portal for an OTP-verified contact viewing an eligible release, and the owner's data export.
 
+**Phase 6, implemented.** `app/security/envelope.py` (AES-256-GCM, the stored format and AAD above), `kms.py` (the `KmsProvider` interface and `LocalKms`) and `vault.py` (seal/open with the per-user key, created on a user's first instruction and cached unwrapped for at most 5 minutes in process memory).
+* The wrapped DEK carries the KEK's identifier (`local-<12 hex>`), is bound to the user by AAD, and a previous KEK can stay configured (`KMS_LOCAL_KEY_PREVIOUS`) while keys are rewrapped. `KMS_PROVIDER=local` keeps the KEK in the environment: it is **refused in staging and production**, and a cloud KMS adapter is a deployment item (ROADMAP Phase 10-12): until it exists the backend cannot start in production, which is the safe failure.
+* Only the API process holds keys: `afterme_worker` has no privilege on `user_keys` and cannot select `instructions.content_ciphertext`, so the engine decides releases without ever being able to read one.
+* A ciphertext copied to another row, another user, or another key version fails to decrypt (tests `test_a_ciphertext_moved_to_another_*`); the failure is a generic `500` that names nothing.
+* Not implemented yet: per-user DEK rotation and the KEK re-wrap job (the schema carries `dek_version` and `rotated_at`), and export.
+
 ### 6.3 Secrets and hashes
 
 | Secret | Generation | Storage |
@@ -135,7 +141,7 @@ The server **can** decrypt instruction content, because it must deliver that con
 | Refresh token | Opaque, rotated on every use; 30 s network-retry grace; otherwise reuse revokes the session |
 | App session | Idle 60 days, absolute 365 days |
 | Web session | 1 h; `__Host-` cookie; counts as re-auth for 5 min after password login |
-| Re-auth (step-up) | Password, valid 5 min: I'M SAFE, deactivate check-ins, **lengthen the interval of an active schedule** (Phase 4, owner decision 2026-10-10), **change the plan while the schedule is active, remove or deactivate a contact who is in a plan stage, or change that contact's email** (Phase 5 review F-12, owner decision 2026-10-10), export, delete account, change email |
+| Re-auth (step-up) | Password, valid 5 min: I'M SAFE, deactivate check-ins, **lengthen the interval of an active schedule** (Phase 4, owner decision 2026-10-10), **change the plan while the schedule is active, remove or deactivate a contact who is in a plan stage or is a recipient, or change that contact's email, change who receives an instruction, or switch off or delete an instruction that has recipients** (Phase 5 review F-12, owner decision 2026-10-10; Phase 6 review F5), export, delete account, change email |
 | Lockout | 10 consecutive failures → 15 min lock + security email |
 | Security emails | New-device login, password changed/reset, email changed, refresh reuse detected, all sessions revoked, deletion requested |
 | Planned (1.1) | TOTP / passkeys; Google Sign-In; device-bound biometric key as an alternative step-up for I'M SAFE (evaluate in Phase 9) |
@@ -161,7 +167,7 @@ Append-only (`INSERT`/`SELECT` grants only). `user_visible` marks events shown i
 | Check-in | `schedule.updated` ✓, `schedule.activated` ✓, `schedule.deactivated` ✓, `checkin.recorded` ✓ |
 | Plan / instructions | `plan.updated` ✓, `instruction.created`, `instruction.updated`, `instruction.deleted`, `instruction.recipients_changed` ✓ |
 | Escalation | `incident.opened` ✓, `incident.resolved` ✓, `incident.cancelled` ✓, `incident.voided` ✓, `escalation.reminder_sent`, `escalation.final_warning_sent` ✓, `escalation.stage_executed` ✓, `escalation.action_held` |
-| Release / portal | `release.created` ✓, `release.revoked` ✓, `release.viewed` ✓, `portal.session_created`, `portal.otp_sent`, `portal.otp_failed`, `portal.access_denied` |
+| Release / portal | `release.created` ✓, `release.revoked` ✓, `release.viewed` ✓, `portal.session_created`, `portal.otp_sent`, `portal.otp_verified`, `portal.otp_failed`, `portal.new_link_requested`, `portal.access_denied` (reserved) |
 | Notifications | `notification.sent` / `notification.failed` (contact-facing only) |
 | Data | `export.created` ✓, `account.deletion_requested`, `account.purged` |
 | System / operator | `system.hold_entered`, `system.hold_exited`, `system.consistency_violation`, `operator.<command>` |
@@ -182,7 +188,7 @@ Metadata contains IDs, reason codes and counts only. **Never** content, names, a
 
 | MASVS area | Controls |
 |---|---|
-| STORAGE | Tokens and the pending check-in record (opaque account id, random key, tap time) in Keystore-backed secure storage; nothing sensitive in `shared_preferences`, files or logs; instruction content never persisted; `allowBackup="false"`; FLAG_SECURE on instruction/export screens |
+| STORAGE | Tokens and the pending check-in record (opaque account id, random key, tap time) in Keystore-backed secure storage; nothing sensitive in `shared_preferences`, files or logs; instruction content never persisted; `allowBackup="false"`; FLAG_SECURE on instruction/export screens (**implemented in Phase 6**: a MethodChannel `app.afterme/secure_screen`, reference counted, follows what is shown; export screens when they exist) |
 | CRYPTO | No custom crypto; platform Keystore via plugin |
 | AUTH | All authorization server-side; app lock is local convenience security; step-up via server password re-auth |
 | NETWORK | HTTPS only; cleartext disabled (except the dev emulator host); platform CA trust |
@@ -195,8 +201,10 @@ Metadata contains IDs, reason codes and counts only. **Never** content, names, a
 
 - Headers: `Content-Security-Policy: default-src 'none'; script-src 'nonce-{n}'; style-src 'self'; img-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'`, plus HSTS, `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, a minimal `Permissions-Policy`, `Cache-Control: no-store`, `X-Robots-Tag: noindex, nofollow`.
 - Cookies: `__Host-` prefix, `Secure`, `HttpOnly`, `SameSite=Strict`, server-side session rows (hashed).
-- CSRF: a synchronizer token bound to the portal/web session on every POST.
+- CSRF: the double-submit pair (a `__Host-` cookie and a hidden field with the same random value, compared in constant time) on every POST; the portal session cookie is a separate, HttpOnly value.
 - Every message to a contact shows who sent it (name + email), why they received it, and how to opt out.
+
+**Phase 6, implemented (release pages).** A portal session is a random 256-bit value in a `__Host-` cookie, stored as SHA-256, valid 60 minutes, and is not enough to see content: the one-time code (HMAC under the pepper, bound to its challenge, five attempts counted *before* the comparison, 10 minutes, three sent per hour per access) elevates it for 15 minutes. Link tokens are random, 30 days, stored hashed, and minted by the dispatcher at send time, so the raw token exists only in the email. The portal re-checks the contact (verified, switched on, not suppressed or opted out), the account and the release (not revoked, past the settle delay, outside an unprocessed Hold window, instruction active) on **every** request; a link, a session or a code never outlives the state it was issued for. Instruction text appears only in the body of a successful view response, HTML-escaped (`white-space: pre-wrap`), never in a URL, header, log, audit record, email or push.
 
 ## 13. Abuse prevention
 

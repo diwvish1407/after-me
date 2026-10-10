@@ -24,6 +24,11 @@ async def run() -> None:
     configure_logging(settings)
     log = get_logger("afterme.worker")
     services = build_worker_services(settings)
+    if settings.is_production_like:
+        role = await services.db.current_role()
+        if role != "afterme_worker":
+            msg = f"the worker must connect as afterme_worker, not {role}"
+            raise RuntimeError(msg)
     engine = Engine(services)
     dispatcher = Dispatcher(services, push=LogOnlyPushProvider())
     stop = asyncio.Event()

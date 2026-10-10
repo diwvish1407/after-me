@@ -1,9 +1,9 @@
 // Enforces the mobile coverage gates (TEST_PLAN.md §10) on coverage/lcov.info:
 //   * >= 70% line coverage overall,
 //   * >= 90% for the API interceptors and the session/auth code,
-//   * >= 90% for every Phase 2-4 feature area (auth, onboarding, settings, home,
-//     contacts, check-ins, the temporary repositories, app lock, permissions, forms,
-//     pickers, device and platform gateways, time formatting).
+//   * >= 90% for every Phase 2-6 feature area (auth, onboarding, settings, home,
+//     contacts, check-ins, plan, instructions, app lock and the secure-screen flag,
+//     permissions, forms, pickers, device and platform gateways, time formatting).
 // Generated code (*.g.dart, *.freezed.dart, lib/l10n/gen/) is excluded.
 //
 // `flutter test --coverage` only reports libraries that some test loads, so a lib
@@ -27,6 +27,7 @@ const _gates = <String, double>{
   'lib/features/contacts/': 90,
   // Phase 4 (check-ins: schedule, I'M OK with its pending state, Home, history).
   'lib/features/checkin/': 90,
+  // Phase 5 (the plan) and Phase 6 (instructions: data, controllers, screens, FLAG_SECURE).
   'lib/features/plan/': 90,
   'lib/features/instructions/': 90,
   'lib/core/security/': 90,

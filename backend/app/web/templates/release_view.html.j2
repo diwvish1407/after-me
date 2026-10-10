@@ -1,0 +1,18 @@
+{% extends "base.html.j2" %}
+{% block title %}From {{ view.owner_name }} · AfterMe{% endblock %}
+{% block content %}
+<h1>From {{ view.owner_name }}</h1>
+<p class="hint">{{ view.owner_name }} ({{ view.owner_email }}) prepared this{% if view.after_text %} and chose to share it if they hadn't checked in for {{ view.after_text }}{% endif %}.{% if view.last_checkin %} Their last check-in was {{ view.last_checkin }}.{% endif %}</p>
+{% for item in view.items %}
+<article class="instruction">
+<h2>{{ item.title }}</h2>
+<div class="instruction-body">{{ item.body }}</div>
+</article>
+{% endfor %}
+{% if view.missing %}<p class="notice" role="alert">{{ view.missing }} item{{ "s" if view.missing != 1 else "" }} could not be shown right now. Please try again in a few minutes.</p>{% endif %}
+<p class="hint">This page is not saved or cached. You can print it, or come back with the same link.</p>
+<form method="post" action="/c/release/end" class="no-print">
+<input type="hidden" name="csrf" value="{{ csrf }}">
+<button type="submit" class="secondary">I'm done</button>
+</form>
+{% endblock %}

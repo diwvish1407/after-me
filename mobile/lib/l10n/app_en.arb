@@ -64,13 +64,13 @@
   "@peopleEmptyBody": {
     "description": "Empty state body on the People tab."
   },
-  "instructionsEmptyTitle": "Your instructions will live here",
+  "instructionsEmptyTitle": "Write down what someone may need",
   "@instructionsEmptyTitle": {
     "description": "Empty state title on the Instructions tab."
   },
-  "instructionsEmptyBody": "Write down what someone may need, and choose who receives it and when. This arrives in a later phase.",
+  "instructionsEmptyBody": "Where the keys are, who to call, which accounts matter: the things only you know. Choose who receives each one and when. Nothing is shared unless you stop checking in for the time you choose.",
   "@instructionsEmptyBody": {
-    "description": "Empty state body on the Instructions tab."
+    "description": "Empty state body on the Instructions tab: what instructions are for."
   },
   "planEmptyTitle": "You haven't set up a plan yet",
   "@planEmptyTitle": {
@@ -834,6 +834,26 @@
   "@reauthReasonContactEmail": {
     "description": "Body of the re-authentication sheet when changing the email address of a contact who is in the plan while check-ins are on."
   },
+  "reauthReasonInstructionNewTime": "Adding this time to your plan and choosing who receives this needs your password because it decides who is told and who sees it.",
+  "@reauthReasonInstructionNewTime": {
+    "description": "Body of the re-authentication sheet when saving an instruction whose time the plan has no stage for yet, while check-ins are on."
+  },
+  "reauthReasonRemoveRecipient": "Removing someone who receives your instructions needs your password because it changes who sees them.",
+  "@reauthReasonRemoveRecipient": {
+    "description": "Body of the re-authentication sheet when removing a contact who receives an active instruction but is not in the plan, while check-ins are on."
+  },
+  "reauthReasonRecipientEmail": "Changing the email address of someone who receives your instructions needs your password because it changes who sees them.",
+  "@reauthReasonRecipientEmail": {
+    "description": "Body of the re-authentication sheet when changing the email address of a contact who receives an active instruction but is not in the plan, while check-ins are on."
+  },
+  "reauthReasonInstructionRecipients": "Changing who receives this needs your password because it decides who sees it.",
+  "@reauthReasonInstructionRecipients": {
+    "description": "Body of the re-authentication sheet when choosing or changing the recipients of an instruction while check-ins are on."
+  },
+  "reauthReasonInstructionOff": "Switching this off or deleting it needs your password because it changes what is shared.",
+  "@reauthReasonInstructionOff": {
+    "description": "Body of the re-authentication sheet when switching off or deleting an instruction that has recipients while check-ins are on."
+  },
   "settingsSectionAccount": "Account",
   "@settingsSectionAccount": {
     "description": "Section heading in settings."
@@ -1470,7 +1490,7 @@
   "@instructionStepTitle": {
     "description": "Instruction step heading."
   },
-  "instructionStepBody": "Write down something someone may need. Pick a starter to begin, or skip this for now.",
+  "instructionStepBody": "Write down something someone may need. Pick an example to begin, or skip this for now.",
   "@instructionStepBody": {
     "description": "Instruction step body."
   },
@@ -1500,103 +1520,17 @@
   "@instructionNoContact": {
     "description": "Shown without contacts."
   },
-  "instructionPickRecipient": "Choose at least one person.",
-  "@instructionPickRecipient": {
-    "description": "Validation."
-  },
   "instructionWhen": "When?",
   "@instructionWhen": {
     "description": "Heading above release choices."
-  },
-  "instructionReleaseAfterDays": "{days, plural, =1{If you haven't checked in for 1 day} other{If you haven't checked in for {days} days}}",
-  "@instructionReleaseAfterDays": {
-    "description": "Release choice.",
-    "placeholders": {
-      "days": {
-        "type": "int",
-        "example": "2"
-      }
-    }
   },
   "instructionSave": "Save instruction",
   "@instructionSave": {
     "description": "Primary action."
   },
-  "instructionChooseAnother": "Choose a different starter",
+  "instructionChooseAnother": "Choose a different example",
   "@instructionChooseAnother": {
     "description": "Returns to the template list."
-  },
-  "templateCallFirstTitle": "Who to call first",
-  "@templateCallFirstTitle": {
-    "description": "Starter template."
-  },
-  "templateCallFirstDescription": "The first people to reach, and what to say.",
-  "@templateCallFirstDescription": {
-    "description": "Starter template."
-  },
-  "templateCallFirstStarter": "The first person to call is… Their number is… They will know what to do about…",
-  "@templateCallFirstStarter": {
-    "description": "Starter text."
-  },
-  "templateHomeTitle": "Home and keys",
-  "@templateHomeTitle": {
-    "description": "Starter template."
-  },
-  "templateHomeDescription": "Where keys are, how to get in, what to look after.",
-  "@templateHomeDescription": {
-    "description": "Starter template."
-  },
-  "templateHomeStarter": "A spare key is… The alarm code is kept… Bills and mail go to… Please check on…",
-  "@templateHomeStarter": {
-    "description": "Starter text."
-  },
-  "templatePetsTitle": "Pets",
-  "@templatePetsTitle": {
-    "description": "Starter template."
-  },
-  "templatePetsDescription": "Who looks after them, food, vet details.",
-  "@templatePetsDescription": {
-    "description": "Starter template."
-  },
-  "templatePetsStarter": "My pet's name is… Food and routine… The vet is… Someone who can take them in…",
-  "@templatePetsStarter": {
-    "description": "Starter text."
-  },
-  "templateWorkTitle": "Work handover",
-  "@templateWorkTitle": {
-    "description": "Starter template."
-  },
-  "templateWorkDescription": "What colleagues will need to pick up.",
-  "@templateWorkDescription": {
-    "description": "Starter template."
-  },
-  "templateWorkStarter": "The most urgent thing at work is… My manager is… Files and tools are in…",
-  "@templateWorkStarter": {
-    "description": "Starter text."
-  },
-  "templateDocumentsTitle": "Where my documents are",
-  "@templateDocumentsTitle": {
-    "description": "Starter template."
-  },
-  "templateDocumentsDescription": "Important papers and where to find them.",
-  "@templateDocumentsDescription": {
-    "description": "Starter template."
-  },
-  "templateDocumentsStarter": "My important papers are kept… The folder with identity documents is… A copy of my will is with…",
-  "@templateDocumentsStarter": {
-    "description": "Starter text."
-  },
-  "templateInsuranceTitle": "Insurance",
-  "@templateInsuranceTitle": {
-    "description": "Starter template."
-  },
-  "templateInsuranceDescription": "Policies, providers and who to contact.",
-  "@templateInsuranceDescription": {
-    "description": "Starter template."
-  },
-  "templateInsuranceStarter": "My health insurance is with… The policy number is kept… My agent is…",
-  "@templateInsuranceStarter": {
-    "description": "Starter text."
   },
   "protectStepTitle": "Stay protected",
   "@protectStepTitle": {
@@ -1639,23 +1573,6 @@
   "doneActive": "Your plan is active.",
   "@doneActive": {
     "description": "Done step message."
-  },
-  "previewBanner": "Preview: your instructions are not saved yet, so nothing will be shared. Your check-in schedule, trusted contacts and plan are real.",
-  "@previewBanner": {
-    "description": "Banner shown while the instruction service is still a temporary stand-in."
-  },
-  "doneActivePreview": "Check-ins are on. Instructions are still a preview, so nothing will be shared yet.",
-  "@doneActivePreview": {
-    "description": "Done step message while the instructions are a stand-in."
-  },
-  "doneActiveInvitedPreview": "Check-ins are on. {name} has been sent an invitation. Instructions are still a preview, so nothing will be shared yet.",
-  "@doneActiveInvitedPreview": {
-    "description": "Done step message while the instructions are a stand-in.",
-    "placeholders": {
-      "name": {
-        "type": "String"
-      }
-    }
   },
   "doneGoHome": "Go to Home",
   "@doneGoHome": {
@@ -2799,5 +2716,875 @@
         "example": "From the app"
       }
     }
+  },
+  "errorPlanLimitInstructions": "You've reached the number of instructions your plan includes.",
+  "@errorPlanLimitInstructions": {
+    "description": "Shown for 403 plan_limit_reached on instructions, where there is no limit sheet."
+  },
+  "errorStageInUse": "Some instructions are still shared at this stage. Move them to another stage before removing it.",
+  "@errorStageInUse": {
+    "description": "Shown for 409 stage_in_use when a plan stage that releases instructions is removed."
+  },
+  "fieldTitleTooLong": "That title is too long. Use 120 characters or fewer.",
+  "@fieldTitleTooLong": {
+    "description": "Inline error on the instruction title."
+  },
+  "fieldBodyTooLong": "That's too long. Use 20,000 characters or fewer.",
+  "@fieldBodyTooLong": {
+    "description": "Inline error on the instruction text."
+  },
+  "fieldTextInvalid": "This contains characters that can't be used. Remove them and try again.",
+  "@fieldTextInvalid": {
+    "description": "Inline error: control or text-direction characters in an instruction."
+  },
+  "instructionCategoryPersonal": "Personal",
+  "@instructionCategoryPersonal": {
+    "description": "Name of an instruction category (FR-INS-01)."
+  },
+  "instructionCategoryFamily": "Family",
+  "@instructionCategoryFamily": {
+    "description": "Name of an instruction category (FR-INS-01)."
+  },
+  "instructionCategoryHome": "Home",
+  "@instructionCategoryHome": {
+    "description": "Name of an instruction category (FR-INS-01)."
+  },
+  "instructionCategoryWork": "Work",
+  "@instructionCategoryWork": {
+    "description": "Name of an instruction category (FR-INS-01)."
+  },
+  "instructionCategoryBusiness": "Business",
+  "@instructionCategoryBusiness": {
+    "description": "Name of an instruction category (FR-INS-01)."
+  },
+  "instructionCategoryDocuments": "Documents",
+  "@instructionCategoryDocuments": {
+    "description": "Name of an instruction category (FR-INS-01)."
+  },
+  "instructionCategoryInsurance": "Insurance",
+  "@instructionCategoryInsurance": {
+    "description": "Name of an instruction category (FR-INS-01)."
+  },
+  "instructionCategoryPets": "Pets",
+  "@instructionCategoryPets": {
+    "description": "Name of an instruction category (FR-INS-01)."
+  },
+  "instructionCategoryTravel": "Travel",
+  "@instructionCategoryTravel": {
+    "description": "Name of an instruction category (FR-INS-01)."
+  },
+  "instructionCategoryDigitalAccounts": "Digital accounts",
+  "@instructionCategoryDigitalAccounts": {
+    "description": "Name of an instruction category (FR-INS-01)."
+  },
+  "instructionCategoryOther": "Other",
+  "@instructionCategoryOther": {
+    "description": "Name of an instruction category (FR-INS-01)."
+  },
+  "instructionsAdd": "Add instruction",
+  "@instructionsAdd": {
+    "description": "Primary action and tooltip on the Instructions tab."
+  },
+  "instructionsWriteOwn": "Write your own",
+  "@instructionsWriteOwn": {
+    "description": "Starts a blank instruction."
+  },
+  "instructionsStartersTitle": "Or start from an example",
+  "@instructionsStartersTitle": {
+    "description": "Heading above the example instructions on the empty Instructions tab."
+  },
+  "instructionsFilterAll": "All",
+  "@instructionsFilterAll": {
+    "description": "Category filter: every category."
+  },
+  "instructionStatusActive": "Active",
+  "@instructionStatusActive": {
+    "description": "Chip: the instruction will be shared when its time comes."
+  },
+  "instructionStatusInactive": "Inactive",
+  "@instructionStatusInactive": {
+    "description": "Chip: the instruction is never shared."
+  },
+  "instructionStatusLabel": "Status: {status}",
+  "@instructionStatusLabel": {
+    "description": "Screen reader label of the status chip.",
+    "placeholders": {
+      "status": {
+        "type": "String"
+      }
+    }
+  },
+  "instructionNotShared": "Not shared with anyone yet",
+  "@instructionNotShared": {
+    "description": "Card line for an instruction without recipients."
+  },
+  "instructionStageAfter": "After {delay}",
+  "@instructionStageAfter": {
+    "description": "When an instruction is released, as a duration after the missed check-in (the plan stage).",
+    "placeholders": {
+      "delay": {
+        "type": "String"
+      }
+    }
+  },
+  "instructionStageNumber": "Stage {position}",
+  "@instructionStageNumber": {
+    "description": "When an instruction is released, when the plan is not known: the stage number.",
+    "placeholders": {
+      "position": {
+        "type": "int"
+      }
+    }
+  },
+  "instructionRecipientWhen": "{names}: {when}",
+  "@instructionRecipientWhen": {
+    "description": "Card line: who receives it and when.",
+    "placeholders": {
+      "names": {
+        "type": "String"
+      },
+      "when": {
+        "type": "String"
+      }
+    }
+  },
+  "instructionRecipientPending": "{count, plural, =1{{names} hasn't accepted yet.} other{{names} haven't accepted yet.}}",
+  "@instructionRecipientPending": {
+    "description": "Gentle note: these trusted contacts have not accepted their invitation.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "names": {
+        "type": "String"
+      }
+    }
+  },
+  "instructionRecipientUnreachable": "{names} can't be reached right now. See People for what to do.",
+  "@instructionRecipientUnreachable": {
+    "description": "Gentle note: these trusted contacts declined, opted out or could not be reached.",
+    "placeholders": {
+      "names": {
+        "type": "String"
+      }
+    }
+  },
+  "instructionCardSemantics": "{title}. {category}. {status}. {sharing}",
+  "@instructionCardSemantics": {
+    "description": "Screen reader label of an instruction card.",
+    "placeholders": {
+      "title": {
+        "type": "String"
+      },
+      "category": {
+        "type": "String"
+      },
+      "status": {
+        "type": "String"
+      },
+      "sharing": {
+        "type": "String"
+      }
+    }
+  },
+  "instructionDetailTitle": "Instruction",
+  "@instructionDetailTitle": {
+    "description": "Title of the instruction detail screen."
+  },
+  "instructionDetailBody": "What they'll read",
+  "@instructionDetailBody": {
+    "description": "Heading above the text of an instruction."
+  },
+  "instructionDetailSharedWith": "Shared with",
+  "@instructionDetailSharedWith": {
+    "description": "Heading above the recipients."
+  },
+  "instructionDetailNobody": "Not shared with anyone yet. Choose who receives it when you edit it.",
+  "@instructionDetailNobody": {
+    "description": "Detail: an instruction without recipients."
+  },
+  "instructionDetailChanged": "Last changed {when}",
+  "@instructionDetailChanged": {
+    "description": "Detail: when it was last changed.",
+    "placeholders": {
+      "when": {
+        "type": "String"
+      }
+    }
+  },
+  "instructionActiveLabel": "Active",
+  "@instructionActiveLabel": {
+    "description": "Label of the switch on the detail screen."
+  },
+  "instructionActiveOn": "It will be shared with the people you chose, at the time you chose.",
+  "@instructionActiveOn": {
+    "description": "Explains an active instruction."
+  },
+  "instructionActiveOff": "It will never be shared while it is inactive.",
+  "@instructionActiveOff": {
+    "description": "Explains an inactive instruction."
+  },
+  "instructionActivated": "This instruction is active.",
+  "@instructionActivated": {
+    "description": "Announced after switching it on."
+  },
+  "instructionDeactivated": "This instruction is inactive and won't be shared.",
+  "@instructionDeactivated": {
+    "description": "Announced after switching it off."
+  },
+  "instructionEditAction": "Edit",
+  "@instructionEditAction": {
+    "description": "Detail action."
+  },
+  "instructionDeleteAction": "Delete",
+  "@instructionDeleteAction": {
+    "description": "Detail action."
+  },
+  "instructionDeleteTitle": "Delete this instruction?",
+  "@instructionDeleteTitle": {
+    "description": "Confirmation sheet title."
+  },
+  "instructionDeleteBody": "It will no longer be shared with anyone, and this can't be undone.",
+  "@instructionDeleteBody": {
+    "description": "Confirmation sheet body."
+  },
+  "instructionDeleteConfirm": "Delete instruction",
+  "@instructionDeleteConfirm": {
+    "description": "Confirmation sheet action."
+  },
+  "instructionDeleted": "Instruction deleted.",
+  "@instructionDeleted": {
+    "description": "Snack bar after deleting."
+  },
+  "instructionAdded": "Instruction saved.",
+  "@instructionAdded": {
+    "description": "Snack bar after creating."
+  },
+  "instructionUpdated": "Changes saved.",
+  "@instructionUpdated": {
+    "description": "Snack bar after editing."
+  },
+  "instructionAddTitle": "Add an instruction",
+  "@instructionAddTitle": {
+    "description": "Title of the create screen."
+  },
+  "instructionEditTitle": "Edit instruction",
+  "@instructionEditTitle": {
+    "description": "Title of the edit screen."
+  },
+  "instructionCategoryHeading": "Category",
+  "@instructionCategoryHeading": {
+    "description": "Heading above the category choices."
+  },
+  "instructionCategoryRequired": "Choose a category.",
+  "@instructionCategoryRequired": {
+    "description": "Validation."
+  },
+  "instructionCategoryUnknown": "That category isn't available. Choose another.",
+  "@instructionCategoryUnknown": {
+    "description": "Server said unknown_category."
+  },
+  "instructionStartFromExample": "Start from an example",
+  "@instructionStartFromExample": {
+    "description": "Opens the examples sheet."
+  },
+  "instructionExamplesTitle": "Start from an example",
+  "@instructionExamplesTitle": {
+    "description": "Title of the examples sheet."
+  },
+  "instructionExamplesBody": "These are only examples to get you started. Change anything you like, and never add passwords.",
+  "@instructionExamplesBody": {
+    "description": "Body of the examples sheet."
+  },
+  "instructionBodyCounter": "{count} of {max} characters",
+  "@instructionBodyCounter": {
+    "description": "Counter under the text.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      },
+      "max": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "instructionDigitalGuidance": "Don't paste passwords. Say where they can be found (for example, your password manager's emergency access).",
+  "@instructionDigitalGuidance": {
+    "description": "Guidance shown in the Digital accounts category (FR-INS-07)."
+  },
+  "instructionDraftKept": "We kept what you typed.",
+  "@instructionDraftKept": {
+    "description": "Shown when a draft was restored."
+  },
+  "instructionStartOver": "Start over",
+  "@instructionStartOver": {
+    "description": "Clears the draft."
+  },
+  "instructionAddContact": "Add a trusted contact",
+  "@instructionAddContact": {
+    "description": "Action when there is no contact yet."
+  },
+  "instructionNobodyChosen": "Nobody is chosen yet, so this won't be shared. You can choose people later.",
+  "@instructionNobodyChosen": {
+    "description": "Note under the recipients when none is ticked."
+  },
+  "instructionWhenRequired": "Choose when this is shared.",
+  "@instructionWhenRequired": {
+    "description": "Validation."
+  },
+  "instructionReleaseAfter": "If you haven't checked in for {delay}",
+  "@instructionReleaseAfter": {
+    "description": "A choice of when it is shared: the plan stage, as a duration.",
+    "placeholders": {
+      "delay": {
+        "type": "String"
+      }
+    }
+  },
+  "instructionNoStage": "Your plan has no stage at least {delay} after a missed check-in, so this can't be shared with anyone yet. You can save it now and choose who receives it once your plan has one.",
+  "@instructionNoStage": {
+    "description": "Shown when the plan has no stage late enough to release an instruction.",
+    "placeholders": {
+      "delay": {
+        "type": "String"
+      }
+    }
+  },
+  "instructionNewTimeNone": "Your plan has no stage that far out yet. Choosing a time adds it to your plan, and the people you choose for it are told then too.",
+  "@instructionNewTimeNone": {
+    "description": "Hint under the times when the plan has no stage that can release an instruction: choosing a time adds one."
+  },
+  "instructionNewTimeChosen": "Saving adds this time to your plan. Whoever you choose for it is told at that time, and receives this.",
+  "@instructionNewTimeChosen": {
+    "description": "Hint under the times when a time the plan has no stage for is chosen."
+  },
+  "instructionStageKept": "Your plan now has the new time, but this instruction wasn't saved. Nothing else changed. Try again: the time is already there.",
+  "@instructionStageKept": {
+    "description": "Shown when the plan got a new stage and the instruction was then refused."
+  },
+  "instructionStageLimit": "Your account has room for {limit, plural, =1{1 stage} other{{limit} stages}} in your plan, and this would need more. Nothing was changed. Choose a time your plan already has, or the same time for everyone.",
+  "@instructionStageLimit": {
+    "description": "Shown for 403 plan_limit_reached on the plan's stages while saving an instruction with a new time.",
+    "placeholders": {
+      "limit": {
+        "type": "int"
+      }
+    }
+  },
+  "instructionStageLimitFree": "The free plan has room for {limit, plural, =1{1 stage} other{{limit} stages}} in your plan, and this would need more. Nothing was changed. Choose a time your plan already has, or the same time for everyone.",
+  "@instructionStageLimitFree": {
+    "description": "Shown for 403 plan_limit_reached on the plan's stages on the free plan while saving an instruction with a new time.",
+    "placeholders": {
+      "limit": {
+        "type": "int"
+      }
+    }
+  },
+  "instructionTimeRefused": "That time doesn't fit with the times already in your plan. Nothing was changed. Choose another.",
+  "@instructionTimeRefused": {
+    "description": "Shown for a 422 on the plan's stages while saving an instruction with a new time."
+  },
+  "instructionPerPerson": "Choose a time for each person",
+  "@instructionPerPerson": {
+    "description": "Switches to a time per person."
+  },
+  "instructionSameTime": "Use the same time for everyone",
+  "@instructionSameTime": {
+    "description": "Switches to one time for all."
+  },
+  "instructionWhenFor": "When should {name} receive it?",
+  "@instructionWhenFor": {
+    "description": "Heading of one person's choices.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "instructionSaveChanges": "Save changes",
+  "@instructionSaveChanges": {
+    "description": "Primary action when editing."
+  },
+  "instructionErrorStageTooEarly": "Choose a time at least {delay} after a missed check-in for sharing instructions.",
+  "@instructionErrorStageTooEarly": {
+    "description": "Server said release_stage_too_early.",
+    "placeholders": {
+      "delay": {
+        "type": "String"
+      }
+    }
+  },
+  "instructionErrorDuplicate": "Each person can be chosen once.",
+  "@instructionErrorDuplicate": {
+    "description": "Server said duplicate_recipient."
+  },
+  "instructionNotFound": "Something in this instruction can't be found any more, such as a person or a time in your plan, so we've refreshed. Look it over and try again.",
+  "@instructionNotFound": {
+    "description": "Server said 404 when saving an instruction."
+  },
+  "instructionLimitTitle": "More instructions are part of Premium",
+  "@instructionLimitTitle": {
+    "description": "Title of the limit sheet."
+  },
+  "instructionLimitBodyFree": "The free plan allows {limit, plural, =1{1 instruction} other{{limit} instructions}}. Adding more is part of Premium. You can also delete one to make room for another.",
+  "@instructionLimitBodyFree": {
+    "description": "Body of the free-plan limit sheet.",
+    "placeholders": {
+      "limit": {
+        "type": "int"
+      }
+    }
+  },
+  "instructionLimitBodyMax": "You've reached the most instructions one account can have ({limit}). Delete one to add another.",
+  "@instructionLimitBodyMax": {
+    "description": "Body of the limit sheet at the top tier.",
+    "placeholders": {
+      "limit": {
+        "type": "int"
+      }
+    }
+  },
+  "planStageReleases": "{count, plural, =1{Shares 1 instruction} other{Shares {count} instructions}}",
+  "@planStageReleases": {
+    "description": "Plan tab: how many instructions are shared at a stage.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "starterPersonalWhoToCallFirstTitle": "Who to call first",
+  "@starterPersonalWhoToCallFirstTitle": {
+    "description": "Example instruction: title."
+  },
+  "starterPersonalWhoToCallFirstHint": "The first people to reach, and what to say.",
+  "@starterPersonalWhoToCallFirstHint": {
+    "description": "Example instruction: what it is for."
+  },
+  "starterPersonalWhoToCallFirstBody": "The first person to call is…\nTheir number is…\nThey will know what to do about…",
+  "@starterPersonalWhoToCallFirstBody": {
+    "description": "Example instruction: text to fill in. Examples only."
+  },
+  "starterPersonalWhatMattersMostTitle": "What matters most right now",
+  "@starterPersonalWhatMattersMostTitle": {
+    "description": "Example instruction: title."
+  },
+  "starterPersonalWhatMattersMostHint": "The few things someone should deal with first.",
+  "@starterPersonalWhatMattersMostHint": {
+    "description": "Example instruction: what it is for."
+  },
+  "starterPersonalWhatMattersMostBody": "The most urgent thing is…\nThe next most important thing is…\nSomething that can wait is…",
+  "@starterPersonalWhatMattersMostBody": {
+    "description": "Example instruction: text to fill in. Examples only."
+  },
+  "starterPersonalHealthInfoTitle": "Health information",
+  "@starterPersonalHealthInfoTitle": {
+    "description": "Example instruction: title."
+  },
+  "starterPersonalHealthInfoHint": "Doctors, medicines and allergies someone may need to know.",
+  "@starterPersonalHealthInfoHint": {
+    "description": "Example instruction: what it is for."
+  },
+  "starterPersonalHealthInfoBody": "My doctor is…\nI take these medicines…\nI am allergic to…\nMy health records are kept…",
+  "@starterPersonalHealthInfoBody": {
+    "description": "Example instruction: text to fill in. Examples only."
+  },
+  "starterPersonalMessageTitle": "A message for people close to me",
+  "@starterPersonalMessageTitle": {
+    "description": "Example instruction: title."
+  },
+  "starterPersonalMessageHint": "Something you would like them to hear from you.",
+  "@starterPersonalMessageHint": {
+    "description": "Example instruction: what it is for."
+  },
+  "starterPersonalMessageBody": "I want you to know…\nThank you for…\nPlease remember…",
+  "@starterPersonalMessageBody": {
+    "description": "Example instruction: text to fill in. Examples only."
+  },
+  "starterFamilyChildrenTitle": "Looking after the children",
+  "@starterFamilyChildrenTitle": {
+    "description": "Example instruction: title."
+  },
+  "starterFamilyChildrenHint": "Routines, school and the adults they trust.",
+  "@starterFamilyChildrenHint": {
+    "description": "Example instruction: what it is for."
+  },
+  "starterFamilyChildrenBody": "The children are…\nTheir school and teachers are…\nTheir daily routine is…\nThe adults they trust are…\nAllergies and health notes are…",
+  "@starterFamilyChildrenBody": {
+    "description": "Example instruction: text to fill in. Examples only."
+  },
+  "starterFamilyCareTitle": "Caring for a parent or relative",
+  "@starterFamilyCareTitle": {
+    "description": "Example instruction: title."
+  },
+  "starterFamilyCareHint": "What they need and who helps.",
+  "@starterFamilyCareHint": {
+    "description": "Example instruction: what it is for."
+  },
+  "starterFamilyCareBody": "The person I look after is…\nThey need help with…\nTheir medicines and doctors are…\nWho else helps is…",
+  "@starterFamilyCareBody": {
+    "description": "Example instruction: text to fill in. Examples only."
+  },
+  "starterFamilyWhoToTellTitle": "Who to tell, and in what order",
+  "@starterFamilyWhoToTellTitle": {
+    "description": "Example instruction: title."
+  },
+  "starterFamilyWhoToTellHint": "The people who should hear first.",
+  "@starterFamilyWhoToTellHint": {
+    "description": "Example instruction: what it is for."
+  },
+  "starterFamilyWhoToTellBody": "The first person to tell is…\nAfter that, please tell…\nRelatives who may be hard to reach by phone are…",
+  "@starterFamilyWhoToTellBody": {
+    "description": "Example instruction: text to fill in. Examples only."
+  },
+  "starterFamilyDatesTitle": "Important dates and plans",
+  "@starterFamilyDatesTitle": {
+    "description": "Example instruction: title."
+  },
+  "starterFamilyDatesHint": "Dates, plans and promises that matter.",
+  "@starterFamilyDatesHint": {
+    "description": "Example instruction: what it is for."
+  },
+  "starterFamilyDatesBody": "Dates that matter are…\nPlans already made are…\nSomething I promised and want kept is…",
+  "@starterFamilyDatesBody": {
+    "description": "Example instruction: text to fill in. Examples only."
+  },
+  "starterHomeEmergencyTitle": "House emergency",
+  "@starterHomeEmergencyTitle": {
+    "description": "Example instruction: title."
+  },
+  "starterHomeEmergencyHint": "Where the spare keys are, who to call, how to turn off water and power.",
+  "@starterHomeEmergencyHint": {
+    "description": "Example instruction: what it is for."
+  },
+  "starterHomeEmergencyBody": "The spare keys are…\nIn an emergency, call…\nTo turn off the water…\nTo turn off the power…",
+  "@starterHomeEmergencyBody": {
+    "description": "Example instruction: text to fill in. Examples only."
+  },
+  "starterHomeKeysTitle": "Home and keys",
+  "@starterHomeKeysTitle": {
+    "description": "Example instruction: title."
+  },
+  "starterHomeKeysHint": "Where keys are, how to get in, what to look after.",
+  "@starterHomeKeysHint": {
+    "description": "Example instruction: what it is for."
+  },
+  "starterHomeKeysBody": "A spare key is…\nThe alarm code is kept…\nBills and mail go to…\nPlease check on…",
+  "@starterHomeKeysBody": {
+    "description": "Example instruction: text to fill in. Examples only."
+  },
+  "starterHomeBillsTitle": "Bills and household accounts",
+  "@starterHomeBillsTitle": {
+    "description": "Example instruction: title."
+  },
+  "starterHomeBillsHint": "What is paid, when, and from where.",
+  "@starterHomeBillsHint": {
+    "description": "Example instruction: what it is for."
+  },
+  "starterHomeBillsBody": "Rent or mortgage is paid…\nUtilities are paid…\nSubscriptions to cancel or keep…\nPapers are kept…",
+  "@starterHomeBillsBody": {
+    "description": "Example instruction: text to fill in. Examples only."
+  },
+  "starterHomeRepairsTitle": "Utilities and repairs",
+  "@starterHomeRepairsTitle": {
+    "description": "Example instruction: title."
+  },
+  "starterHomeRepairsHint": "Who fixes what, and where the meters are.",
+  "@starterHomeRepairsHint": {
+    "description": "Example instruction: what it is for."
+  },
+  "starterHomeRepairsBody": "The meters are…\nMy electrician is…\nMy plumber is…\nThe landlord or building manager is…",
+  "@starterHomeRepairsBody": {
+    "description": "Example instruction: text to fill in. Examples only."
+  },
+  "starterWorkHandoverTitle": "Work handover",
+  "@starterWorkHandoverTitle": {
+    "description": "Example instruction: title."
+  },
+  "starterWorkHandoverHint": "What colleagues will need to pick up.",
+  "@starterWorkHandoverHint": {
+    "description": "Example instruction: what it is for."
+  },
+  "starterWorkHandoverBody": "The most urgent thing at work is…\nMy manager is…\nFiles and tools are in…",
+  "@starterWorkHandoverBody": {
+    "description": "Example instruction: text to fill in. Examples only."
+  },
+  "starterWorkPeopleTitle": "People to tell at work",
+  "@starterWorkPeopleTitle": {
+    "description": "Example instruction: title."
+  },
+  "starterWorkPeopleHint": "Who should hear, and who decides.",
+  "@starterWorkPeopleHint": {
+    "description": "Example instruction: what it is for."
+  },
+  "starterWorkPeopleBody": "The first person to tell is…\nMy manager can be reached at…\nClients who should hear from someone are…",
+  "@starterWorkPeopleBody": {
+    "description": "Example instruction: text to fill in. Examples only."
+  },
+  "starterWorkFilesTitle": "Where my work files are",
+  "@starterWorkFilesTitle": {
+    "description": "Example instruction: title."
+  },
+  "starterWorkFilesHint": "Folders, tools and shared accounts.",
+  "@starterWorkFilesHint": {
+    "description": "Example instruction: what it is for."
+  },
+  "starterWorkFilesBody": "My files are in…\nThe tools I use are…\nShared access is managed by…",
+  "@starterWorkFilesBody": {
+    "description": "Example instruction: text to fill in. Examples only."
+  },
+  "starterWorkProjectsTitle": "Projects in progress",
+  "@starterWorkProjectsTitle": {
+    "description": "Example instruction: title."
+  },
+  "starterWorkProjectsHint": "What is under way and what is due.",
+  "@starterWorkProjectsHint": {
+    "description": "Example instruction: what it is for."
+  },
+  "starterWorkProjectsBody": "The project that matters most is…\nIt is due…\nThe next step is…\nThe person who knows more is…",
+  "@starterWorkProjectsBody": {
+    "description": "Example instruction: text to fill in. Examples only."
+  },
+  "starterDocumentsWhereTitle": "Where my documents are",
+  "@starterDocumentsWhereTitle": {
+    "description": "Example instruction: title."
+  },
+  "starterDocumentsWhereHint": "Important papers and where to find them.",
+  "@starterDocumentsWhereHint": {
+    "description": "Example instruction: what it is for."
+  },
+  "starterDocumentsWhereBody": "My important papers are kept…\nThe folder with identity documents is…\nA copy of my will is with…",
+  "@starterDocumentsWhereBody": {
+    "description": "Example instruction: text to fill in. Examples only."
+  },
+  "starterDocumentsIdTitle": "Identity documents",
+  "@starterDocumentsIdTitle": {
+    "description": "Example instruction: title."
+  },
+  "starterDocumentsIdHint": "Passport, licence and ID cards.",
+  "@starterDocumentsIdHint": {
+    "description": "Example instruction: what it is for."
+  },
+  "starterDocumentsIdBody": "My passport is kept…\nMy driving licence is kept…\nMy other ID cards are…",
+  "@starterDocumentsIdBody": {
+    "description": "Example instruction: text to fill in. Examples only."
+  },
+  "starterDocumentsPropertyTitle": "Property and legal papers",
+  "@starterDocumentsPropertyTitle": {
+    "description": "Example instruction: title."
+  },
+  "starterDocumentsPropertyHint": "Deeds, contracts and agreements.",
+  "@starterDocumentsPropertyHint": {
+    "description": "Example instruction: what it is for."
+  },
+  "starterDocumentsPropertyBody": "The papers for my home are…\nMy contracts are…\nMy lawyer or adviser is…",
+  "@starterDocumentsPropertyBody": {
+    "description": "Example instruction: text to fill in. Examples only."
+  },
+  "starterDocumentsFinanceTitle": "Bank and financial papers",
+  "@starterDocumentsFinanceTitle": {
+    "description": "Example instruction: title."
+  },
+  "starterDocumentsFinanceHint": "Accounts, statements and where they are kept.",
+  "@starterDocumentsFinanceHint": {
+    "description": "Example instruction: what it is for."
+  },
+  "starterDocumentsFinanceBody": "My bank accounts are with…\nMy statements arrive…\nMy accountant or adviser is…\nMy papers are kept…",
+  "@starterDocumentsFinanceBody": {
+    "description": "Example instruction: text to fill in. Examples only."
+  },
+  "starterInsuranceOverviewTitle": "Insurance",
+  "@starterInsuranceOverviewTitle": {
+    "description": "Example instruction: title."
+  },
+  "starterInsuranceOverviewHint": "Policies, providers and who to contact.",
+  "@starterInsuranceOverviewHint": {
+    "description": "Example instruction: what it is for."
+  },
+  "starterInsuranceOverviewBody": "My health insurance is with…\nThe policy number is kept…\nMy agent is…",
+  "@starterInsuranceOverviewBody": {
+    "description": "Example instruction: text to fill in. Examples only."
+  },
+  "starterInsuranceHealthTitle": "Health insurance",
+  "@starterInsuranceHealthTitle": {
+    "description": "Example instruction: title."
+  },
+  "starterInsuranceHealthHint": "Provider, cover and how to claim.",
+  "@starterInsuranceHealthHint": {
+    "description": "Example instruction: what it is for."
+  },
+  "starterInsuranceHealthBody": "My health insurance is with…\nThe member number is kept…\nTo make a claim, call…",
+  "@starterInsuranceHealthBody": {
+    "description": "Example instruction: text to fill in. Examples only."
+  },
+  "starterInsuranceHomeTitle": "Home and vehicle insurance",
+  "@starterInsuranceHomeTitle": {
+    "description": "Example instruction: title."
+  },
+  "starterInsuranceHomeHint": "What is covered and who to call.",
+  "@starterInsuranceHomeHint": {
+    "description": "Example instruction: what it is for."
+  },
+  "starterInsuranceHomeBody": "My home insurance is with…\nMy vehicle insurance is with…\nThe policy papers are kept…\nTo make a claim, call…",
+  "@starterInsuranceHomeBody": {
+    "description": "Example instruction: text to fill in. Examples only."
+  },
+  "starterInsuranceLifeTitle": "Life insurance and savings",
+  "@starterInsuranceLifeTitle": {
+    "description": "Example instruction: title."
+  },
+  "starterInsuranceLifeHint": "Policies that someone may need to claim.",
+  "@starterInsuranceLifeHint": {
+    "description": "Example instruction: what it is for."
+  },
+  "starterInsuranceLifeBody": "My life insurance is with…\nThe policy papers are kept…\nThe person to contact is…\nOther savings or investments are with…",
+  "@starterInsuranceLifeBody": {
+    "description": "Example instruction: text to fill in. Examples only."
+  },
+  "starterPetsCareTitle": "Pets",
+  "@starterPetsCareTitle": {
+    "description": "Example instruction: title."
+  },
+  "starterPetsCareHint": "Who looks after them, food, vet details.",
+  "@starterPetsCareHint": {
+    "description": "Example instruction: what it is for."
+  },
+  "starterPetsCareBody": "My pet's name is…\nFood and routine…\nThe vet is…\nSomeone who can take them in is…",
+  "@starterPetsCareBody": {
+    "description": "Example instruction: text to fill in. Examples only."
+  },
+  "starterPetsRoutineTitle": "Feeding and daily routine",
+  "@starterPetsRoutineTitle": {
+    "description": "Example instruction: title."
+  },
+  "starterPetsRoutineHint": "Meals, walks and anything they need.",
+  "@starterPetsRoutineHint": {
+    "description": "Example instruction: what it is for."
+  },
+  "starterPetsRoutineBody": "They eat…\nThey are walked…\nThey need…\nThey are afraid of…",
+  "@starterPetsRoutineBody": {
+    "description": "Example instruction: text to fill in. Examples only."
+  },
+  "starterPetsVetTitle": "Vet and medical details",
+  "@starterPetsVetTitle": {
+    "description": "Example instruction: title."
+  },
+  "starterPetsVetHint": "Vet, medicines and vaccinations.",
+  "@starterPetsVetHint": {
+    "description": "Example instruction: what it is for."
+  },
+  "starterPetsVetBody": "The vet is…\nTheir medicines are…\nTheir vaccination papers are…\nIn an emergency, go to…",
+  "@starterPetsVetBody": {
+    "description": "Example instruction: text to fill in. Examples only."
+  },
+  "starterPetsHomeTitle": "Who can take them in",
+  "@starterPetsHomeTitle": {
+    "description": "Example instruction: title."
+  },
+  "starterPetsHomeHint": "A home for them if you can't be there.",
+  "@starterPetsHomeHint": {
+    "description": "Example instruction: what it is for."
+  },
+  "starterPetsHomeBody": "The person who can take them in is…\nTheir number is…\nThey already know the pet because…",
+  "@starterPetsHomeBody": {
+    "description": "Example instruction: text to fill in. Examples only."
+  },
+  "starterTravelPlansTitle": "Trips and bookings",
+  "@starterTravelPlansTitle": {
+    "description": "Example instruction: title."
+  },
+  "starterTravelPlansHint": "Where you're going and what is booked.",
+  "@starterTravelPlansHint": {
+    "description": "Example instruction: what it is for."
+  },
+  "starterTravelPlansBody": "My next trip is…\nMy bookings are kept…\nThe person who knows my plans is…",
+  "@starterTravelPlansBody": {
+    "description": "Example instruction: text to fill in. Examples only."
+  },
+  "starterTravelDocumentsTitle": "Travel documents",
+  "@starterTravelDocumentsTitle": {
+    "description": "Example instruction: title."
+  },
+  "starterTravelDocumentsHint": "Passport, visas and tickets.",
+  "@starterTravelDocumentsHint": {
+    "description": "Example instruction: what it is for."
+  },
+  "starterTravelDocumentsBody": "My passport is kept…\nMy visas are…\nMy tickets are in…",
+  "@starterTravelDocumentsBody": {
+    "description": "Example instruction: text to fill in. Examples only."
+  },
+  "starterTravelContactsTitle": "Contacts and cover while travelling",
+  "@starterTravelContactsTitle": {
+    "description": "Example instruction: title."
+  },
+  "starterTravelContactsHint": "Who to call, and travel insurance.",
+  "@starterTravelContactsHint": {
+    "description": "Example instruction: what it is for."
+  },
+  "starterTravelContactsBody": "My travel insurance is with…\nThe number to call is…\nMy contact at the destination is…",
+  "@starterTravelContactsBody": {
+    "description": "Example instruction: text to fill in. Examples only."
+  },
+  "starterTravelHomeTitle": "Home while I'm away",
+  "@starterTravelHomeTitle": {
+    "description": "Example instruction: title."
+  },
+  "starterTravelHomeHint": "Who has keys and what to look after.",
+  "@starterTravelHomeHint": {
+    "description": "Example instruction: what it is for."
+  },
+  "starterTravelHomeBody": "Someone with a key is…\nPlants and pets are looked after by…\nMy post goes to…",
+  "@starterTravelHomeBody": {
+    "description": "Example instruction: text to fill in. Examples only."
+  },
+  "starterDigitalPasswordManagerTitle": "Password manager and emergency access",
+  "@starterDigitalPasswordManagerTitle": {
+    "description": "Example instruction: title."
+  },
+  "starterDigitalPasswordManagerHint": "Where it is, and who can open it for you.",
+  "@starterDigitalPasswordManagerHint": {
+    "description": "Example instruction: what it is for."
+  },
+  "starterDigitalPasswordManagerBody": "I use this password manager…\nIts emergency access is set up with…\nThe person who can ask for access is…",
+  "@starterDigitalPasswordManagerBody": {
+    "description": "Example instruction: text to fill in. Examples only."
+  },
+  "starterDigitalEmailTitle": "Email and phone accounts",
+  "@starterDigitalEmailTitle": {
+    "description": "Example instruction: title."
+  },
+  "starterDigitalEmailHint": "Which accounts matter, and where to find them.",
+  "@starterDigitalEmailHint": {
+    "description": "Example instruction: what it is for."
+  },
+  "starterDigitalEmailBody": "My main email account is with…\nMy phone provider is…\nMy recovery details are kept…",
+  "@starterDigitalEmailBody": {
+    "description": "Example instruction: text to fill in. Examples only."
+  },
+  "starterDigitalMoneyTitle": "Online banking and payments",
+  "@starterDigitalMoneyTitle": {
+    "description": "Example instruction: title."
+  },
+  "starterDigitalMoneyHint": "Which services, and who can help.",
+  "@starterDigitalMoneyHint": {
+    "description": "Example instruction: what it is for."
+  },
+  "starterDigitalMoneyBody": "I bank online with…\nThe payment apps I use are…\nThe person who can help is…",
+  "@starterDigitalMoneyBody": {
+    "description": "Example instruction: text to fill in. Examples only."
+  },
+  "starterDigitalSocialTitle": "Social media and subscriptions",
+  "@starterDigitalSocialTitle": {
+    "description": "Example instruction: title."
+  },
+  "starterDigitalSocialHint": "What to keep, close or hand over.",
+  "@starterDigitalSocialHint": {
+    "description": "Example instruction: what it is for."
+  },
+  "starterDigitalSocialBody": "My social media accounts are…\nSubscriptions to cancel are…\nMy photos and files are stored in…",
+  "@starterDigitalSocialBody": {
+    "description": "Example instruction: text to fill in. Examples only."
   }
 }

@@ -91,6 +91,17 @@ final class InvalidStateFailure extends ConflictFailure {
   const InvalidStateFailure({super.problem}) : super(code: 'invalid_state');
 }
 
+/// 409 `stage_in_use`: a plan stage cannot be removed while instructions are released at
+/// it. [instructionIds] are the ids the server listed (ids only, never titles).
+final class StageInUseFailure extends ConflictFailure {
+  const StageInUseFailure({
+    this.instructionIds = const <String>[],
+    super.problem,
+  }) : super(code: 'stage_in_use');
+
+  final List<String> instructionIds;
+}
+
 /// 409 `activation_requirements_unmet`: check-ins cannot be turned on yet. The
 /// [requirements] are the codes the server listed (`no_contacts`, and later `no_stages`
 /// and others). Codes this app version does not know are kept, so the screen can say

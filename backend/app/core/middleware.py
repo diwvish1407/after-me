@@ -35,6 +35,9 @@ SCOPE_RESPONSE_HEADERS: Final = "afterme.response_headers"
 REQUEST_ID_HEADER: Final = "X-Request-ID"
 CLIENT_HEADER: Final = "X-AfterMe-Client"
 MAX_BODY_BYTES: Final = 64 * 1024
+# 20,000 characters can be 80,000 bytes of UTF-8 (four bytes for an emoji): only the instruction
+# routes may be larger than the general cap.
+INSTRUCTION_BODY_BYTES: Final = 96 * 1024
 
 _REQUEST_ID_RE: Final = re.compile(r"^[A-Za-z0-9._:-]{1,128}$")
 _CLIENT_RE: Final = re.compile(r"^android/(\d{1,6})\.(\d{1,6})\.(\d{1,6})(?:\+\d{1,9})?$")
@@ -162,6 +165,11 @@ class BodySizeLimitMiddleware:
             await self.app(scope, receive, send)
             return
 
+        max_bytes = (
+            max(self.max_bytes, INSTRUCTION_BODY_BYTES)
+            if scope["path"].startswith("/v1/instructions")
+            else self.max_bytes
+        )
         declared = Headers(scope=scope).get("content-length")
         if declared is not None:
             if not declared.isdigit():
@@ -169,7 +177,7 @@ class BodySizeLimitMiddleware:
                     scope, receive, send, PayloadTooLarge, self.settings.public_base_url
                 )
                 return
-            if int(declared) > self.max_bytes:
+            if int(declared) > max_bytes:
                 await _send_problem(
                     scope, receive, send, PayloadTooLarge, self.settings.public_base_url
                 )
@@ -183,7 +191,7 @@ class BodySizeLimitMiddleware:
             message = await receive()
             if message["type"] == "http.request":
                 received += len(message.get("body", b""))
-                if received > self.max_bytes:
+                if received > max_bytes:
                     raise BodyTooLargeError
             return message
 

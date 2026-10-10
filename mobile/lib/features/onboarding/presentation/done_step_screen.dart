@@ -2,8 +2,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
 
-import '../../../app/preview_banner.dart';
-import '../../../app/repository_providers.dart';
 import '../../../app/router.dart';
 import '../../../app/theme/dimens.dart';
 import '../../../app/theme/tokens.dart';
@@ -81,14 +79,11 @@ class _DoneStepScreenState extends ConsumerState<DoneStepScreen> {
         ref.watch(setupControllerProvider).value ?? const SetupState();
     final schedule = setup.schedule;
     final first = setup.contacts.isEmpty ? null : setup.contacts.first;
-    final preview = ref.watch(previewModeProvider);
     final String message;
     if (_activated && first != null) {
-      message = preview
-          ? l10n.doneActiveInvitedPreview(first.displayName)
-          : l10n.doneActiveInvited(first.displayName);
+      message = l10n.doneActiveInvited(first.displayName);
     } else if (_activated) {
-      message = preview ? l10n.doneActivePreview : l10n.doneActive;
+      message = l10n.doneActive;
     } else if (_outcome != null) {
       message = l10n.doneUnmet(activationMissingText(l10n, _outcome!.missing));
     } else {
@@ -101,7 +96,6 @@ class _DoneStepScreenState extends ConsumerState<DoneStepScreen> {
       primaryBusy: _activating,
       onPrimary: _finish,
       children: [
-        const PreviewBanner(),
         if (_failure != null) ...[
           FailureNotice.of(context, _failure!),
           Gap.sm,

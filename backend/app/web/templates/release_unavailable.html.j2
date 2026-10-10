@@ -1,0 +1,17 @@
+{% extends "base.html.j2" %}
+{% block title %}Not available · AfterMe{% endblock %}
+{% block content %}
+{% if state == "checked_in" %}
+<h1>This information is no longer available</h1>
+<p>{{ view.owner_name }} has checked in and confirmed they're safe. No action is needed.</p>
+{% elif state == "not_yet" %}
+<h1>Not available yet</h1>
+<p>What {{ view.owner_name }} shared will be available in a few minutes. Please open the link again then.</p>
+{% elif state == "error" %}
+<h1>We couldn't show this right now</h1>
+<p>What {{ view.owner_name }} shared is still available, but something went wrong on our side. Please try again in a few minutes. Nothing has been lost.</p>
+{% else %}
+<h1>This information is no longer available</h1>
+<p>It was withdrawn, or it's no longer meant to be shared. You don't need to do anything.</p>
+{% endif %}
+{% endblock %}

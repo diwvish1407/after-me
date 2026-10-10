@@ -1,22 +1,23 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
 
-import '../../../app/theme/dimens.dart';
-import '../../../app/theme/tokens.dart';
-import '../../../core/api/failures/app_failure.dart';
 import '../../../core/design_system/design_system.dart';
-import '../../../core/forms/validators.dart';
+import '../../../core/security/secure_screen.dart';
 import '../../../l10n/gen/app_localizations.dart';
-import '../../instructions/data/instructions_repository.dart';
+import '../../auth/presentation/reauth_sheet.dart';
+import '../../instructions/application/instruction_autosave.dart';
+import '../../instructions/presentation/instruction_form.dart';
+import '../../instructions/presentation/instruction_starter_cards.dart';
+import '../../instructions/presentation/instruction_starters.dart';
 import '../application/onboarding_controller.dart';
 import '../application/setup_controller.dart';
-import 'instruction_templates.dart';
 import 'onboarding_scaffold.dart';
 
-/// Release delays offered for the first instruction, in hours (at least 24).
-const List<int> instructionReleaseChoicesHours = [24, 48, 72];
-
-/// Step 7 (optional): pick a starter template and write the first instruction.
+/// Step 7 (optional): write the first instruction. The same create flow as the
+/// Instructions tab (category, title, text, who receives it, when), against the real
+/// instructions API, started from one of six examples or from a blank page. The step can
+/// be skipped. The window is `FLAG_SECURE` while the person writes (FR-INS-06).
 class InstructionStepScreen extends ConsumerStatefulWidget {
   const InstructionStepScreen({super.key});
 
@@ -26,71 +27,40 @@ class InstructionStepScreen extends ConsumerStatefulWidget {
 }
 
 class _InstructionStepScreenState extends ConsumerState<InstructionStepScreen> {
-  InstructionTemplate? _template;
-  final _title = TextEditingController();
-  final _body = TextEditingController();
-  int _hours = 48;
-  Set<String>? _recipients;
-  bool _busy = false;
-  AppFailure? _failure;
-  FieldIssue? _titleIssue;
-  bool _bodyEmpty = false;
+  InstructionStarter? _starter;
+
+  /// The form is open (with an example, or blank). A draft that was kept in memory
+  /// reopens it directly.
+  late bool _writing;
 
   @override
-  void dispose() {
-    _title.dispose();
-    _body.dispose();
-    super.dispose();
+  void initState() {
+    super.initState();
+    final draft = ref.read(instructionAutosaveProvider);
+    _writing = draft != null && draft.editingId == null;
   }
 
-  void _choose(InstructionTemplate template, AppLocalizations l10n) {
-    final text = templateText(l10n, template);
-    setState(() {
-      _template = template;
-      _title.text = text.title;
-      _body.text = text.starter;
-      _titleIssue = null;
-      _bodyEmpty = false;
-      _failure = null;
-    });
-  }
-
-  Future<void> _save(SetupState setup) async {
-    final recipients = _recipients ?? {for (final c in setup.contacts) c.id};
-    final title = _title.text.trim();
-    setState(() {
-      _titleIssue = title.isEmpty ? FieldIssue.required : null;
-      _bodyEmpty = _body.text.trim().isEmpty;
-      _failure = null;
-    });
-    if (title.isEmpty || _body.text.trim().isEmpty || recipients.isEmpty) {
-      return;
+  /// Saves it. While check-ins are off (onboarding) the server never asks for the
+  /// password; if it does (an account that is already on), the same save is repeated
+  /// once after it, plan stage and all.
+  Future<bool> _save(BuildContext context, InstructionFormValues values) async {
+    final controller = ref.read(setupControllerProvider.notifier);
+    final saved = await withReauth(context, () async {
+      await controller.createInstruction(
+        category: values.category,
+        title: values.title,
+        body: values.body,
+        recipients: values.recipients,
+      );
+      return true;
+    }, reason: instructionSaveReason(values));
+    if (saved == null) {
+      return false;
     }
-    FocusScope.of(context).unfocus();
-    setState(() => _busy = true);
-    try {
-      await ref
-          .read(setupControllerProvider.notifier)
-          .createInstruction(
-            InstructionDraft(
-              title: title,
-              body: _body.text,
-              releaseAfterHours: _hours,
-              recipientContactIds: recipients.toList(),
-              template: _template,
-            ),
-          );
-      if (mounted) {
-        await advanceFrom(context, ref, OnboardingStep.instruction);
-      }
-    } on AppFailure catch (failure) {
-      if (mounted) {
-        setState(() {
-          _busy = false;
-          _failure = failure;
-        });
-      }
+    if (mounted && context.mounted) {
+      await advanceFrom(context, ref, OnboardingStep.instruction);
     }
+    return true;
   }
 
   @override
@@ -99,17 +69,20 @@ class _InstructionStepScreenState extends ConsumerState<InstructionStepScreen> {
     final setup =
         ref.watch(setupControllerProvider).value ?? const SetupState();
     if (setup.instructions.isNotEmpty) {
-      return OnboardingScaffold(
-        step: OnboardingStep.instruction,
-        title: l10n.instructionStepTitle,
-        subtitle: l10n.instructionStepSaved(setup.instructions.first.title),
-        primaryLabel: l10n.actionContinue,
-        onPrimary: () => advanceFrom(context, ref, OnboardingStep.instruction),
-        children: const [],
+      // The title is content, so this page is secure too.
+      return SecureScreen(
+        child: OnboardingScaffold(
+          step: OnboardingStep.instruction,
+          title: l10n.instructionStepTitle,
+          subtitle: l10n.instructionStepSaved(setup.instructions.first.title),
+          primaryLabel: l10n.actionContinue,
+          onPrimary: () =>
+              advanceFrom(context, ref, OnboardingStep.instruction),
+          children: const [],
+        ),
       );
     }
-    final template = _template;
-    if (template == null) {
+    if (!_writing) {
       return OnboardingScaffold(
         step: OnboardingStep.instruction,
         title: l10n.instructionStepTitle,
@@ -118,144 +91,52 @@ class _InstructionStepScreenState extends ConsumerState<InstructionStepScreen> {
         onSecondary: () =>
             advanceFrom(context, ref, OnboardingStep.instruction),
         children: [
-          for (final value in InstructionTemplate.values)
-            _TemplateCard(
-              text: templateText(l10n, value),
-              onTap: () => _choose(value, l10n),
+          for (final starter in InstructionStarter.featured)
+            StarterCard(
+              starter: starter,
+              onTap: () => setState(() {
+                _starter = starter;
+                _writing = true;
+              }),
             ),
+          AppButton.text(
+            label: l10n.instructionsWriteOwn,
+            onPressed: () => setState(() {
+              _starter = null;
+              _writing = true;
+            }),
+            expand: true,
+          ),
+          Gap.sm,
           BodyText(l10n.instructionPasswordNote),
         ],
       );
     }
-    final selected = _recipients ?? {for (final c in setup.contacts) c.id};
-    return OnboardingScaffold(
-      step: OnboardingStep.instruction,
-      title: templateText(l10n, template).title,
-      subtitle: l10n.instructionWriteBody,
-      primaryLabel: l10n.instructionSave,
-      primaryBusy: _busy,
-      onPrimary: setup.hasContact ? () => _save(setup) : null,
-      secondaryLabel: l10n.actionSkipForNow,
-      onSecondary: () => advanceFrom(context, ref, OnboardingStep.instruction),
-      children: [
-        if (_failure != null) ...[FailureNotice.of(context, _failure!), Gap.md],
-        AppTextField(
-          label: l10n.fieldInstructionTitle,
-          controller: _title,
-          errorText: _titleIssue == null
-              ? null
-              : issueMessage(l10n, _titleIssue!),
-          textInputAction: TextInputAction.next,
-          textCapitalization: TextCapitalization.sentences,
-          enabled: !_busy,
-          onChanged: (_) => setState(() => _titleIssue = null),
-        ),
-        Gap.md,
-        TextField(
-          controller: _body,
-          enabled: !_busy,
-          minLines: 5,
-          maxLines: 12,
-          keyboardType: TextInputType.multiline,
-          textCapitalization: TextCapitalization.sentences,
-          decoration: InputDecoration(
-            labelText: l10n.fieldInstructionBody,
-            alignLabelWithHint: true,
-            errorText: _bodyEmpty ? l10n.fieldRequired : null,
+    return SecureScreen(
+      child: OnboardingScaffold(
+        step: OnboardingStep.instruction,
+        title: l10n.instructionStepTitle,
+        subtitle: l10n.instructionWriteBody,
+        secondaryLabel: l10n.actionSkipForNow,
+        onSecondary: () =>
+            advanceFrom(context, ref, OnboardingStep.instruction),
+        children: [
+          InstructionForm(
+            starter: _starter,
+            submitLabel: l10n.instructionSave,
+            // The contact just added is the natural first recipient.
+            suggestedRecipientIds: {for (final c in setup.contacts) c.id},
+            onSubmit: (values) => _save(context, values),
+            onAddContact: () => context.go(OnboardingStep.contact.path),
+            onReviewPlan: () => context.go(OnboardingStep.plan.path),
           ),
-          onChanged: (_) => setState(() => _bodyEmpty = false),
-        ),
-        Gap.sm,
-        BodyText(l10n.instructionPasswordNote),
-        Gap.lg,
-        Semantics(
-          header: true,
-          child: Text(
-            l10n.instructionWho,
-            style: Theme.of(context).textTheme.titleSmall,
+          Gap.md,
+          AppButton.text(
+            label: l10n.instructionChooseAnother,
+            onPressed: () => setState(() => _writing = false),
+            expand: true,
           ),
-        ),
-        if (!setup.hasContact)
-          BodyText(l10n.instructionNoContact)
-        else
-          for (final contact in setup.contacts)
-            CheckboxListTile(
-              contentPadding: EdgeInsets.zero,
-              controlAffinity: ListTileControlAffinity.leading,
-              value: selected.contains(contact.id),
-              title: Text(contact.displayName),
-              onChanged: _busy
-                  ? null
-                  : (value) => setState(() {
-                      final next = {...selected};
-                      value ?? false
-                          ? next.add(contact.id)
-                          : next.remove(contact.id);
-                      _recipients = next;
-                    }),
-            ),
-        if (setup.hasContact && selected.isEmpty)
-          Text(
-            l10n.instructionPickRecipient,
-            style: Theme.of(context).textTheme.bodySmall
-                ?.copyWith(color: context.tokens.escalation),
-          ),
-        Gap.md,
-        Semantics(
-          header: true,
-          child: Text(
-            l10n.instructionWhen,
-            style: Theme.of(context).textTheme.titleSmall,
-          ),
-        ),
-        RadioGroup<int>(
-          groupValue: _hours,
-          onChanged: (value) {
-            if (value != null && !_busy) {
-              setState(() => _hours = value);
-            }
-          },
-          child: Column(
-            children: [
-              for (final hours in instructionReleaseChoicesHours)
-                RadioListTile<int>(
-                  contentPadding: EdgeInsets.zero,
-                  value: hours,
-                  title: Text(l10n.instructionReleaseAfterDays(hours ~/ 24)),
-                ),
-            ],
-          ),
-        ),
-        const SizedBox(height: AppSpacing.xs),
-        AppButton.text(
-          label: l10n.instructionChooseAnother,
-          onPressed: _busy ? null : () => setState(() => _template = null),
-          expand: true,
-        ),
-      ],
-    );
-  }
-}
-
-class _TemplateCard extends StatelessWidget {
-  const _TemplateCard({required this.text, required this.onTap});
-
-  final TemplateText text;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-      child: Card(
-        clipBehavior: Clip.antiAlias,
-        child: ListTile(
-          minTileHeight: 64,
-          title: Text(text.title),
-          subtitle: Text(text.description),
-          trailing: const Icon(Icons.chevron_right_rounded),
-          onTap: onTap,
-        ),
+        ],
       ),
     );
   }

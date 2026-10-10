@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | Phase 0 approved 2026-10-08 · Phases 1–3 built, reviewed and signed off · Phase 4 built, owner decisions applied (sign-off implied by the Phase 5 instruction, 2026-10-10) · Phase 5 built and independently reviewed (17 findings: all dispositioned, 16 fixed or by owner decision implemented, 1 not a defect, see ESCALATION_ENGINE §13.2; the owner's decisions of 2026-10-10 on F-03, F-12, F-05a and the Home gap banner are implemented); awaiting owner review (the engine walkthrough is part of it) |
+| **Status** | Phase 0 approved 2026-10-08 · Phases 1–3 built, reviewed and signed off · Phase 4 built, owner decisions applied (sign-off implied by the Phase 5 instruction, 2026-10-10) · Phase 5 built, independently reviewed and decisions implemented (owner approved 2026-10-10: "yes start phase 6") · Phase 6 built and independently reviewed (ESCALATION_ENGINE §13.3), awaiting owner review |
 | **Working agreement** | One phase at a time. Each phase ends with format, lint, tests and a written report (commands run, structure, open issues, how to run). The next phase starts **only** on the product owner's instruction. |
 | **Related** | [PRD](PRD.md) · [TEST_PLAN §12](TEST_PLAN.md#12-release-acceptance-criteria) · [PLAY_STORE §1](PLAY_STORE.md#1-critical-path-and-timeline) |
 
@@ -56,7 +56,7 @@ Scope (from the Phase 1 brief):
 - Plans/stages API and editor validation; incidents, snapshot, timeline materialisation; the worker tick (open → execute → reminders → dispatch skeleton with recording providers); the full **safety gate**; settle delay; **Hold** (probes, anomaly, operator CLI) with rollback/shift; I'M OK resolution and I'M SAFE cancellation with the all-clear; DB role grants (`afterme_api` vs `afterme_worker`); observability metrics.
 - **Exit (M1):** ENG-LC-*, ENG-INV-*, ENG-FS-*, ENG-PBT-02/03 and ENG-CONC-* all pass; the T0–T8 test passes 100× consecutively; an engine walkthrough is reviewed with the owner.
 
-## Phase 6 — Instructions, recipients & release · L
+## Phase 6 — Instructions, recipients & release · L *(built, independently reviewed, awaiting owner review)*
 
 - Categories; instructions with envelope encryption (local KMS provider in dev, KMS interface); recipients with release stages; release events; portal access, tokens, OTP, the viewing page; revocation paths; the Instructions screens (FLAG_SECURE) and starter templates.
 - **Exit:** INS-*, REL-* and the related SEC-* (ciphertext swap, portal scope, XSS) tests pass; the lifecycle test includes a real release view.
@@ -115,6 +115,7 @@ Scope (from the Phase 1 brief):
 
 - **Not assigned to a phase yet:** web check-in and web I'M SAFE for a lost phone (FR-CHK-07; `/a/login`, `/a/checkin`, `/a/safe`). Proposed: Phase 7, next to the I'M SAFE flow, because I'M SAFE needs the incident model from Phase 5. The owner decides.
 - **Decisions taken at Phase 4 review (2026-10-10):** a pending check-in older than 12 h is dropped by the app with a notice (ESCALATION_ENGINE §9.1); lengthening the interval of an active schedule needs the password (SECURITY §7); the `timezone` package is accepted; web check-in is still unassigned.
+- **Phase 6 → 7 hand-off:** the incident timeline UI, the I'M SAFE flow and `safe_required` handling are still Phase 7 (the backend and contract files exist since Phase 5), plus the plan editor. Phase 6 leaves these for the deployment phases: a **cloud KMS adapter** (`KmsProvider` is the interface; `local` is refused in staging and production, so production cannot start without it), **per-user DEK rotation and KEK re-wrap**, **export** and **account deletion** (the schema and the revocation paths are ready; the endpoints are not), and the push copy for "someone viewed your instruction" (the Activity feed shows `release.viewed` already). **Open owner decision:** whether reading an instruction in the app should need a recent password (ESCALATION_ENGINE §13.3).
 - **Phase 5 → 6 hand-off:** the engine already handles releases end to end behind two seams (`app/engine/releases.py`, `app/plans/releases.py`): Phase 6 supplies the instruction-backed implementations, adds the `release_events`/`portal_*` tables (their foreign keys point at `escalation_incidents` and `incident_actions`), creates the releases inside `_stage`, and turns `contact_release` messages and the final warning's real content on. `release_count` is `0` and G8 reports `instructions_unavailable` until then. The mobile app got only the plan wiring in Phase 5 (so onboarding can activate); the incident timeline UI, the I'M SAFE flow and `safe_required` handling are Phase 7.
 - **Phase 4 → 5 hand-off:** the activation requirement is "at least one live contact" until the plan exists (`no_contacts`), and `POST /checkins` has no incident branch. Phase 5 replaces the first with `no_stages` and adds the second at the marked line in `app/checkins/service.py`.
 

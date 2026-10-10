@@ -15,7 +15,14 @@ from psycopg import sql
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Connection, Engine
 
-from app.models import ALL_TABLES, PHASE1_TABLES, PHASE3_TABLES, PHASE4_TABLES, metadata
+from app.models import (
+    ALL_TABLES,
+    PHASE1_TABLES,
+    PHASE3_TABLES,
+    PHASE4_TABLES,
+    PHASE5_TABLES,
+    metadata,
+)
 from tests.support import OWNER_PASSWORD, TEST_DB, alembic_config, connect, sqlalchemy_url
 
 SCRATCH_DB = f"{TEST_DB}_migrations"
@@ -110,7 +117,7 @@ def test_single_linear_history() -> None:
     heads = script.get_heads()
     assert len(heads) == 1
     revisions = list(script.walk_revisions())
-    assert [r.revision for r in revisions] == ["0005", "0004", "0003", "0002", "0001"]
+    assert [r.revision for r in revisions] == ["0006", "0005", "0004", "0003", "0002", "0001"]
 
 
 def test_upgrade_downgrade_upgrade_and_no_drift(scratch_url: str, engine: Engine) -> None:
@@ -203,6 +210,17 @@ def test_migration_grants_runtime_roles(scratch_url: str, engine: Engine) -> Non
     assert grants.pop("notification_logs") == {"SELECT"}
     assert grants.pop("system_holds") == {"SELECT"}
     assert grants.pop("ingestion_probes") == {"INSERT"}
+    # Phase 6: the API serves the owner and the portal; it cannot create releases, portal
+    # access or link tokens (the engine's), and cannot modify or delete a wrapped key.
+    assert grants.pop("user_keys") == {"SELECT", "INSERT"}
+    assert grants.pop("instruction_categories") == {"SELECT"}
+    assert grants.pop("instructions") == {"SELECT", "INSERT", "UPDATE"}  # soft delete only
+    assert grants.pop("instruction_recipients") == {"SELECT", "INSERT", "UPDATE", "DELETE"}
+    assert grants.pop("release_events") == {"SELECT"}  # UPDATE is column-limited
+    assert grants.pop("portal_access") == {"SELECT"}
+    assert grants.pop("portal_tokens") == {"SELECT"}
+    assert grants.pop("portal_sessions") == {"SELECT", "INSERT"}
+    assert grants.pop("portal_otp_challenges") == {"SELECT", "INSERT"}
     assert grants == {
         t: {"SELECT", "INSERT", "UPDATE", "DELETE"} for t in PHASE1_TABLES if t != "audit_logs"
     }
@@ -216,6 +234,34 @@ def test_migration_grants_runtime_roles(scratch_url: str, engine: Engine) -> Non
             )
         ).scalar_one()
     assert remaining == 0
+
+
+def test_phase6_downgrade_removes_only_instructions_and_release(
+    scratch_url: str, engine: Engine
+) -> None:
+    cfg = alembic_config(scratch_url)
+    command.upgrade(cfg, "head")
+    command.downgrade(cfg, "0005")
+    assert _tables(engine) == {
+        *PHASE1_TABLES,
+        *PHASE3_TABLES,
+        *PHASE4_TABLES,
+        *PHASE5_TABLES,
+        "alembic_version",
+    }
+    with engine.connect() as conn:
+        left = conn.execute(
+            text(
+                "SELECT count(*) FROM information_schema.role_table_grants "
+                "WHERE table_name IN ('instructions', 'release_events', 'portal_tokens')"
+            )
+        ).scalar_one()
+        assert left == 0
+        assert conn.execute(
+            text("SELECT has_table_privilege('afterme_api', 'notifications', 'INSERT')")
+        ).scalar_one()
+    command.upgrade(cfg, "head")
+    assert _tables(engine) == {*ALL_TABLES, "alembic_version"}
 
 
 def test_phase5_downgrade_removes_only_the_engine_tables(scratch_url: str, engine: Engine) -> None:

@@ -4,6 +4,7 @@ import 'package:afterme/core/permissions/notification_permission.dart';
 import 'package:afterme/core/platform/contact_picker.dart';
 import 'package:afterme/core/security/app_lock/local_auth_gateway.dart';
 import 'package:afterme/core/security/screen_privacy.dart';
+import 'package:afterme/core/security/secure_screen.dart';
 
 /// A scriptable [LocalAuthGateway].
 class FakeLocalAuthGateway implements LocalAuthGateway {
@@ -36,6 +37,21 @@ class FakeScreenPrivacy implements ScreenPrivacy {
   @override
   Future<void> setObscureInRecents({required bool enabled}) async =>
       calls.add(enabled);
+}
+
+/// Records what `SecureScreen` asked of the window (`FLAG_SECURE`): every call, in order,
+/// and whether the flag would be set now.
+class FakeSecureScreenGateway implements SecureScreenGateway {
+  final List<bool> calls = [];
+
+  /// The flag is set right now.
+  bool get secure => calls.isNotEmpty && calls.last;
+
+  /// How many times it was turned on.
+  int get enabledCount => calls.where((c) => c).length;
+
+  @override
+  Future<void> setSecure({required bool enabled}) async => calls.add(enabled);
 }
 
 class FakeNotificationPermissionGateway

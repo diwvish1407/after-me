@@ -7,13 +7,15 @@ from dataclasses import dataclass
 from app.audit.writer import AuditWriter
 from app.auth.tokens import AccessTokenService
 from app.core.clock import Clock, DbClock
-from app.core.config import Settings
+from app.core.config import Settings, decode_kek
 from app.core.db import Database
 from app.notifications.email import ConsoleEmailProvider, EmailProvider, RecordingEmailProvider
 from app.notifications.mailer import Mailer
 from app.security.hashing import Pepper
+from app.security.kms import LocalKms
 from app.security.passwords import PasswordHasher
 from app.security.rate_limit import RateLimiter
+from app.security.vault import InstructionVault
 
 
 @dataclass(frozen=True)
@@ -27,12 +29,29 @@ class AppServices:
     limiter: RateLimiter
     audit: AuditWriter
     mailer: Mailer
+    vault: InstructionVault
 
 
 def _email_provider(settings: Settings) -> EmailProvider:
     if settings.email_provider == "recording":
         return RecordingEmailProvider()
     return ConsoleEmailProvider(settings.dev_mail_dir)
+
+
+def _vault(settings: Settings, db: Database) -> InstructionVault:
+    if settings.kms_provider != "local":
+        msg = f"KMS provider {settings.kms_provider!r} is not available in this build"
+        raise ValueError(msg)
+    active = decode_kek(settings.kms_local_key.get_secret_value())
+    previous = (
+        decode_kek(settings.kms_local_key_previous.get_secret_value())
+        if settings.kms_local_key_previous
+        else None
+    )
+    if active is None:  # pragma: no cover - Settings already refuses this
+        msg = "KMS_LOCAL_KEY is invalid"
+        raise ValueError(msg)
+    return InstructionVault(LocalKms(active, previous), independent_session=db.independent_session)
 
 
 def build_services(
@@ -71,6 +90,7 @@ def build_services(
         limiter=RateLimiter(db=db, pepper=pepper, enabled=settings.rate_limit_enabled),
         audit=AuditWriter(db),
         mailer=Mailer(email_provider or _email_provider(settings), sender=settings.email_from),
+        vault=_vault(settings, db),
     )
 
 

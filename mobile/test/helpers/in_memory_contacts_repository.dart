@@ -5,13 +5,15 @@ import 'package:afterme/features/contacts/data/contacts_repository.dart';
 
 /// What the server looks at before it lets a trusted contact be taken out of a safety
 /// net that is on (SECURITY.md §7): whether check-ins are switched on, whether the
-/// contact is in a plan stage, and whether the session entered its password recently.
+/// contact is in a plan stage or receives an active instruction, and whether the session
+/// entered its password recently.
 /// `TestFakes` wires it to the check-in and plan fakes.
 class ContactStepUp {
   const ContactStepUp({
     required this.scheduleOff,
     required this.inPlan,
     required this.reauthenticated,
+    this.receivesInstruction,
   });
 
   /// Check-ins are `inactive` (onboarding): nothing needs the password.
@@ -23,10 +25,16 @@ class ContactStepUp {
   /// The session re-authenticated within the last 5 minutes.
   final bool Function() reauthenticated;
 
+  /// The contact receives an active instruction (a recipient who is in no stage is held
+  /// to the same rule). Null: nobody does.
+  final bool Function(String contactId)? receivesInstruction;
+
   /// Throws 403 `reauth_required` when this contact may not be removed, switched off or
   /// pointed at another address right now.
   void check(String contactId) {
-    if (!scheduleOff() && inPlan(contactId) && !reauthenticated()) {
+    final guarded =
+        inPlan(contactId) || (receivesInstruction?.call(contactId) ?? false);
+    if (!scheduleOff() && guarded && !reauthenticated()) {
       throw const ForbiddenFailure(code: 'reauth_required');
     }
   }
@@ -64,6 +72,10 @@ class InMemoryContactsRepository implements ContactsRepository {
 
   /// Failures thrown by the next calls to the named method, consumed in order.
   final Map<String, List<AppFailure>> failures = {};
+
+  /// How many instructions exist, for `usage.instructions` of the entitlements
+  /// (`TestFakes` wires it to the instructions "server").
+  int Function()? instructionUsage;
 
   /// The step-up rule (`TestFakes` sets it). Null: a change never asks for the password,
   /// which is what the contact tests that have no plan or schedule need.
@@ -240,7 +252,10 @@ class InMemoryContactsRepository implements ContactsRepository {
         stages: tier == 'free' ? 2 : 10,
         customOffsets: tier != 'free',
       ),
-      usage: EntitlementUsage(contacts: _contacts.length),
+      usage: EntitlementUsage(
+        contacts: _contacts.length,
+        instructions: instructionUsage?.call() ?? 0,
+      ),
     );
   }
 }

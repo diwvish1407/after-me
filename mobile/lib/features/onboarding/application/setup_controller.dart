@@ -4,10 +4,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/repository_providers.dart';
 import '../../../core/api/failures/app_failure.dart';
 import '../../../core/api/failures/failure_mapper.dart';
+import '../../../core/auth/auth_controller.dart';
 import '../../checkin/application/schedule_controller.dart';
 import '../../checkin/data/schedule_repository.dart';
 import '../../contacts/application/contacts_controller.dart';
 import '../../contacts/data/contacts_repository.dart';
+import '../../instructions/application/instructions_controller.dart';
+import '../../instructions/application/release_options.dart';
 import '../../instructions/data/instructions_repository.dart';
 import '../../plan/application/plan_controller.dart';
 import '../../plan/data/plan_repository.dart';
@@ -16,8 +19,8 @@ import '../../plan/data/plan_repository.dart';
 /// readiness checklist on Home. The contacts come from the contacts API through
 /// [contactsControllerProvider], the schedule from the check-in API through
 /// [scheduleControllerProvider] and the plan from the plan API through
-/// [planControllerProvider]; the instructions are read from a temporary in-memory
-/// repository until Phase 6 (see `repository_providers.dart`).
+/// [planControllerProvider]; the instructions (summaries only, never a body) from the
+/// instructions API through [instructionsControllerProvider].
 @immutable
 class SetupState {
   const SetupState({
@@ -35,6 +38,8 @@ class SetupState {
 
   /// The plan as the server has it (no stages for an account that never made one).
   final Plan? plan;
+
+  /// The instructions as the server has them, without their text.
   final List<InstructionSummary> instructions;
 
   SetupState copyWith({
@@ -85,15 +90,17 @@ class ActivationOutcome {
 class SetupController extends AsyncNotifier<SetupState> {
   @override
   Future<SetupState> build() {
-    // Rebuilt (and so emptied) whenever a repository is replaced, which happens on
-    // every sign-in or sign-out.
+    // Rebuilt (and so emptied) whenever the sign-in status changes (and with it every
+    // repository, which each watch it too).
     ref
+      ..watch(authControllerProvider)
       ..watch(contactsRepositoryProvider)
       ..watch(scheduleRepositoryProvider)
       ..watch(planRepositoryProvider)
       ..watch(instructionsRepositoryProvider)
-      // The People screens change the contacts, Settings changes the schedule and the
-      // plan is read again after a conflict; the checklist follows.
+      // The People screens change the contacts, Settings changes the schedule, the plan
+      // is read again after a conflict and the Instructions tab changes the instructions;
+      // the checklist follows.
       ..listen(contactsControllerProvider, (previous, next) {
         final contacts = next.value;
         if (contacts != null && state.hasValue) {
@@ -111,6 +118,12 @@ class SetupController extends AsyncNotifier<SetupState> {
         if (plan != null && state.hasValue) {
           state = AsyncData(_current.copyWith(plan: plan));
         }
+      })
+      ..listen(instructionsControllerProvider, (previous, next) {
+        final instructions = next.value;
+        if (instructions != null && state.hasValue) {
+          state = AsyncData(_current.copyWith(instructions: instructions));
+        }
       });
     return _load();
   }
@@ -120,9 +133,15 @@ class SetupController extends AsyncNotifier<SetupState> {
       final contacts = await ref.read(contactsControllerProvider.future);
       final snapshot = await ref.read(scheduleControllerProvider.future);
       final plan = await ref.read(planControllerProvider.future);
-      final instructions = await ref
-          .read(instructionsRepositoryProvider)
-          .list();
+      // Optional in onboarding: a list that cannot be read now must not hide the
+      // contacts, the schedule and the plan. The controller keeps its own failure and
+      // the setup state follows it once it has the list.
+      var instructions = const <InstructionSummary>[];
+      try {
+        instructions = await ref.read(instructionsControllerProvider.future);
+      } on Object {
+        // Shown as none yet.
+      }
       return SetupState(
         contacts: contacts,
         snapshot: snapshot,
@@ -138,18 +157,11 @@ class SetupController extends AsyncNotifier<SetupState> {
     await ref.read(contactsControllerProvider.notifier).reload();
     await ref.read(scheduleControllerProvider.notifier).reload();
     await ref.read(planControllerProvider.notifier).reload();
+    await ref.read(instructionsControllerProvider.notifier).reload();
     state = await AsyncValue.guard(_load);
   }
 
   SetupState get _current => state.value ?? const SetupState();
-
-  Future<T> _run<T>(Future<T> Function() body) async {
-    try {
-      return await body();
-    } on Object catch (error) {
-      throw toAppFailure(error);
-    }
-  }
 
   /// Adds a contact through the contacts API (the invitation is queued by the server).
   Future<TrustedContact> addContact(ContactDraft draft) async {
@@ -183,12 +195,31 @@ class SetupController extends AsyncNotifier<SetupState> {
     state = AsyncData(_current.copyWith(plan: saved));
   }
 
-  Future<void> createInstruction(InstructionDraft draft) async {
-    final item = await _run(
-      () => ref.read(instructionsRepositoryProvider).create(draft),
-    );
+  /// Saves an instruction through the instructions API (onboarding step 7). A time the
+  /// plan has no stage for yet is added to the plan first. The server validates; a
+  /// failure (403 `plan_limit_reached`, 422 with field errors, 404, the plan's answers)
+  /// is thrown as an `AppFailure`, or as `StageAddedButNotSaved` when the plan got its
+  /// stage and the instruction was then refused. Only the summary is kept: never the
+  /// text.
+  Future<void> createInstruction({
+    required InstructionCategory category,
+    required String title,
+    required String body,
+    required List<RecipientChoice> recipients,
+  }) async {
+    await ref
+        .read(instructionsControllerProvider.notifier)
+        .addInstructionWithTimes(
+          category: category,
+          title: title,
+          body: body,
+          recipients: recipients,
+        );
     state = AsyncData(
-      _current.copyWith(instructions: [..._current.instructions, item]),
+      _current.copyWith(
+        instructions: ref.read(instructionsControllerProvider).value,
+        plan: ref.read(planControllerProvider).value,
+      ),
     );
   }
 

@@ -15,15 +15,21 @@ import io.flutter.plugin.common.MethodChannel
  * FlutterFragmentActivity (not FlutterActivity): BiometricPrompt, used by the app lock
  * through local_auth, needs a FragmentActivity.
  *
- * Two small platform features live here:
+ * Three small platform features live here:
  *  - `app.afterme/privacy`: while the app lock is on, FLAG_SECURE is set in onPause so
  *    the recents thumbnail shows nothing from the app.
+ *  - `app.afterme/secure_screen`: FLAG_SECURE for as long as a screen that shows or
+ *    edits instruction content is on screen (FR-INS-06): no screenshots, no screen
+ *    recording and nothing in the recents card. The Dart side counts the screens; this
+ *    side only keeps the two reasons for the flag apart, so one never clears the other.
  *  - `app.afterme/contact_picker`: the system contact picker via ACTION_PICK. It grants
  *    read access to the one chosen contact only, so the app needs no READ_CONTACTS
  *    permission (SECURITY.md section 11).
  */
 class MainActivity : FlutterFragmentActivity() {
     private var obscureInRecents = false
+    private var contentSecure = false
+    private var paused = false
     private var pendingPick: MethodChannel.Result? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -33,9 +39,17 @@ class MainActivity : FlutterFragmentActivity() {
             when (call.method) {
                 "setObscureInRecents" -> {
                     obscureInRecents = call.argument<Boolean>("enabled") ?: false
-                    if (!obscureInRecents) {
-                        window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
-                    }
+                    updateSecureFlag()
+                    result.success(null)
+                }
+                else -> result.notImplemented()
+            }
+        }
+        MethodChannel(messenger, SECURE_SCREEN_CHANNEL).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "setSecure" -> {
+                    contentSecure = call.argument<Boolean>("enabled") ?: false
+                    updateSecureFlag()
                     result.success(null)
                 }
                 else -> result.notImplemented()
@@ -49,17 +63,30 @@ class MainActivity : FlutterFragmentActivity() {
         }
     }
 
+    /**
+     * FLAG_SECURE is on while an instruction screen is showing, and while the app is paused
+     * with the app lock on (so the recents card is blank). It is cleared only when neither
+     * reason holds.
+     */
+    private fun updateSecureFlag() {
+        if (contentSecure || (paused && obscureInRecents)) {
+            window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        } else {
+            window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        }
+    }
+
     override fun onPause() {
         // Set before super: the system takes the recents snapshot after onPause.
-        if (obscureInRecents) {
-            window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
-        }
+        paused = true
+        updateSecureFlag()
         super.onPause()
     }
 
     override fun onResume() {
         super.onResume()
-        window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        paused = false
+        updateSecureFlag()
     }
 
     @Suppress("UNUSED_PARAMETER")
@@ -120,6 +147,7 @@ class MainActivity : FlutterFragmentActivity() {
 
     companion object {
         private const val PRIVACY_CHANNEL = "app.afterme/privacy"
+        private const val SECURE_SCREEN_CHANNEL = "app.afterme/secure_screen"
         private const val PICKER_CHANNEL = "app.afterme/contact_picker"
         private const val PICK_REQUEST = 7201
     }

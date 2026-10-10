@@ -28,6 +28,7 @@ SECURE_PROD = {
     "trusted_proxy_hops": 1,
     "worker_database_url": "postgresql+psycopg://afterme_worker:secret@db/afterme",
     "probe_token": "p" * 48,
+    "kms_provider": "gcp_kms",  # the local KMS keeps the KEK in the environment: dev/test only
 }
 
 
@@ -139,6 +140,11 @@ def test_secure_production_configuration_reports_exactly_the_email_problem(env: 
         ({"hmac_pepper": None}, "HMAC_PEPPER is required"),
         ({"hmac_pepper": "short"}, "HMAC_PEPPER must be at least 32 bytes"),
         ({"hmac_pepper_previous": "short"}, "HMAC_PEPPER_PREVIOUS must be at least 32 bytes"),
+        ({"kms_local_key": "short"}, "KMS_LOCAL_KEY must be base64url of exactly 32 bytes"),
+        (
+            {"kms_local_key_previous": "!!!not base64!!!"},
+            "KMS_LOCAL_KEY_PREVIOUS must be base64url of exactly 32 bytes",
+        ),
         ({"jwt_signing_keys": {}}, "JWT_SIGNING_KEYS is required"),
         ({"jwt_active_kid": "other"}, "JWT_ACTIVE_KID must name one of JWT_SIGNING_KEYS"),
         ({"jwt_signing_keys": {"bad kid!": "x"}}, "invalid kid"),
@@ -340,3 +346,11 @@ def test_production_needs_a_worker_url_and_a_probe_token(env: str) -> None:
     message = _problems(excinfo.value)
     assert "WORKER_DATABASE_URL must be set explicitly" in message
     assert "PROBE_TOKEN is required" in message
+
+
+@pytest.mark.parametrize("env", ["prod", "staging"])
+def test_production_refuses_the_local_kms(env: str) -> None:
+    """SEC-24: a key-encryption key in the environment is for development and tests."""
+    with pytest.raises(ValidationError) as excinfo:
+        make_settings(**{**SECURE_PROD, "app_env": env, "kms_provider": "local"})
+    assert "KMS_PROVIDER=local" in _problems(excinfo.value)

@@ -64,6 +64,10 @@ AppFailure mapErrorResponse(
       problem: problem,
     ),
     409 when code == 'invalid_state' => InvalidStateFailure(problem: problem),
+    409 when code == 'stage_in_use' => StageInUseFailure(
+      instructionIds: problem?.instructionIds ?? const <String>[],
+      problem: problem,
+    ),
     409 when code == 'activation_requirements_unmet' =>
       ActivationRequirementsFailure(
         requirements: problem?.requirements ?? const <String>[],

@@ -21,6 +21,7 @@ from app.auth.models import Device, User
 from app.checkins.models import CheckinConfiguration, CheckinEvent
 from app.contacts.models import EmailSuppression, TrustedContact
 from app.incidents.models import OPEN_STATUSES, EscalationIncident, IncidentAction
+from app.notifications.models import Notification
 from app.ops.models import ServiceHeartbeat, SystemHold
 from app.plans.models import EscalationPlan, EscalationStep, EscalationStepContact
 
@@ -258,6 +259,18 @@ class EngineStore:
             IncidentAction.step_id == step_id,
         )
         return (await session.execute(stmt)).scalars().first()
+
+    @staticmethod
+    async def alerted_contacts(session: AsyncSession, incident_id: uuid.UUID) -> set[uuid.UUID]:
+        """Contacts that already have a (not cancelled) escalation message in this incident: a
+        later stage's release then goes out as a release notice, not a second alert."""
+        stmt = select(Notification.contact_id).where(
+            Notification.incident_id == incident_id,
+            Notification.category == "contact_escalation",
+            Notification.status != "cancelled",
+            Notification.contact_id.is_not(None),
+        )
+        return {row[0] for row in (await session.execute(stmt)).all() if row[0] is not None}
 
     @staticmethod
     async def pending_stage_count(session: AsyncSession, incident_id: uuid.UUID) -> int:

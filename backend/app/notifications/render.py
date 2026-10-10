@@ -83,3 +83,19 @@ def day_time(instant: datetime, timezone: str) -> str:
         f"{local.strftime('%A')} {local.day} {local.strftime('%b')}, "
         f"{clock_time(instant, timezone)} {local.tzname() or ''}"
     ).strip()
+
+
+def date_text(instant: datetime, timezone: str) -> str:
+    """``14 Nov 2026``."""
+    local = instant.astimezone(_zone(timezone))
+    return f"{local.day} {local.strftime('%b')} {local.year}"
+
+
+def duration_text(minutes: int) -> str:
+    """How long a person had not checked in when something was shared: ``24 hours``,
+    ``2 days``. Whole days from two days on; hours otherwise."""
+    days, rest = divmod(minutes, 1440)
+    if days >= 2 and rest == 0:  # noqa: PLR2004 - "2 days" and over read better in days
+        return f"{days} days"
+    hours = max(minutes // 60, 1)
+    return f"{hours} hour{'s' if hours != 1 else ''}"

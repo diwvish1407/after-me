@@ -13,6 +13,7 @@ import '../../../core/time/clock.dart';
 import '../../../core/time/time_format.dart';
 import '../../../l10n/gen/app_localizations.dart';
 import '../../auth/presentation/reauth_sheet.dart';
+import '../../plan/application/plan_controller.dart';
 import '../application/contacts_controller.dart';
 import '../data/contacts_repository.dart';
 import 'contact_by_id_view.dart';
@@ -91,6 +92,18 @@ class _ContactDetailState extends ConsumerState<_ContactDetail> {
     }
   }
 
+  /// Why the password may be asked for: the contact is told by the plan, or (when they are
+  /// not in a stage) receives an instruction. Their own wording each.
+  ReauthReason _removeReason() {
+    final plan = ref.read(planControllerProvider).value;
+    final inPlan =
+        plan?.contactIds.contains(_contact.id) ??
+        _contact.notifiedAtStages.isNotEmpty;
+    return !inPlan && _contact.receivesInstructions > 0
+        ? ReauthReason.removeRecipient
+        : ReauthReason.removeContact;
+  }
+
   Future<void> _remove() async {
     final l10n = AppLocalizations.of(context);
     final messenger = ScaffoldMessenger.of(context);
@@ -118,7 +131,7 @@ class _ContactDetailState extends ConsumerState<_ContactDetail> {
       final removed = await withReauth(context, () async {
         await controller.removeContact(_contact.id);
         return true;
-      }, reason: ReauthReason.removeContact);
+      }, reason: _removeReason());
       if (removed == null) {
         // The sheet was closed: nothing was removed and nothing is said.
         if (mounted) {

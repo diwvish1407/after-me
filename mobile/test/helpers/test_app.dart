@@ -9,6 +9,7 @@ import 'package:afterme/core/permissions/notification_permission.dart';
 import 'package:afterme/core/platform/contact_picker.dart';
 import 'package:afterme/core/security/app_lock/local_auth_gateway.dart';
 import 'package:afterme/core/security/screen_privacy.dart';
+import 'package:afterme/core/security/secure_screen.dart';
 import 'package:afterme/core/storage/preferences_store.dart';
 import 'package:afterme/core/storage/secure_store.dart';
 import 'package:afterme/core/time/clock.dart';
@@ -25,6 +26,7 @@ import 'package:shared_preferences_platform_interface/shared_preferences_async_p
 
 import 'fake_auth_repository.dart';
 import 'fake_checkin_server.dart';
+import 'fake_instructions_server.dart';
 import 'fake_plan_server.dart';
 import 'fake_platform.dart';
 import 'fake_timers.dart';
@@ -84,6 +86,9 @@ class TestFakes {
   final FakeLocalAuthGateway localAuth;
   final FakeNotificationPermissionGateway notifications;
   final FakeScreenPrivacy privacy = FakeScreenPrivacy();
+
+  /// What the screens that show instruction content asked of the window.
+  final FakeSecureScreenGateway secureScreen = FakeSecureScreenGateway();
   final FakeUrlOpener urls = FakeUrlOpener();
   final FakeContactPicker picker = FakeContactPicker();
   final FakeDeviceInfoSource device = FakeDeviceInfoSource();
@@ -100,7 +105,9 @@ class TestFakes {
         scheduleOff: () => server.status == CheckInStatus.inactive,
         inPlan: (id) => plan.stages.any((s) => s.contactIds.contains(id)),
         reauthenticated: () => auth.reauthenticated,
-      );
+        receivesInstruction: (id) => instructions.isActiveRecipient(id),
+      )
+      ..instructionUsage = () => instructions.liveCount;
   }
 
   late InMemoryContactsRepository _contacts;
@@ -108,6 +115,10 @@ class TestFakes {
   /// Use the production [contactsRepositoryProvider] (the Dio one) instead of
   /// [contacts]. Only the wiring tests do this.
   bool realContactsRepository = false;
+
+  /// Every call the plan and instructions "servers" received, in order across both
+  /// (`plan.save`, `instructions.create`, ...).
+  final List<String> events = [];
 
   /// The check-in "server": schedule, check-ins and the Home aggregate. It reads the
   /// contacts above, so readiness and activation follow what the test did there.
@@ -118,7 +129,7 @@ class TestFakes {
     reauthenticated: () => auth.reauthenticated,
     displayName: auth.displayName,
     timezone: auth.timezone,
-  );
+  )..instructionCount = () => instructions.activeCount;
 
   /// The plan "server": `GET` and `PUT /v1/plan` with the backend's validation. The
   /// check-in server above reads it for activation and the Home aggregate.
@@ -128,11 +139,32 @@ class TestFakes {
     incidentOpen: () => server.status == CheckInStatus.incidentOpen,
     scheduleActive: () => server.status == CheckInStatus.active,
     reauthenticated: () => auth.reauthenticated,
+    releaseCount: (stageId) => instructions.releaseCount(stageId),
+    instructionIdsAt: (stageId) => instructions.idsAtStage(stageId),
+    onCall: events.add,
   );
 
   /// Use the production [planRepositoryProvider] (the Dio one) instead of [plan]. Only
   /// the wiring tests do this.
   bool realPlanRepository = false;
+
+  /// The instructions "server": the categories and `GET` / `POST` / `PATCH` / `DELETE
+  /// /v1/instructions` with the backend's validation and the free tier's three. It reads
+  /// the contacts and the plan above, which in turn count what it holds (the stages'
+  /// `release_count`, the entitlements' usage and Home's active instructions).
+  late final FakeInstructionsServer instructions = FakeInstructionsServer(
+    contacts: () => contacts.contacts,
+    plan: () => plan,
+    tier: () => contacts.tier,
+    clock: clock.now,
+    scheduleOn: () => server.status != CheckInStatus.inactive,
+    reauthenticated: () => auth.reauthenticated,
+    onCall: events.add,
+  );
+
+  /// Use the production [instructionsRepositoryProvider] (the Dio one) instead of
+  /// [instructions]. Only the wiring tests do this.
+  bool realInstructionsRepository = false;
 
   /// Retry and reset timers of the check-in controller (fired by hand).
   final FakeTimers timers = FakeTimers();
@@ -154,6 +186,7 @@ class TestFakes {
     authRepositoryProvider.overrideWithValue(auth),
     localAuthGatewayProvider.overrideWithValue(localAuth),
     screenPrivacyProvider.overrideWithValue(privacy),
+    secureScreenGatewayProvider.overrideWithValue(secureScreen),
     notificationPermissionGatewayProvider.overrideWithValue(notifications),
     urlOpenerProvider.overrideWithValue(urls),
     contactPickerProvider.overrideWithValue(picker),
@@ -168,6 +201,8 @@ class TestFakes {
       homeRepositoryProvider.overrideWithValue(server),
     ],
     if (!realPlanRepository) planRepositoryProvider.overrideWithValue(plan),
+    if (!realInstructionsRepository)
+      instructionsRepositoryProvider.overrideWithValue(instructions),
     checkInTimerProvider.overrideWithValue(timers.create),
     checkInKeyGeneratorProvider.overrideWithValue(keys.next),
   ];

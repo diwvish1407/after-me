@@ -29,6 +29,10 @@ USER_FINAL_WARNING: Final = "release_final_warning"
 USER_ALL_CLEAR: Final = "all_clear_confirmation"
 USER_HOLD_NOTICE: Final = "service_interruption"
 CONTACT_ALERT: Final = "contact_alert"
+CONTACT_ALERT_WITH_RELEASE: Final = "contact_alert_with_release"
+CONTACT_RELEASE: Final = "contact_release"
+# Messages that carry a link to the portal; the dispatcher mints the link when it sends.
+RELEASE_TEMPLATES: Final = frozenset({CONTACT_ALERT_WITH_RELEASE, CONTACT_RELEASE})
 CONTACT_ALL_CLEAR: Final = "contact_all_clear"
 
 # Which channels each user-facing template uses (USER_FLOWS §6, ESCALATION_ENGINE §5.3).

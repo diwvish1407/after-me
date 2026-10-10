@@ -324,6 +324,8 @@ Error codes: §1.1.
 | `GET /v1/plan`, `PUT /v1/plan` | authenticated | the escalation plan: `ETag`/`If-Match` (`"plan-<version>"`); 422 field errors, 403 `plan_limit_reached`, 409 `incident_open` |
 | `GET /v1/incidents/current`, `GET /v1/incidents`, `GET /v1/incidents/{id}` | authenticated / owned | the incident and its timeline; 404 for a stranger's id |
 | `POST /v1/incidents/{id}/safe` | re-auth + `Idempotency-Key` | I'M SAFE: cancels, queues the all-clear, restarts the schedule |
+| `GET /v1/instruction-categories`, `GET /v1/instructions`, `POST`, `GET/PATCH/DELETE /v1/instructions/{id}` | authenticated / owned | Phase 6: content is sealed with the owner's key; the list has no body; 403 `plan_limit_reached`, 422 `release_stage_too_early`; a route to someone, switching one off or deleting it needs a fresh password while check-ins are on |
+| `GET /c/release`, `POST /c/release/{session,code,verify,view,new-link,end}` | public web + CSRF + portal session | the recipient portal: link → session → one-time code → content (every content page is a POST response); a withdrawn release says so |
 | `POST /internal/probe` | `X-Probe-Token` | the uptime monitor's heartbeat (feeds Hold); 404 where no token is configured |
 | `GET /health/live`, `GET /health/ready` | public | liveness; readiness (database reachable and Alembic at head, else 503) |
 
@@ -345,12 +347,18 @@ app/
                    repositories), service, portal_service (what a contact can do), tokens, router
   web/             server-rendered pages under /a and /c (Jinja2 templates, CSS, CSP/CSRF helpers)
   audit/           audit_logs model and the append-only writer
-  security/        Argon2id passwords + blocklist, HMAC/SHA-256 helpers, rate limiting
+  security/        Argon2id passwords + blocklist, HMAC/SHA-256 helpers, rate limiting, envelope
+                   crypto (AES-256-GCM), KMS provider interface + local dev provider, the vault
   notifications/   EmailProvider interface, console/recording providers, text templates (16)
   checkins/        schedule (pure deadline computation, no I/O), models, repository, service
                    (schedule, activation, I'M OK incl. the incident branch, history), router
   home/            GET /v1/home aggregate (read-only: schedule, readiness, incident, activity)
   plans/           the escalation plan: models, pure rules, service, router; releases seam
+  instructions/    categories, instructions and recipients: models, schemas, owner-scoped
+                   repository, service (seals content with the owner's key), router
+  releases/        release events, portal access/tokens/sessions/OTP: models, repository
+                   (creation by the engine; revocation one way), portal_service (the recipient
+                   portal's logic: every request re-checks contact, account, incident, release)
   incidents/       models, snapshot, owner-scoped repository, closing routine (resolve / I'M SAFE /
                    void), service and router (read + stop only), timeline view
   engine/          WORKER-ONLY (the API never imports it): timeline, gate, opener, executor,

@@ -3,6 +3,7 @@ import 'package:afterme/core/auth/auth_controller.dart';
 import 'package:afterme/core/storage/preferences_store.dart';
 import 'package:afterme/features/checkin/data/schedule_repository.dart';
 import 'package:afterme/features/contacts/data/contacts_repository.dart';
+import 'package:afterme/features/instructions/application/release_options.dart';
 import 'package:afterme/features/instructions/data/instructions_repository.dart';
 import 'package:afterme/features/onboarding/application/onboarding_controller.dart';
 import 'package:afterme/features/onboarding/application/setup_controller.dart';
@@ -406,22 +407,50 @@ void main() {
     });
 
     test('instructions keep a summary but not the body', () async {
-      final container = signedIn();
-      await state(container);
+      final fakes = TestFakes();
+      fakes.contacts = InMemoryContactsRepository(initial: [testContact()]);
+      fakes.plan.seedStandard(['c1'], offsetMinutes: 1440);
+      final container = signedIn(fakes);
+      final before = await state(container);
+      final stage = before.plan!.stages.single;
       final c = container.read(setupControllerProvider.notifier);
       await c.createInstruction(
-        const InstructionDraft(
-          title: ' Keys ',
-          body: 'the spare key is under the third pot',
-          releaseAfterHours: 48,
-          recipientContactIds: ['a'],
-          template: InstructionTemplate.homeAndKeys,
-        ),
+        category: InstructionCategory.home,
+        title: ' Keys ',
+        body: 'the spare key is under the third pot',
+        recipients: [RecipientChoice.stage(contactId: 'c1', stageId: stage.id)],
       );
       final s = await state(container);
       expect(s.instructions.single.title, 'Keys');
-      expect(s.instructions.single.releaseAfterHours, 48);
+      expect(s.instructions.single.recipients.single.contactId, 'c1');
+      expect(s.instructions.single.recipients.single.releaseStageId, stage.id);
+      expect(
+        fakes.instructions.bodyOf(s.instructions.single.id),
+        'the spare key is under the third pot',
+        reason: 'the server has it; the setup state does not',
+      );
+      expect(s.instructions.single.toString(), isNot(contains('Keys')));
     });
+
+    test(
+      'a refused instruction is thrown as it came and nothing is kept',
+      () async {
+        final fakes = TestFakes();
+        final container = signedIn(fakes);
+        await state(container);
+        final c = container.read(setupControllerProvider.notifier);
+        await expectLater(
+          c.createInstruction(
+            category: InstructionCategory.home,
+            title: '',
+            body: 'x',
+            recipients: const [],
+          ),
+          throwsA(isA<ValidationFailure>()),
+        );
+        expect((await state(container)).instructions, isEmpty);
+      },
+    );
 
     test('refresh re-reads and signing out empties everything', () async {
       final container = signedIn();

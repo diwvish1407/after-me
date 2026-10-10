@@ -138,4 +138,9 @@ abstract class Entitlements with _$Entitlements {
 
   /// Another trusted contact would exceed the tier's limit.
   bool get contactsAtLimit => usage.contacts >= limits.contacts;
+
+  /// Another instruction would exceed the tier's limit. A limit the answer left out (0)
+  /// is not a limit: the server decides.
+  bool get instructionsAtLimit =>
+      limits.instructions > 0 && usage.instructions >= limits.instructions;
 }

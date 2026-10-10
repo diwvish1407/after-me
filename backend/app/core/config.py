@@ -7,6 +7,8 @@ without echoing secret values.
 
 from __future__ import annotations
 
+import base64
+import binascii
 import os
 import re
 from enum import StrEnum
@@ -41,6 +43,9 @@ _SEMVER = re.compile(r"^(0|[1-9]\d{0,5})\.(0|[1-9]\d{0,5})\.(0|[1-9]\d{0,5})$")
 _KID = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
 
 _DEV_DATABASE_URL = "postgresql+psycopg://afterme_api:afterme_api_dev@localhost:5432/afterme_dev"
+# A development KEK: base64url of 32 bytes. Anything encrypted with it is disposable by
+# definition, and production-like environments refuse the local KMS provider altogether.
+_DEV_KMS_LOCAL_KEY = "ZGV2LW9ubHkta2VrLS1kby1ub3QtdXNlLWluLXByb2Q"
 _DEV_MIGRATION_URL = (
     "postgresql+psycopg://afterme_owner:afterme_owner_dev@localhost:5432/afterme_dev"
 )
@@ -94,6 +99,12 @@ class Settings(BaseSettings):
 
     hmac_pepper: SecretStr | None = None
     hmac_pepper_previous: SecretStr | None = None
+
+    # Envelope encryption of instructions (SECURITY §6.2). ``local`` keeps the key-encryption
+    # key in the environment: development and tests only.
+    kms_provider: Literal["local", "gcp_kms"] = "local"
+    kms_local_key: SecretStr = SecretStr(_DEV_KMS_LOCAL_KEY)
+    kms_local_key_previous: SecretStr | None = None
 
     email_provider: Literal["console", "recording"] = "console"
     email_from: Annotated[str, Field(min_length=3, max_length=200)] = (
@@ -222,6 +233,11 @@ class Settings(BaseSettings):
                 continue
             if len(secret.get_secret_value().encode()) < MIN_PEPPER_BYTES:
                 problems.append(f"{name.upper()} must be at least {MIN_PEPPER_BYTES} bytes")
+
+        for name in ("kms_local_key", "kms_local_key_previous"):
+            kek: SecretStr | None = getattr(self, name)
+            if kek is not None and decode_kek(kek.get_secret_value()) is None:
+                problems.append(f"{name.upper()} must be base64url of exactly 32 bytes")
         return problems
 
     def _check_hardening(self) -> list[str]:
@@ -296,6 +312,11 @@ class Settings(BaseSettings):
             problems.append(
                 f"PROBE_TOKEN is required and must be at least {MIN_PEPPER_BYTES} bytes"
             )
+        if self.kms_provider == "local":
+            problems.append(
+                "KMS_PROVIDER=local keeps the key-encryption key in the environment: it is for "
+                "development and tests (use a cloud KMS)"
+            )
         if "jwt_issuer" not in explicitly_set or "jwt_audience" not in explicitly_set:
             problems.append("JWT_ISSUER and JWT_AUDIENCE must be set explicitly")
         if "trusted_proxy_hops" not in explicitly_set:
@@ -303,6 +324,15 @@ class Settings(BaseSettings):
                 "TRUSTED_PROXY_HOPS must be set explicitly (0 = no proxy, 1 = one load balancer)"
             )
         return problems
+
+
+def decode_kek(value: str) -> bytes | None:
+    """A local key-encryption key: base64url (padding optional) of exactly 32 bytes."""
+    try:
+        raw = base64.urlsafe_b64decode(value + "=" * (-len(value) % 4))
+    except (binascii.Error, ValueError):
+        return None
+    return raw if len(raw) == 32 else None  # noqa: PLR2004 - AES-256
 
 
 def _load_ed25519(pem: str) -> Ed25519PrivateKey:

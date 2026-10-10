@@ -20,6 +20,9 @@ class FakePlanServer implements PlanRepository {
     this.incidentOpen,
     this.scheduleActive,
     this.reauthenticated,
+    this.releaseCount,
+    this.instructionIdsAt,
+    this.onCall,
   });
 
   /// The person's contacts (every id a stage names must be one of them).
@@ -38,6 +41,17 @@ class FakePlanServer implements PlanRepository {
   /// Whether the session entered its password recently (the same switch the check-in
   /// server uses for deactivating). Null counts as yes.
   final bool Function()? reauthenticated;
+
+  /// How many active instructions are released at a stage (`stages[].release_count`).
+  final int Function(String stageId)? releaseCount;
+
+  /// The instructions assigned to a stage, active or not: a stage that holds any cannot
+  /// be removed (409 `stage_in_use`) nor moved earlier than 24 hours.
+  final List<String> Function(String stageId)? instructionIdsAt;
+
+  /// Told the name of every call (`plan.get`, `plan.save`), so a test can see the order of
+  /// calls across several "servers".
+  final void Function(String call)? onCall;
 
   // --- the plan row -------------------------------------------------------------------
   String id = '00000000-0000-4000-8000-0000000000a1';
@@ -72,6 +86,7 @@ class FakePlanServer implements PlanRepository {
 
   void _enter(String method) {
     calls.add(method);
+    onCall?.call('plan.$method');
     final queue = failures[method];
     if (queue != null && queue.isNotEmpty) {
       throw queue.removeAt(0);
@@ -95,7 +110,10 @@ class FakePlanServer implements PlanRepository {
     id: id,
     version: version,
     graceMinutes: graceMinutes,
-    stages: List.of(_stages),
+    stages: [
+      for (final s in _stages)
+        s.copyWith(releaseCount: releaseCount?.call(s.id) ?? s.releaseCount),
+    ],
     rules: rules,
     etag: '"plan-$version"',
   );
@@ -183,6 +201,26 @@ class FakePlanServer implements PlanRepository {
         resource: 'stages',
       );
     }
+    // A stage that still holds an instruction cannot be removed (after the tier's
+    // limit, before the password, like the server).
+    final kept = {
+      for (final s in draft.stages)
+        if (s.id != null) s.id,
+    };
+    final inUse = [
+      for (final stage in _stages)
+        if (!kept.contains(stage.id)) ...?instructionIdsAt?.call(stage.id),
+    ];
+    if (inUse.isNotEmpty) {
+      throw StageInUseFailure(
+        instructionIds: inUse,
+        problem: ApiProblem(
+          status: 409,
+          code: 'stage_in_use',
+          instructionIds: inUse,
+        ),
+      );
+    }
     final unchanged =
         graceMinutes == draft.graceMinutes &&
         _stages.length == draft.stages.length &&
@@ -261,6 +299,13 @@ class FakePlanServer implements PlanRepository {
         errors.add(error(field, 'too_close', 'Stages must be further apart.'));
       } else if (i > 0 && !allowed(offset)) {
         errors.add(error(field, 'not_a_preset', 'Choose a suggested time.'));
+      }
+      if (stage.id != null &&
+          offset < r.releaseOffsetMin &&
+          (instructionIdsAt?.call(stage.id!).isNotEmpty ?? false)) {
+        errors.add(
+          error(field, 'release_too_early', 'It shares instructions.'),
+        );
       }
       if (stage.contactIds.toSet().length != stage.contactIds.length) {
         errors.add(

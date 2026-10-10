@@ -20,9 +20,7 @@ from sqlalchemy.exc import OperationalError
 from app.engine import dispatcher as dispatcher_module
 from app.engine import runtime as runtime_module
 from app.engine.hold import HoldMonitor
-from app.engine.runtime import Engine
 from app.engine.store import EngineStore
-from app.incidents.snapshot import SnapshotRelease
 from app.ops import admin
 from tests.support import API_PASSWORD, conninfo
 from tests.world import Person, World, ist
@@ -482,56 +480,72 @@ async def test_f14_a_backlog_is_reported_so_the_worker_does_not_sleep(
 # --- F-17: G8 is evaluated at execution ------------------------------------------------------
 
 
-class _SamIsReleased:
-    """Phase 6 stand-in: stage 2 releases an instruction to Sam, who is *not* notified by it."""
+async def _instruct(world: World, person: Person, recipient: str = "Sam") -> str:
+    """A real instruction, released to ``recipient`` at stage 2 (made before the deadline, so it
+    is in the incident's snapshot)."""
+    await world.login(person)
+    assert (
+        await world.h.reauth(person.tokens)
+    ).status_code == 204  # a route, while check-ins are on
+    plan = await world.h.client.get("/v1/plan", headers=person.headers)
+    made = await world.h.client.post(
+        "/v1/instructions",
+        json={
+            "category": "home",
+            "title": "House emergency",
+            "body": "The spare key is with a neighbour.",
+            "recipients": [
+                {
+                    "contact_id": person.contacts[recipient],
+                    "release_stage_id": plan.json()["stages"][1]["id"],
+                }
+            ],
+        },
+        headers=person.headers,
+    )
+    assert made.status_code == 201, made.text
+    return str(made.json()["id"])
 
-    def __init__(self, contact_id: str) -> None:
-        self.contact_id = uuid.UUID(contact_id)
-        self.valid = True
 
-    async def planned(self, session: Any, *, user_id: uuid.UUID, step_ids: list[uuid.UUID]) -> Any:
-        plan = await EngineStore.plan(session, user_id)
-        stages = await EngineStore.stages(session, plan.id) if plan else []
-        return {
-            step.id: [SnapshotRelease(uuid.uuid4(), self.contact_id)]
-            for step, _ in stages
-            if step.position == 2
-        }
-
-    async def still_valid(self, session: Any, *, user_id: uuid.UUID, release: Any) -> str | None:
-        return None if self.valid else "instruction_inactive"
-
-
-async def _releasing(world: World) -> tuple[Person, _SamIsReleased]:
+async def _releasing(world: World) -> tuple[Person, str]:
     person = await world.ready(
         contacts=("Mom", "Dad", "Sam"), stages=((180, ("Mom",)), (1440, ("Dad",)))
     )
-    stub = _SamIsReleased(person.contacts["Sam"])
-    world.engine = Engine(world.engine.services, releases=stub, instance_id="g8")
-    world.dispatcher.services = world.engine.services
-    return person, stub
+    return person, await _instruct(world, person)
 
 
 async def test_f17_a_valid_release_adds_its_contact_to_the_stage(world: World) -> None:
     person, _ = await _releasing(world)
     await world.advance_to(STAGE_2 + timedelta(minutes=10))
     assert len(world.mail.to(address(person, "Dad"), "contact_alert")) == 1
-    assert len(world.mail.to(address(person, "Sam"), "contact_alert")) == 1
+    # Sam is told only because an instruction is released to them, so it is the alert that
+    # carries the release
+    assert len(world.mail.to(address(person, "Sam"), "contact_alert_with_release")) == 1
     outcome = world.actions(person, kind="execute_stage")[1]["outcome"]
     assert [r["result"] for r in outcome["releases"]] == ["valid"]
+    sam = next(t for t in outcome["targets"] if t["contact_id"] == person.contacts["Sam"])
+    assert sam.get("releases") == 1
 
 
 async def test_f17_a_release_that_failed_g8_is_skipped_and_its_contact_is_not_told(
     world: World,
 ) -> None:
-    person, stub = await _releasing(world)
-    stub.valid = False
+    person, instruction_id = await _releasing(world)
+    await world.advance_to(DUE + timedelta(minutes=10))  # the incident (and its snapshot) exist
+    await world.login(person)
+    assert (await world.h.reauth(person.tokens)).status_code == 204  # switching a route off
+    switched = await world.h.client.patch(
+        f"/v1/instructions/{instruction_id}", json={"status": "inactive"}, headers=person.headers
+    )
+    assert switched.status_code == 200
     await world.advance_to(STAGE_2 + timedelta(minutes=10))
     assert len(world.mail.to(address(person, "Dad"), "contact_alert")) == 1  # notified anyway
     assert world.mail.to(address(person, "Sam"), "contact_alert") == []  # release only: narrowed
+    assert world.mail.to(address(person, "Sam"), "contact_alert_with_release") == []
     outcome = world.actions(person, kind="execute_stage")[1]["outcome"]
     assert outcome["releases"][0]["result"] == "skipped"
     assert outcome["releases"][0]["reason"] == "instruction_inactive"
+    assert world.db.execute("SELECT count(*) AS n FROM release_events").fetchone()["n"] == 0  # type: ignore[index]
 
 
 # --- Hold: re-entry after an operator exit, and two workers ------------------------------------

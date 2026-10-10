@@ -1,0 +1,11 @@
+{
+  "type": "https://afterme.test/problems/stage-in-use",
+  "title": "This stage is in use",
+  "status": 409,
+  "code": "stage_in_use",
+  "detail": "Move the information shared at this stage before removing it.",
+  "request_id": "req_0123456789abcdef0123456789abcdef",
+  "instruction_ids": [
+    "00000000-0000-4000-8000-000000000004"
+  ]
+}

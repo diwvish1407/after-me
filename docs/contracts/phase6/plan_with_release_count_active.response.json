@@ -1,0 +1,42 @@
+{
+  "id": "00000000-0000-4000-8000-000000000005",
+  "version": 2,
+  "grace_minutes": 180,
+  "stages": [
+    {
+      "id": "00000000-0000-4000-8000-000000000002",
+      "position": 1,
+      "offset_minutes": 180,
+      "notify_contact_ids": [
+        "00000000-0000-4000-8000-000000000006"
+      ],
+      "release_count": 0
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000003",
+      "position": 2,
+      "offset_minutes": 1440,
+      "notify_contact_ids": [
+        "00000000-0000-4000-8000-000000000001"
+      ],
+      "release_count": 1
+    }
+  ],
+  "rules": {
+    "grace_min": 60,
+    "grace_max": 4320,
+    "stage_gap_min": 30,
+    "offset_max": 43200,
+    "release_offset_min": 1440,
+    "max_stages": 10,
+    "custom_offsets": true,
+    "presets": [
+      180,
+      360,
+      720,
+      1440,
+      2880,
+      4320
+    ]
+  }
+}

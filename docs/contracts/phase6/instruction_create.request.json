@@ -1,0 +1,12 @@
+{
+  "category": "home",
+  "title": "House emergency",
+  "body": "The spare key is with Mrs. Sharma at flat 3B.\nCall her before you go.",
+  "status": "active",
+  "recipients": [
+    {
+      "contact_id": "00000000-0000-4000-8000-000000000001",
+      "release_stage_id": "00000000-0000-4000-8000-000000000003"
+    }
+  ]
+}

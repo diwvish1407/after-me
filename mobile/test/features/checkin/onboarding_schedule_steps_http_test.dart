@@ -312,7 +312,7 @@ void main() {
   });
 
   group('step 9: check-ins are turned on by the server', () {
-    testWidgets('activates and says what is a preview', (tester) async {
+    testWidgets('activates and says the invitation went out', (tester) async {
       final (container, adapter) = await _openStep(tester, 'done', {
         'POST /v1/checkin/activate': (r) => FakeReply.json(
           200,
@@ -326,7 +326,7 @@ void main() {
       expect(find.text("You're set"), findsOneWidget);
       expect(
         find.text(
-          'Check-ins are on. Mom has been sent an invitation. Instructions are still a preview, so nothing will be shared yet.',
+          "Your plan is active. Mom has been invited, and we'll let you know when they accept.",
         ),
         findsOneWidget,
       );

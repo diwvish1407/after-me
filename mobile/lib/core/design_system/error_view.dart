@@ -22,6 +22,8 @@ String failureMessage(
   // The tier's stage limit (a 403 plan_limit_reached on the escalation plan); the
   // contacts limit has its own sheet and the default wording.
   PlanLimitFailure(resource: 'stages') => l10n.errorPlanLimitStages,
+  // The instructions limit has its own sheet; this is the line where there is none.
+  PlanLimitFailure(resource: 'instructions') => l10n.errorPlanLimitInstructions,
   ForbiddenFailure(:final code) => switch (code) {
     'reauth_required' => l10n.errorReauthRequired,
     'email_unverified' => l10n.errorEmailUnverified,
@@ -34,6 +36,7 @@ String failureMessage(
     'incident_open' => l10n.errorIncidentOpen,
     'precondition_failed' || 'precondition_required' => l10n.errorStaleData,
     'contact_duplicate' => l10n.errorContactDuplicate,
+    'stage_in_use' => l10n.errorStageInUse,
     'invalid_state' => l10n.errorInvalidState,
     'activation_requirements_unmet' => l10n.errorActivationRequirements,
     _ => l10n.errorConflict,

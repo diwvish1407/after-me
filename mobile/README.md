@@ -15,9 +15,11 @@ chips, the free-plan limit sheet and onboarding step 4 on the real API (see
 real Home, and Settings > Check-in schedule and history, all against the real API (see
 [Check-ins](#check-ins-phase-4)). Phase 5 makes the **plan** real: it is read and saved through
 the plan API (onboarding step 6 saves the Standard preset, the Plan tab shows it read-only; see
-[The plan](#the-plan-phase-5)). Instructions only have their **screens** so far; their data comes
-from a clearly marked in-memory stand-in until Phase 6 (see
-[Temporary repositories](#temporary-repositories-phase-2)). The backend is authoritative; the app
+[The plan](#the-plan-phase-5)). Phase 6 makes the **instructions** real: the Instructions tab, the
+create/edit/detail screens and onboarding step 7 run on the encrypted instructions API, and every
+screen that shows instruction content keeps the window `FLAG_SECURE` (see
+[Instructions](#instructions-phase-6)). No temporary in-memory repository is left. The backend is
+authoritative; the app
 never decides whether an escalation happens ([ARCHITECTURE §1](../docs/ARCHITECTURE.md)) and never
 computes a deadline.
 
@@ -124,7 +126,7 @@ flutter gen-l10n
 dart format --output=none --set-exit-if-changed lib test tool
 flutter analyze                                  # must report zero issues
 flutter test --coverage
-dart run tool/coverage_check.dart                # >= 70% overall, >= 90% interceptors, session and every Phase 2-4 feature area (contacts, check-ins, home and time formatting included)
+dart run tool/coverage_check.dart                # >= 70% overall, >= 90% interceptors, session and every Phase 2-6 feature area (contacts, check-ins, home, plan, instructions and time formatting included)
 flutter build apk --flavor dev --debug --dart-define-from-file=config/dev.json
 flutter build apk --flavor prod --release --dart-define-from-file=config/prod.json
 dart run tool/check_manifest_permissions.dart    # merged prod manifest: INTERNET, POST_NOTIFICATIONS, USE_BIOMETRIC (+ AndroidX's own signature permission); no AD_ID, no READ_CONTACTS
@@ -193,7 +195,7 @@ to Play. Play App Signing holds the app signing key ([PLAY_STORE §3](../docs/PL
 lib/
   main.dart                    bootstrap: config (fail fast), package info, ProviderScope
   app/                         AfterMeApp (+ the app-lock gate), router + redirect rules, theme/,
-                               repository_providers.dart (where the temporary repositories live)
+                               repository_providers.dart (where the repositories are chosen)
   core/
     config/                    AppConfig, AppEnv
     storage/                   SecureStore (Keystore-backed + in-memory), PreferencesStore
@@ -202,7 +204,8 @@ lib/
     design_system/             AppButton, CheckInButton, StatusBanner, SectionCard, EmptyState,
                                AppTextField, LoadingView, ErrorView, FormPage, FitText
     security/                  app_lock/ (controller, lock screen, gate, local_auth gateway),
-                               screen_privacy.dart (recents thumbnail)
+                               screen_privacy.dart (recents thumbnail), secure_screen.dart
+                               (FLAG_SECURE for instruction content)
     permissions/               notification permission + pre-prompt controller
     forms/                     validators, password-strength hint, digits-only formatter
     pickers/                   timezone and country pickers, country names
@@ -225,7 +228,10 @@ lib/
     plan/                      data/ (PlanRepository + Dio implementation, freezed models, the
                                Standard preset), application/ (PlanController), presentation/
                                (Plan tab, plan preview, plan wording)
-    instructions/              data/ = repository interface + TEMPORARY in-memory fake
+    instructions/              data/ (InstructionsRepository + Dio implementation, freezed models),
+                               application/ (InstructionsController, the in-memory draft, release
+                               stages), presentation/ (Instructions tab, create/edit/detail, the shared
+                               InstructionForm, limit sheet, examples)
     settings/                  settings list, profile, security, change password/email, sessions,
                                app lock, notifications, about
     home/                      data/ (HomeRepository + Dio implementation, models), application/
@@ -234,7 +240,7 @@ lib/
     shell/ dev/                5-tab shell, design gallery (dev only)
   l10n/app_en.arb              every user-visible string (generated code in l10n/gen/)
 test/                          unit + widget tests (helpers/ has the fakes and the fake network)
-  contracts/                   parses docs/contracts/phase2 to phase5 *.json (the backend's
+  contracts/                   parses docs/contracts/phase2 to phase6 *.json (the backend's
                                golden files, with the If-Match / Idempotency-Key / ETag headers of
                                the index); test/fixtures/ holds stand-ins used until a golden file exists
   accessibility/               every Phase 2 screen at 2.0 text scale and against the guidelines
@@ -278,7 +284,7 @@ onboarding is unfinished, only the onboarding steps (anything else resumes at th
 afterwards the five tabs, the Settings screens and the onboarding steps (re-opened from the Home
 checklist). The rules are one pure function, `authRedirect`, tested for every state. Routes are
 fixed paths: the app declares no deep links, query strings and fragments never select a screen,
-and only a `String` is accepted as `extra` (the forgot-password prefill).
+and only a `String` is accepted as `extra` (the forgot-password prefill, and the name of an example to start an instruction from).
 
 The **app lock is not a route**. `AppLockGate` sits above the Navigator in
 `MaterialApp.builder`, so the lock screen also covers bottom sheets and dialogs; the app below
@@ -286,7 +292,7 @@ stays alive but is not painted, cannot be tapped and is hidden from TalkBack.
 
 **Session loss.** A `401 session_revoked` (or a rejected refresh) makes the API client call
 `AuthController.signOut`, which clears the tokens and moves to `signedOut`; every user-scoped
-provider (account, sessions, the temporary repositories) watches the status and is rebuilt empty,
+provider (account, sessions, the repositories, the in-memory instruction draft) watches the status and is rebuilt empty,
 the router sends the person to `/welcome` from wherever they were, and open dialogs and sheets go
 with the old screens. Onboarding progress is kept (it is keyed by account id and holds no
 personal data), so the same account resumes after signing in again.
@@ -330,28 +336,17 @@ follows the wording rules in §15, targets are 48 dp, and every screen is tested
   The password and the code are never persisted. Onboarding ends in the 5-tab shell; Home shows
   the readiness checklist for whatever is missing.
 
-### Temporary repositories (Phase 2, contacts, check-ins and the plan replaced in Phases 3-5)
+### Repositories (all real since Phase 6)
 
-The instructions are a typed repository **interface** with an in-memory fake, registered only in
-`lib/app/repository_providers.dart`. The UI is final; only the data source is temporary, and the
-fake loses its data when the process ends. Because the instructions are not stored, **the
-"Preview: your instructions are not saved yet" banner** (Home and the done step) and the preview
-wording ("check-ins are on, instructions are still a preview") stay while it is registered
-(`previewModeProvider`). **Trusted contacts are real since Phase 3, the check-in schedule,
-check-ins and Home since Phase 4 and the plan since Phase 5** and no longer count: they are
-`DioContactsRepository`, `DioScheduleRepository`, `DioCheckInRepository`, `DioHomeRepository` and
-`DioPlanRepository`. The in-memory contacts fake, the check-in "server"
-(`test/helpers/fake_checkin_server.dart`) and the plan "server"
-(`test/helpers/fake_plan_server.dart`) live in `test/` only.
-`test/app/preview_mode_test.dart` lists the stand-ins still in use: replacing one in a later phase
-means editing that list, and the banner disappears when the last one is gone. Replacements:
-
-| Interface | Replaced by | Phase |
-|---|---|---|
-| `ContactsRepository` | contacts API (invitations, tier limits): **done** | 3 |
-| `ScheduleRepository`, `CheckInRepository`, `HomeRepository` | `/checkin/schedule`, `/checkin/activate`, `/checkins`, `/home`: **done** | 4 |
-| `PlanRepository` | `GET` / `PUT /plan` (ETag / If-Match): **done** | 5 |
-| `InstructionsRepository` | encrypted instructions API (bodies never cached) | 6 |
+Every repository is a typed **interface** registered only in `lib/app/repository_providers.dart`:
+`DioContactsRepository` (Phase 3), `DioScheduleRepository`, `DioCheckInRepository` and
+`DioHomeRepository` (Phase 4), `DioPlanRepository` (Phase 5) and `DioInstructionsRepository`
+(Phase 6). Nothing in the app runs on an in-memory stand-in any more, so the "Preview" notice and
+`previewModeProvider` are gone. The fakes (the contacts repository, the check-in "server"
+`test/helpers/fake_checkin_server.dart`, the plan "server" `fake_plan_server.dart` and the
+instructions "server" `fake_instructions_server.dart`) live in `test/` only.
+`test/app/repository_providers_test.dart` is the release gate: it fails if a repository provider
+ever returns anything but the Dio implementation, or if a preview notice comes back.
 
 ## Check-ins (Phase 4)
 
@@ -452,6 +447,86 @@ does not exist). The full plan editor, the incident timeline and I'M SAFE are Ph
   aggregate again after the fix. Per-contact issues (declined, bounced, opted out, pending) keep
   their own banner; they are not a gap.
 
+## Instructions (Phase 6)
+
+Flows follow [USER_FLOWS §3 step 7, §9](../docs/USER_FLOWS.md); the wire contract is
+[API_SPEC §10](../docs/API_SPEC.md) with the golden files in `docs/contracts/phase6`
+(`test/contracts/phase6_contract_test.dart` parses every file of the index, problems included, and
+skips with a message while the folder does not exist).
+
+* **Data.** `GET /v1/instruction-categories` (ids; the words are localised in the app),
+  `GET /v1/instructions[?category=]` (summaries, **no body**), `POST`, `GET /{id}`, `PATCH` (any
+  subset; `recipients` replaces the list) and `DELETE`. Title 1-120 and body 1-20,000 characters of
+  plain text, counted as code points like the server; control characters and text-direction
+  overrides are refused on the device and by the server (`invalid_characters`). The list holds
+  summaries only: a body is read for the one screen that shows or edits it
+  (`InstructionByIdView`), held in that widget's state and dropped with it. It is never in a
+  provider, a cache, storage, a log or an error message (`toString` of every content model is
+  redacted). Writes carry no `Idempotency-Key` and are not retried automatically.
+* **Create / edit** (`InstructionForm`, shared with onboarding step 7): category, title, text, **Who
+  receives this?** (the trusted contacts, several allowed; somebody who has not accepted yet is
+  allowed with a gentle note) and **When?**, worded "If you haven't checked in for 2 days": the
+  plan's own stages that run at least `rules.release_offset_min` = 1 day after a missed check-in
+  **and** the tier's presets of 1, 2 and 3 days that the plan has no stage for yet
+  (`releaseOptions`; offered only where the server would accept the stage: the plan already has a
+  first stage, has room under `max_stages`, and the time is later than the first stage and 30
+  minutes from every other). One time for everybody, or one per person, which edit keeps when the
+  instruction already has different times.
+  * **Choosing a time the plan has no stage for adds that stage when the instruction is saved**
+    (`InstructionsController.addInstructionWithTimes` / `updateInstructionWithTimes`): one
+    `PUT /v1/plan` (`If-Match`) with every existing stage exactly as it is (ids, times, contacts)
+    plus a new stage per distinct time telling the people chosen for it, then the instruction with
+    the new stage ids. All new stages are one request, so the plan changes completely or not at all.
+    A 412/428 re-reads the plan and tries once more, silently (a stage another device added is
+    reused), then shows the plan's "changed somewhere else" notice. If the plan cannot be saved
+    nothing is sent for the instruction. If the instruction is refused after the plan was saved the
+    form says so plainly, keeps the draft, and the stage stays (the next try finds it and uses it,
+    without a second plan save). `403 plan_limit_reached` (stages) says the free plan's room (2)
+    was hit and that nothing was changed. The whole save runs inside one `withReauth` (reason
+    `ReauthReason.instructionNewTime`), so there is one password sheet and each request is sent
+    once after it; during onboarding nothing is asked.
+  * With no time to choose (the plan has no stage at all, or no room for another and none far
+    enough out) the form says so plainly, offers *Review your plan*, and the instruction can still
+    be saved with nobody to receive it.
+  Digital Accounts shows "Don't paste passwords. Say where they can be found (for example, your
+  password manager's emergency access)." *Start from an example* fills in the title and a skeleton
+  of 4 per category (36 in `app_en.arb`, examples only: prompts, never real data); onboarding and
+  the empty tab offer the six featured ones. Server answers land on fields (`title`, `body`,
+  `category`, `recipients[n].contact_id`, `recipients[n].release_stage_id`) in the app's own words;
+  the free-plan `plan_limit_reached` for instructions opens the limit sheet (3 on the free plan, no
+  purchase action).
+* **The draft** being typed is kept in memory only (`InstructionAutosave`), so leaving to add a
+  contact or review the plan loses nothing; it is dropped when the instruction is saved, on
+  *Start over* and when the session ends, and is never written anywhere.
+* **List** grouped by category with a filter; each card has the title, an Active/Inactive chip (icon
+  and word), the recipients' initials and "Mom: After 1 day" (from the plan's own offset, "Stage 2"
+  while the plan is not loaded), and the notes for recipients who have not accepted or cannot be
+  reached. **Detail**: text, who and when ("Stage 2: after 1 day"), the Active switch, Edit and
+  Delete behind a confirmation sheet. The Plan tab says how many instructions a stage shares, and
+  Home's plan card shows `instructions_active`.
+* **Step-up** ([SECURITY §7](../docs/SECURITY.md)). While check-ins are on the server answers
+  `403 reauth_required` (after ownership and validation) for: creating an instruction with
+  recipients, changing its recipients, switching off or deleting one that has recipients, and
+  removing or re-addressing a contact who only receives an active instruction. The app does what
+  the plan does: `withReauth` shows the password sheet with a reason of its own
+  (`ReauthReason.instructionRecipients`, `.instructionOff`, `.removeRecipient`, `.recipientEmail`)
+  and sends the **same request again, once**; closing the sheet changes nothing and says nothing.
+  Editing the text or the category, switching on, an instruction nobody receives and everything
+  during onboarding never ask.
+* **FLAG_SECURE (FR-INS-06).** `SecureScreen` wraps every screen that shows or edits instruction
+  content (the whole Instructions tab, create, edit, detail and the onboarding editor). It tells
+  `MainActivity` over `app.afterme/secure_screen` to set or clear `FLAG_SECURE`: no screenshots, no
+  screen recording and nothing in the recents card. It is reference counted (`SecureScreens`), so a
+  page on top of another never clears it for the one below, and it follows what is *shown*, not what
+  is built: the shell keeps every tab's navigator alive, so it holds the flag only while its
+  `TickerMode` is on, which also lets go when a page is covered by another route. The flag is
+  cleared a microtask after the last holder lets go, so a page replaced by another never leaves a
+  gap. The native side keeps this reason apart from the app lock's recents reason (`onPause`):
+  neither clears the other's flag. Android only; no package, no new permission.
+* **What is not E2EE.** Content is encrypted at rest on the server and opened for the owner's own
+  requests and for released recipients; it is not end-to-end encrypted ([SECURITY §18](../docs/SECURITY.md)).
+  The text fields turn off the keyboard's personal learning (`enableIMEPersonalizedLearning`).
+
 ## Trusted contacts (Phase 3)
 
 Flows follow [USER_FLOWS §8, §3 step 4](../docs/USER_FLOWS.md); the wire contract is
@@ -513,7 +588,8 @@ browser can reach.
   dialogs (the unlock prompt, the notification permission, the contact picker) do not count as
   leaving (`runWithoutLocking`).
 * **Recents thumbnail:** while the lock is on, `MainActivity` sets `FLAG_SECURE` in `onPause`
-  (before the system snapshot) and clears it in `onResume`, so the recents card shows nothing.
+  (before the system snapshot) and clears it in `onResume` (unless an instruction screen holds it
+  for its own reason, see [Instructions](#instructions-phase-6)), so the recents card shows nothing.
   `MainActivity` extends `FlutterFragmentActivity` (BiometricPrompt needs it) and the launch
   themes derive from AppCompat for the same reason.
 * **No screen lock / biometrics removed:** turning it on explains what to do. If the lock is on and
@@ -587,19 +663,21 @@ logcat only, so confirm the Welcome screen visually (`adb shell screencap`).
 
 ## Known limitations / next steps
 
-* Instructions are a temporary in-memory fake (table above). The plan is real, but only the
-  Standard preset can be saved and the Plan tab is read-only: the plan editor (stages, offsets,
-  who is told), the incident timeline and I'M SAFE arrive in Phase 7; web check-in and push
-  reminders in the later phases. Home does not list `recent_activity` yet; the
-  battery-optimisation readiness banner needs a check that does not exist yet.
+* The plan is real, but only the Standard preset can be saved and the Plan tab is read-only: the
+  plan editor (stages, offsets, who is told), the incident timeline and I'M SAFE arrive in Phase 7.
+  The Standard preset's only stage runs at the end of the grace period, so no stage is a day out;
+  the instruction form closes that gap itself by adding a stage at 1, 2 or 3 days to the plan when
+  the person chooses that time (see [Instructions](#instructions-phase-6)). Web check-in and push
+  reminders come in the later phases.
 * A tap that was not confirmed is replayed whenever the app next runs, however much later; the
   server stamps it with the time it receives it, and the screen shows when it was tapped
   ("You tapped I'M OK at 5:30 PM") until then.
 * Contacts: the activity feed ("Mom accepted") and push notices for answers arrive with the
   notifications phases; until then the People tab shows the status after a refresh. Priority
   ordering (drag to reorder) and the pause switch (`is_active`) are in the API but not in the UI.
-* Push notifications (Phase 8), FLAG_SECURE on instruction screens (Phase 6) and Sentry are later
-  phases.
+* Push notifications (Phase 8) and Sentry are later phases. Attachments (FR-INS-09) are deferred.
+  FLAG_SECURE has been tested through the Dart gateway and the channel only; it has not been seen on
+  a device yet.
 * **Fonts:** the platform font is still used; bundling an OFL humanist sans (USER_FLOWS §1.3) is
   deferred to Phase 11. Layout tests use real Roboto metrics (`fontFamilyProvider`).
 * English only; a language picker arrives with the first translation.

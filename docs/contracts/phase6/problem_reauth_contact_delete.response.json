@@ -1,0 +1,8 @@
+{
+  "type": "https://afterme.test/problems/reauth-required",
+  "title": "Confirm your password",
+  "status": 403,
+  "code": "reauth_required",
+  "detail": "Enter your password again to continue.",
+  "request_id": "req_0123456789abcdef0123456789abcdef"
+}

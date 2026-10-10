@@ -497,6 +497,12 @@ CREATE TABLE portal_otp_challenges (
 CREATE INDEX ix_portal_otp_session ON portal_otp_challenges(portal_session_id);
 ```
 
+**Phase 6 (migration `0006`, implemented) notes.**
+* Creates `user_keys`, `instruction_categories` (seeded with the eleven categories), `instructions`, `instruction_recipients`, `release_events`, `portal_access`, `portal_tokens`, `portal_sessions` and `portal_otp_challenges` as specified in §3.5 and §3.7. `release_events.revoke_reason` also allows `recipient_removed`, and a CHECK ties `revoked_at` and `revoke_reason` together.
+* **Grants keep the content boundary in the database.** `afterme_api`: read and write instructions and recipients; `SELECT, INSERT` on `user_keys` (no update or delete); `SELECT` on releases, portal access and tokens, with `UPDATE` limited to `revoked_at`, `revoke_reason` and the view counters (releases), `revoked_at` (access) and `first_used_at` (tokens); `INSERT` and a column-limited `UPDATE` on portal sessions and one-time-code challenges. It can **not** insert releases, portal access or tokens: those are the engine's (INV-1). A trigger refuses any change to a revoked release or access by the API role: revocation is one way. `afterme_worker`: `SELECT` on `instructions` for every column **except** `content_ciphertext`, nothing on `user_keys`; `SELECT, INSERT, UPDATE` on releases and portal access; `SELECT, INSERT` on tokens (the dispatcher mints them when a message is sent, storing only the hash). `afterme_maintenance`: `DELETE` of expired tokens, sessions and challenges.
+* `instruction_recipients.release_step_id` refuses to leave a stage while an instruction is assigned to it, but the constraint is `DEFERRABLE INITIALLY DEFERRED` (checked at commit): a plain `RESTRICT` made deleting a whole account depend on the order its rows cascade in. Contacts are soft-deleted, so deleting a contact removes their recipient rows explicitly (and takes back their releases).
+* A release revoked by a Hold rollback is brought back by the stage running again (the unique `(incident, instruction, contact)` row is reused); a release revoked for any other reason is never brought back.
+
 ### 3.8 Notifications (outbox)
 
 ```sql

@@ -13,6 +13,7 @@ check-in that committed first cancels them, and one that arrives later finds
 
 from __future__ import annotations
 
+import secrets
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -39,8 +40,17 @@ from app.notifications.email import EmailMessage, ProviderResult
 from app.notifications.mailer import EmailTemplate
 from app.notifications.models import Notification, NotificationLog
 from app.notifications.push import PushMessage, PushProvider
-from app.notifications.render import clock_time, day_time, join_names, push_message
+from app.notifications.render import (
+    clock_time,
+    date_text,
+    day_time,
+    duration_text,
+    join_names,
+    push_message,
+)
 from app.ops.models import SystemHold
+from app.releases.models import PortalAccess, PortalToken, ReleaseEvent
+from app.security.hashing import sha256
 from app.users.models import UserProfile
 
 _log = get_logger("afterme.dispatch")
@@ -51,7 +61,11 @@ GIVE_UP_AFTER: Final = timedelta(hours=24)
 BACKOFF_MINUTES: Final = (1, 2, 4, 8, 16, 32, 60)  # then hourly (§8.3)
 # What the engine itself writes in the escalation category. Anything else found there did not
 # come from the engine and is never sent (Phase 6 adds the release message here).
-ESCALATION_TEMPLATES: Final = frozenset({outbox.CONTACT_ALERT})
+ESCALATION_TEMPLATES: Final = frozenset(
+    {outbox.CONTACT_ALERT, outbox.CONTACT_ALERT_WITH_RELEASE, outbox.CONTACT_RELEASE}
+)
+LINK_LIFETIME: Final = timedelta(days=30)
+LINK_PREFIX: Final = "rt_"
 # A reminder for an incident is only true while it is open.
 INCIDENT_BOUND_USER_TEMPLATES: Final = frozenset(
     {
@@ -218,7 +232,7 @@ class Dispatcher:
                 report.why(verdict)
                 return None
 
-            outgoing = await self._build(session, row)
+            outgoing = await self._build(session, row, now)
             if outgoing is None:
                 self._cancel(row, "no_recipient", now)
                 report.cancelled += 1
@@ -286,7 +300,15 @@ class Dispatcher:
     async def _recheck_contact_other(self, session: AsyncSession, row: Notification) -> str | None:
         """All-clears and similar: no Hold, no settle delay, no open incident required. They are
         still not sent to someone who has since asked not to be contacted."""
-        problem = await self._contact_problem(session, row, require_verified=False)
+        is_link = row.template_key in outbox.RELEASE_TEMPLATES
+        if is_link and await EngineStore.open_hold(session) is not None:
+            return "wait"  # content-bearing links wait out a Hold like every escalation message
+        problem = await self._contact_problem(session, row, require_verified=is_link)
+        if problem is None and is_link:
+            user = await EngineStore.user(session, row.user_id)
+            if user is None or user.status != "active":
+                return "account_inactive"
+            problem = await self._release_problem(session, row, await self.clock.now(session))
         return problem
 
     async def _recheck_escalation(  # noqa: PLR0911 - an ordered list of re-checks
@@ -336,7 +358,35 @@ class Dispatcher:
         user = await EngineStore.user(session, row.user_id)
         if user is None or user.status != "active":
             return "account_inactive"
-        return await self._contact_problem(session, row, require_verified=True)
+        problem = await self._contact_problem(session, row, require_verified=True)
+        if problem is not None:
+            return problem
+        gone = await self._release_problem(session, row, now)
+        if (
+            gone is not None
+            and row.template_key == outbox.CONTACT_ALERT_WITH_RELEASE
+            and self._notified_by_stage(incident, action, row)
+        ):
+            # The person asked for this contact to be alerted, and still does: only the release
+            # is gone (switched off, withdrawn). They get the alert without a link, not silence.
+            row.template_key = outbox.CONTACT_ALERT
+            row.params = {
+                k: v for k, v in row.params.items() if k not in ("release_count", "after_minutes")
+            }
+            return None
+        return gone
+
+    @staticmethod
+    def _notified_by_stage(
+        incident: EscalationIncident, action: IncidentAction, row: Notification
+    ) -> bool:
+        if action.step_id is None:
+            return False
+        try:
+            stage = parse_snapshot(incident.plan_snapshot).stage(action.step_id)
+        except SnapshotError:
+            return False
+        return stage is not None and row.contact_id in stage.notify_contact_ids
 
     def _derive(
         self,
@@ -366,6 +416,59 @@ class Dispatcher:
         if action.executed_at is None or now < action.executed_at + settle:
             return "wait"
         return None
+
+    async def _release_problem(
+        self, session: AsyncSession, row: Notification, now: datetime
+    ) -> str | None:
+        """A message that carries a link must still have something behind it: portal access that
+        is not revoked and at least one release that is not revoked."""
+        if row.template_key not in outbox.RELEASE_TEMPLATES:
+            return None
+        access = await self._access_for(session, row)
+        if access is None or access.revoked_at is not None:
+            return "release_revoked"
+        incident = await _incident(session, access.incident_id)
+        if incident is None or incident.status not in OPEN_STATUSES:
+            return "release_revoked"
+        open_release = (
+            await session.execute(
+                select(ReleaseEvent.id)
+                .where(
+                    ReleaseEvent.incident_id == access.incident_id,
+                    ReleaseEvent.contact_id == access.contact_id,
+                    ReleaseEvent.revoked_at.is_(None),
+                )
+                .limit(1)
+            )
+        ).first()
+        return None if open_release is not None else "release_revoked"
+
+    @staticmethod
+    async def _access_for(session: AsyncSession, row: Notification) -> PortalAccess | None:
+        """The portal access a message is about: by incident and contact for an escalation
+        message, by ``access_id`` for a fresh-link request."""
+        access_id = row.params.get("access_id")
+        stmt = select(PortalAccess)
+        if access_id is not None:
+            try:
+                wanted = uuid.UUID(str(access_id))
+            except ValueError:
+                return None
+            # The row's own owner and contact must be the access's: a row (the API role may
+            # insert them) can never make the worker mint a link for someone else's access.
+            stmt = stmt.where(
+                PortalAccess.id == wanted,
+                PortalAccess.user_id == row.user_id,
+                PortalAccess.contact_id == row.contact_id,
+            )
+        elif row.incident_id is not None and row.contact_id is not None:
+            stmt = stmt.where(
+                PortalAccess.incident_id == row.incident_id,
+                PortalAccess.contact_id == row.contact_id,
+            )
+        else:
+            return None
+        return (await session.execute(stmt)).scalar_one_or_none()
 
     async def _contact_problem(
         self, session: AsyncSession, row: Notification, *, require_verified: bool
@@ -414,7 +517,9 @@ class Dispatcher:
             template_key=row.template_key,
         )
 
-    async def _build(self, session: AsyncSession, row: Notification) -> _Outgoing | None:
+    async def _build(
+        self, session: AsyncSession, row: Notification, now: datetime
+    ) -> _Outgoing | None:
         user = await EngineStore.user(session, row.user_id)
         if user is None:
             return None
@@ -452,22 +557,52 @@ class Dispatcher:
             "user_email": user.email,
             "optout_link": link,
         }
-        if row.template_key == outbox.CONTACT_ALERT:
+        if row.template_key in (outbox.CONTACT_ALERT, outbox.CONTACT_ALERT_WITH_RELEASE):
             missed = datetime.fromisoformat(row.params["missed_due_at"])
             last = row.params.get("last_checkin_at")
             contact_context["due_at"] = day_time(missed, timezone)
             contact_context["last_checkin"] = (
                 day_time(datetime.fromisoformat(last), timezone) if last else ""
             )
-        else:
+        elif row.template_key != outbox.CONTACT_RELEASE:
             at = row.params.get("checked_in_at")
             contact_context["checked_in_at"] = (
                 day_time(datetime.fromisoformat(at), timezone) if at else "just now"
+            )
+        if row.template_key in outbox.RELEASE_TEMPLATES:
+            release_link = await self._mint_link(session, row, now)
+            if release_link is None:
+                return None
+            contact_context["release_link"] = release_link
+            contact_context["expires_on"] = date_text(now + LINK_LIFETIME, timezone)
+            contact_context["after_text"] = duration_text(
+                int(row.params.get("after_minutes", 1440))
             )
         rendered = self.services.mailer.render(
             EmailTemplate(row.template_key), to=contact.email, **contact_context
         )
         return self._outgoing(row, email=rendered)
+
+    async def _mint_link(
+        self, session: AsyncSession, row: Notification, now: datetime
+    ) -> str | None:
+        """A fresh link token for the portal access this message is about. Only its SHA-256 is
+        stored, so the raw token exists only in the email being sent (SECURITY §6.3). A retry
+        of the same message mints another; every token of an access is revoked together."""
+        access = await self._access_for(session, row)
+        if access is None or access.revoked_at is not None:
+            return None
+        raw = secrets.token_urlsafe(32)
+        session.add(
+            PortalToken(
+                access_id=access.id,
+                token_hash=sha256(raw),
+                notification_id=row.id,
+                expires_at=now + LINK_LIFETIME,
+            )
+        )
+        await session.flush()
+        return f"{self.settings.public_base_url}/c/release#{LINK_PREFIX}{raw}"
 
     async def _user_context(
         self, session: AsyncSession, row: Notification, user_name: str, timezone: str
@@ -504,6 +639,10 @@ class Dispatcher:
                 context["notified_phrase"] = f"{join_names(names)} {verb} been notified"
             else:
                 context["notified_phrase"] = "Nobody could be notified"
+            shared = int(params.get("release_count", 0))
+            if shared:
+                noun = "instruction was" if shared == 1 else "instructions were"
+                context["notified_phrase"] += f". {shared} {noun} shared with them"
         elif key == outbox.USER_FINAL_WARNING:
             ids = [uuid.UUID(c) for c in params.get("contact_ids", [])]
             context["names"] = (

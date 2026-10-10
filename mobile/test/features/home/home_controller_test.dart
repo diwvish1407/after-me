@@ -13,6 +13,8 @@ import 'package:afterme/features/contacts/data/contacts_repository.dart';
 import 'package:afterme/features/home/application/client_checks.dart';
 import 'package:afterme/features/home/application/home_controller.dart';
 import 'package:afterme/features/home/application/home_status.dart';
+import 'package:afterme/features/instructions/application/instructions_controller.dart';
+import 'package:afterme/features/instructions/data/instructions_repository.dart';
 import 'package:afterme/features/plan/application/plan_controller.dart';
 import 'package:afterme/features/plan/data/plan_repository.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -357,6 +359,67 @@ void main() {
           .patchProfile(const ProfilePatch(timezone: 'Europe/London'));
       await pumpEventQueue();
       expect(_homeCalls(fakes), start + 3, reason: 'timezone');
+    });
+
+    test('reads again after an instruction changes, and counts the active '
+        'ones the server counts', () async {
+      final fakes = TestFakes();
+      fakes.contacts = InMemoryContactsRepository(initial: [testContact()]);
+      fakes.plan.seedStandard(['c1'], offsetMinutes: 1440);
+      final container = _container(fakes);
+      await _home(container);
+      await container.read(instructionsControllerProvider.future);
+      await pumpEventQueue();
+      expect(
+        (await _home(container)).snapshot.planSummary.instructionsActive,
+        0,
+      );
+      final start = _homeCalls(fakes);
+
+      final created = await container
+          .read(instructionsControllerProvider.notifier)
+          .addInstruction(
+            InstructionDraft(
+              category: InstructionCategory.home,
+              title: 'Keys',
+              body: 'Under the pot.',
+              recipients: [
+                RecipientDraft(
+                  contactId: 'c1',
+                  releaseStageId: fakes.plan.stages.single.id,
+                ),
+              ],
+            ),
+          );
+      await pumpEventQueue();
+      expect(_homeCalls(fakes), greaterThan(start), reason: 'created');
+      expect(
+        container
+            .read(homeControllerProvider)
+            .value!
+            .snapshot
+            .planSummary
+            .instructionsActive,
+        1,
+      );
+
+      await container
+          .read(instructionsControllerProvider.notifier)
+          .updateInstruction(
+            created.id,
+            const InstructionPatch(status: InstructionStatus.inactive),
+          );
+      await pumpEventQueue();
+      expect(
+        container
+            .read(homeControllerProvider)
+            .value!
+            .snapshot
+            .planSummary
+            .instructionsActive,
+        0,
+        reason: 'switched off',
+      );
     });
 
     test('a gap in a safety net that is on follows the fix: contact, then '

@@ -26,7 +26,16 @@ from app.incidents.models import EscalationIncident
 from app.incidents.repository import IncidentRepository
 from app.notifications import outbox
 from app.notifications.outbox import Draft
+from app.releases.repository import ReleaseRepository
 from app.users.models import UserProfile
+
+# Why a release is taken back, by who closed the incident (DATABASE §3.7 ``revoke_reason``).
+_REVOKE_REASON: dict[str, str] = {
+    "user_checkin": "user_checkin",
+    "user_safe": "user_safe",
+    "operator_void": "operator",
+    "account_deleted": "account_deleted",
+}
 
 
 @dataclass(frozen=True)
@@ -77,6 +86,31 @@ async def close_incident(
     incident.status = status
     incident.closed_at = now
     incident.closed_by = closed_by
+    revoked_releases = await ReleaseRepository(session).revoke_for_incident(
+        owner_id=owner,
+        incident_id=incident.id,
+        reason=_REVOKE_REASON.get(closed_by, "operator"),
+        now=now,
+    )
+    if revoked_releases:
+        await audit_writer.record(
+            session,
+            AuditEvent(
+                action=audit.RELEASE_REVOKED,
+                occurred_at=now,
+                subject_user_id=owner,
+                actor_type="user" if actor_user_id is not None else "system",
+                actor_id=actor_user_id,
+                resource_type="incident",
+                resource_id=incident.id,
+                request_id=request_id,
+                ip_hash=ip_hash,
+                metadata={
+                    "releases": revoked_releases,
+                    "reason": _REVOKE_REASON.get(closed_by, "operator"),
+                },
+            ),
+        )
 
     recipients: list[tuple[uuid.UUID, str]] = []
     if all_clear and messaged:

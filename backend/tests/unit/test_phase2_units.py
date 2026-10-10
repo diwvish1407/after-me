@@ -16,6 +16,7 @@ from app.audit.writer import (
     PHASE3_ACTIONS,
     PHASE4_ACTIONS,
     PHASE5_ACTIONS,
+    PHASE6_ACTIONS,
     USER_VISIBLE_ACTIONS,
     AuditEvent,
     AuditMetadataError,
@@ -187,6 +188,32 @@ SAMPLE_CONTEXT: dict[EmailTemplate, dict[str, Any]] = {
         "due_at": "Wednesday 15 Oct, 8:00 PM IST",
         "optout_link": "https://afterme.test/c/optout#oo_example",
     },
+    EmailTemplate.CONTACT_ALERT_WITH_RELEASE: {
+        "contact_name": "Asha",
+        "user_name": "Diwakar",
+        "user_email": "diwakar@example.com",
+        "last_checkin": "Tuesday 14 Oct, 7:30 PM IST",
+        "due_at": "Wednesday 15 Oct, 8:00 PM IST",
+        "release_link": "https://afterme.test/c/release#rt_example",
+        "expires_on": "14 Nov 2026",
+        "optout_link": "https://afterme.test/c/optout#oo_example",
+    },
+    EmailTemplate.CONTACT_RELEASE: {
+        "contact_name": "Asha",
+        "user_name": "Diwakar",
+        "user_email": "diwakar@example.com",
+        "after_text": "24 hours",
+        "release_link": "https://afterme.test/c/release#rt_example",
+        "expires_on": "14 Nov 2026",
+        "optout_link": "https://afterme.test/c/optout#oo_example",
+    },
+    EmailTemplate.PORTAL_CODE: {
+        "contact_name": "Asha",
+        "user_name": "Diwakar",
+        "user_email": "diwakar@example.com",
+        "code": "482913",
+        "optout_link": "https://afterme.test/c/optout#oo_example",
+    },
     EmailTemplate.CONTACT_ALL_CLEAR: {
         "contact_name": "Asha",
         "user_name": "Diwakar",
@@ -236,9 +263,28 @@ def test_audit_action_catalogue() -> None:
     assert PHASE5_ACTIONS.isdisjoint(
         PHASE1_ACTIONS | PHASE2_ACTIONS | PHASE3_ACTIONS | PHASE4_ACTIONS
     )
-    assert KNOWN_ACTIONS == (
+    assert PHASE6_ACTIONS.isdisjoint(
         PHASE1_ACTIONS | PHASE2_ACTIONS | PHASE3_ACTIONS | PHASE4_ACTIONS | PHASE5_ACTIONS
     )
+    assert KNOWN_ACTIONS == (
+        PHASE1_ACTIONS
+        | PHASE2_ACTIONS
+        | PHASE3_ACTIONS
+        | PHASE4_ACTIONS
+        | PHASE5_ACTIONS
+        | PHASE6_ACTIONS
+    )
+    # SECURITY §9 marks these Phase 6 events as shown in the Activity feed.
+    assert {
+        "instruction.recipients_changed",
+        "release.created",
+        "release.revoked",
+        "release.viewed",
+    } <= USER_VISIBLE_ACTIONS
+    assert {"instruction.created", "instruction.updated", "instruction.deleted"}.isdisjoint(
+        USER_VISIBLE_ACTIONS
+    )
+    assert not {a for a in PHASE6_ACTIONS if a.startswith("portal.")} & USER_VISIBLE_ACTIONS
     # SECURITY §9 marks these Phase 5 events as shown in the Activity feed.
     assert {
         "plan.updated",

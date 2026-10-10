@@ -17,6 +17,9 @@ import '../features/contacts/presentation/edit_contact_screen.dart';
 import '../features/contacts/presentation/people_screen.dart';
 import '../features/dev/presentation/design_gallery_screen.dart';
 import '../features/home/presentation/home_screen.dart';
+import '../features/instructions/presentation/add_instruction_screen.dart';
+import '../features/instructions/presentation/edit_instruction_screen.dart';
+import '../features/instructions/presentation/instruction_detail_screen.dart';
 import '../features/instructions/presentation/instructions_screen.dart';
 import '../features/onboarding/application/onboarding_controller.dart';
 import '../features/onboarding/presentation/contact_step_screen.dart';
@@ -56,6 +59,7 @@ abstract final class AppRoutes {
   static const people = '/people';
   static const peopleAdd = '/people/add';
   static const instructions = '/instructions';
+  static const instructionNew = '/instructions/new';
   static const plan = '/plan';
   static const settings = '/settings';
   static const settingsProfile = '/settings/profile';
@@ -84,6 +88,22 @@ abstract final class AppRoutes {
   /// deep links exist); an unknown id shows a calm "not found" page.
   static bool isContactRoute(String location) =>
       _contactRoute.hasMatch(location);
+
+  /// An instruction's detail page, `/instructions/<id>`.
+  static String instructionDetail(String id) =>
+      '$instructions/${Uri.encodeComponent(id)}';
+
+  /// An instruction's edit page, `/instructions/<id>/edit`.
+  static String instructionEdit(String id) => '${instructionDetail(id)}/edit';
+
+  static final RegExp _instructionRoute = RegExp(
+    r'^/instructions/[A-Za-z0-9_-]{1,64}(/edit)?$',
+  );
+
+  /// Whether [location] is an instruction page. The id is only ever produced by the app
+  /// (no deep links exist); an unknown id shows a calm "not found" page.
+  static bool isInstructionRoute(String location) =>
+      _instructionRoute.hasMatch(location);
 
   /// Tabs of the signed-in shell, in navigation-bar order.
   static const shellTabs = [home, people, instructions, plan, settings];
@@ -123,6 +143,7 @@ abstract final class AppRoutes {
   static Set<String> signedInRoutes() => {
     ...shellTabs,
     peopleAdd,
+    instructionNew,
     ...settingsScreens,
     ...onboardingSteps,
   };
@@ -183,7 +204,8 @@ String? authRedirect({
             : onboarding.step.path;
       }
       return AppRoutes.signedInRoutes().contains(location) ||
-              AppRoutes.isContactRoute(location)
+              AppRoutes.isContactRoute(location) ||
+              AppRoutes.isInstructionRoute(location)
           ? null
           : AppRoutes.home;
   }
@@ -310,6 +332,30 @@ final routerProvider = Provider<GoRouter>((ref) {
               GoRoute(
                 path: AppRoutes.instructions,
                 builder: (context, state) => const InstructionsScreen(),
+                routes: [
+                  // 'new' is declared before ':id' so it is never read as an id. The
+                  // `extra` is the name of an example to start from, nothing else.
+                  GoRoute(
+                    path: 'new',
+                    builder: (context, state) => AddInstructionScreen(
+                      starterName: _stringExtra(state.extra),
+                    ),
+                  ),
+                  GoRoute(
+                    path: ':id',
+                    builder: (context, state) => InstructionDetailScreen(
+                      instructionId: state.pathParameters['id'] ?? '',
+                    ),
+                    routes: [
+                      GoRoute(
+                        path: 'edit',
+                        builder: (context, state) => EditInstructionScreen(
+                          instructionId: state.pathParameters['id'] ?? '',
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
             ],
           ),

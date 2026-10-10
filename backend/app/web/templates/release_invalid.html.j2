@@ -1,0 +1,14 @@
+{% extends "base.html.j2" %}
+{% block title %}Link not valid · AfterMe{% endblock %}
+{% block content %}
+<h1>This link doesn't work</h1>
+<p>It may have expired, or what was shared is no longer available. Nothing has been changed.</p>
+{% if token %}
+<p>If it's still available, we can send a new link to the email address it was sent to.</p>
+<form method="post" action="/c/release/new-link">
+<input type="hidden" name="csrf" value="{{ csrf }}">
+<input type="hidden" name="token" value="{{ token }}">
+<button type="submit">Send me a new link</button>
+</form>
+{% endif %}
+{% endblock %}

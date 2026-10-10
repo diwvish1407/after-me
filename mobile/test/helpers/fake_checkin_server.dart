@@ -96,7 +96,10 @@ class FakeCheckInServer
   Duration skew = Duration.zero;
 
   // --- the rest of the aggregate ----------------------------------------------------
+  /// `plan_summary.instructions_active`: counted by the instructions "server" when
+  /// [instructionCount] is wired (`TestFakes` does), otherwise this number.
   int instructionsActive = 0;
+  int Function()? instructionCount;
   Map<String, dynamic>? incident;
 
   /// Extra readiness issues (for example Phase 5 codes).
@@ -438,7 +441,7 @@ class FakeCheckInServer
         contactsVerified: people
             .where((c) => c.verificationStatus == VerificationStatus.verified)
             .length,
-        instructionsActive: instructionsActive,
+        instructionsActive: instructionCount?.call() ?? instructionsActive,
       ),
       readiness: Readiness(ready: issues.isEmpty, issues: issues),
     );

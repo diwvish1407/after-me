@@ -20,7 +20,7 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import datetime
 
-from sqlalchemy import DateTime, MetaData
+from sqlalchemy import DateTime, MetaData, text
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -107,6 +107,11 @@ class Database:
         transaction does afterwards."""
         async with self.bookkeeping_sessionmaker() as session, session.begin():
             yield session
+
+    async def current_role(self) -> str:
+        """The database role this process is connected as."""
+        async with self.sessionmaker() as session:
+            return str((await session.execute(text("SELECT current_user"))).scalar_one())
 
     async def dispose(self) -> None:
         await self.engine.dispose()

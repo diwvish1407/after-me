@@ -169,6 +169,22 @@ void main() {
       expect(e.contactsAtLimit, isFalse);
       expect(e.limits.customOffsets, isTrue);
     });
+
+    test('the instruction limit is reached at the tier\'s number', () {
+      Entitlements of(int limit, int used) => Entitlements.fromJson({
+        'tier': 'free',
+        'limits': {'contacts': 1, 'instructions': limit},
+        'usage': {'contacts': 0, 'instructions': used},
+      });
+      expect(of(3, 2).instructionsAtLimit, isFalse);
+      expect(of(3, 3).instructionsAtLimit, isTrue);
+      expect(of(3, 4).instructionsAtLimit, isTrue);
+      expect(
+        of(0, 0).instructionsAtLimit,
+        isFalse,
+        reason: 'no limit in the answer: the server decides',
+      );
+    });
   });
 
   group('request bodies', () {

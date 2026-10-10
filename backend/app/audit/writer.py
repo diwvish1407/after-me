@@ -66,6 +66,19 @@ REMINDER_SENT: Final = "escalation.reminder_sent"
 FINAL_WARNING_SENT: Final = "escalation.final_warning_sent"
 STAGE_EXECUTED: Final = "escalation.stage_executed"
 STAGE_DEFERRED: Final = "escalation.stage_deferred"
+INSTRUCTION_CREATED: Final = "instruction.created"
+INSTRUCTION_UPDATED: Final = "instruction.updated"
+INSTRUCTION_DELETED: Final = "instruction.deleted"
+INSTRUCTION_RECIPIENTS_CHANGED: Final = "instruction.recipients_changed"
+RELEASE_CREATED: Final = "release.created"
+RELEASE_REVOKED: Final = "release.revoked"
+RELEASE_VIEWED: Final = "release.viewed"
+PORTAL_SESSION_CREATED: Final = "portal.session_created"
+PORTAL_OTP_SENT: Final = "portal.otp_sent"
+PORTAL_OTP_VERIFIED: Final = "portal.otp_verified"
+PORTAL_OTP_FAILED: Final = "portal.otp_failed"
+PORTAL_NEW_LINK: Final = "portal.new_link_requested"
+PORTAL_ACCESS_DENIED: Final = "portal.access_denied"
 ACTION_HELD: Final = "escalation.action_held"
 NOTIFICATION_SENT: Final = "notification.sent"
 NOTIFICATION_FAILED: Final = "notification.failed"
@@ -118,6 +131,23 @@ PHASE3_ACTIONS: Final = frozenset(
 PHASE4_ACTIONS: Final = frozenset(
     {CHECKIN_RECORDED, SCHEDULE_UPDATED, SCHEDULE_ACTIVATED, SCHEDULE_DEACTIVATED}
 )
+PHASE6_ACTIONS: Final = frozenset(
+    {
+        INSTRUCTION_CREATED,
+        INSTRUCTION_UPDATED,
+        INSTRUCTION_DELETED,
+        RELEASE_CREATED,
+        RELEASE_REVOKED,
+        RELEASE_VIEWED,
+        PORTAL_SESSION_CREATED,
+        PORTAL_ACCESS_DENIED,
+        INSTRUCTION_RECIPIENTS_CHANGED,
+        PORTAL_OTP_SENT,
+        PORTAL_OTP_VERIFIED,
+        PORTAL_OTP_FAILED,
+        PORTAL_NEW_LINK,
+    }
+)
 PHASE5_ACTIONS: Final = frozenset(
     {
         PLAN_UPDATED,
@@ -142,7 +172,12 @@ PHASE5_ACTIONS: Final = frozenset(
     }
 )
 KNOWN_ACTIONS: Final = (
-    PHASE1_ACTIONS | PHASE2_ACTIONS | PHASE3_ACTIONS | PHASE4_ACTIONS | PHASE5_ACTIONS
+    PHASE1_ACTIONS
+    | PHASE2_ACTIONS
+    | PHASE3_ACTIONS
+    | PHASE4_ACTIONS
+    | PHASE5_ACTIONS
+    | PHASE6_ACTIONS
 )
 
 # Shown in the Activity feed (SECURITY §9, marked ✓). auth.login_succeeded is visible only for a
@@ -172,6 +207,10 @@ USER_VISIBLE_ACTIONS: Final = frozenset(
         INCIDENT_VOIDED,
         FINAL_WARNING_SENT,
         STAGE_EXECUTED,
+        INSTRUCTION_RECIPIENTS_CHANGED,
+        RELEASE_CREATED,
+        RELEASE_REVOKED,
+        RELEASE_VIEWED,
     }
 )
 

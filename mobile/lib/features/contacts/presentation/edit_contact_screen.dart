@@ -5,6 +5,7 @@ import 'package:material_ui/material_ui.dart';
 import '../../../core/design_system/design_system.dart';
 import '../../../l10n/gen/app_localizations.dart';
 import '../../auth/presentation/reauth_sheet.dart';
+import '../../plan/application/plan_controller.dart';
 import '../application/contacts_controller.dart';
 import '../data/contacts_repository.dart';
 import 'contact_by_id_view.dart';
@@ -43,8 +44,9 @@ ContactPatch? contactPatchFor(
 
 /// Edit a trusted contact. Changing the email address warns first and, once saved,
 /// re-invites the new address. While check-ins are on, changing the address of someone
-/// who is in the plan needs the password again (403 `reauth_required`): the sheet is
-/// shown once and the same change repeated; closing it leaves the form as it was.
+/// who is in the plan, or who receives an active instruction, needs the password again
+/// (403 `reauth_required`): the sheet is shown once and the same change repeated; closing
+/// it leaves the form as it was.
 class EditContactScreen extends ConsumerWidget {
   const EditContactScreen({required this.contactId, super.key});
 
@@ -60,10 +62,18 @@ class EditContactScreen extends ConsumerWidget {
     final patch = contactPatchFor(contact, values);
     if (patch != null) {
       final controller = ref.read(contactsControllerProvider.notifier);
+      // Told by the plan, or (in no stage) receiving an instruction: each has its own
+      // wording for the password sheet.
+      final plan = ref.read(planControllerProvider).value;
+      final inPlan =
+          plan?.contactIds.contains(contact.id) ??
+          contact.notifiedAtStages.isNotEmpty;
       final updated = await withReauth(
         context,
         () => controller.updateContact(contact.id, patch),
-        reason: ReauthReason.contactEmail,
+        reason: !inPlan && contact.receivesInstructions > 0
+            ? ReauthReason.recipientEmail
+            : ReauthReason.contactEmail,
       );
       if (!context.mounted) {
         return;

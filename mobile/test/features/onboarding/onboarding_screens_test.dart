@@ -8,14 +8,17 @@ import 'package:afterme/core/security/app_lock/local_auth_gateway.dart';
 import 'package:afterme/core/storage/preferences_store.dart';
 import 'package:afterme/features/checkin/data/models/checkin_models.dart';
 import 'package:afterme/features/home/presentation/home_screen.dart';
+import 'package:afterme/features/instructions/data/instructions_repository.dart';
 import 'package:afterme/features/onboarding/application/onboarding_controller.dart';
 import 'package:afterme/features/onboarding/application/setup_controller.dart';
+import 'package:afterme/features/plan/data/plan_repository.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../../helpers/fake_platform.dart';
+import '../../helpers/in_memory_contacts_repository.dart';
 import '../../helpers/pump_app.dart';
 import '../../helpers/test_app.dart';
 
@@ -473,7 +476,36 @@ void main() {
   });
 
   group('instruction step', () {
-    testWidgets('lists the six starters and a prominent skip', (tester) async {
+    const oneDay = "If you haven't checked in for 1 day";
+
+    /// A contact, and a plan whose only stage is 1 day after a missed check-in, so the
+    /// instruction can be released at it (and, on the free plan, one more stage fits).
+    Future<(ProviderContainer, TestFakes)> withContactAndStage(
+      WidgetTester tester,
+    ) async {
+      final fakes = TestFakes();
+      fakes.contacts = InMemoryContactsRepository(
+        initial: [testContact(name: 'Mom')],
+      );
+      fakes.plan.seedStandard(['c1'], offsetMinutes: 1440);
+      final container = await _atStep(
+        tester,
+        OnboardingStep.instruction,
+        fakes: fakes,
+      );
+      return (container, fakes);
+    }
+
+    Future<void> chooseTime(WidgetTester tester, String label) async {
+      final finder = find.widgetWithText(RadioListTile<String>, label);
+      await tester.ensureVisible(finder.first);
+      await tester.pump();
+      await tester.tap(finder.first);
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('lists the six examples, a way to write your own and a '
+        'prominent skip', (tester) async {
       await _atStep(tester, OnboardingStep.instruction);
       for (final title in [
         'Who to call first',
@@ -485,6 +517,7 @@ void main() {
       ]) {
         expect(find.text(title), findsOneWidget, reason: title);
       }
+      expect(find.text('Write your own'), findsOneWidget);
       expect(find.textContaining("Don't write passwords here"), findsOneWidget);
       expect(find.text('Skip for now'), findsOneWidget);
     });
@@ -496,13 +529,10 @@ void main() {
       expect(find.text('Stay protected'), findsOneWidget);
     });
 
-    testWidgets('writing one: template, recipients, release stage, save', (
+    testWidgets('writing one: example, recipients, release stage, save', (
       tester,
     ) async {
-      final container = await _atStep(tester, OnboardingStep.contact);
-      await _addContact(tester);
-      container.read(routerProvider).go(OnboardingStep.instruction.path);
-      await tester.pumpAndSettle();
+      final (container, fakes) = await withContactAndStage(tester);
 
       await tapText(tester, 'Home and keys');
       await tester.pumpAndSettle();
@@ -511,30 +541,44 @@ void main() {
         'Home and keys',
       );
       expect(
-        find.text('If you haven\'t checked in for 2 days'),
-        findsOneWidget,
+        tester
+            .widget<TextField>(_field('What should they know?'))
+            .controller!
+            .text,
+        startsWith('A spare key is'),
       );
-      await tapText(tester, "If you haven't checked in for 3 days");
+      // The one contact is ticked; the time is still to be chosen.
+      expect(
+        tester
+            .widget<CheckboxListTile>(
+              find.widgetWithText(CheckboxListTile, 'Mom'),
+            )
+            .value,
+        isTrue,
+      );
+      expect(find.text(oneDay), findsOneWidget);
+      await chooseTime(tester, oneDay);
       await typeInto(tester, 'Title', 'House keys');
       await tapText(tester, 'Save instruction');
       await tester.pumpAndSettle();
 
       final setup = container.read(setupControllerProvider).value!;
       expect(setup.instructions.single.title, 'House keys');
-      expect(setup.instructions.single.releaseAfterHours, 72);
-      expect(setup.instructions.single.recipientContactIds, [
-        setup.contacts.single.id,
+      expect(setup.instructions.single.category, InstructionCategory.home);
+      expect(setup.instructions.single.recipients.single.contactId, 'c1');
+      expect(fakes.instructions.created.single['recipients'], [
+        {'contact_id': 'c1', 'release_stage_id': fakes.plan.stages.single.id},
       ]);
+      expect(
+        fakes.plan.calls,
+        isNot(contains('save')),
+        reason: 'the stage was already there',
+      );
       expect(find.text('Stay protected'), findsOneWidget);
     });
 
-    testWidgets('title and body are required; a recipient is required', (
-      tester,
-    ) async {
-      final container = await _atStep(tester, OnboardingStep.contact);
-      await _addContact(tester);
-      container.read(routerProvider).go(OnboardingStep.instruction.path);
-      await tester.pumpAndSettle();
+    testWidgets('the title and the text are required', (tester) async {
+      final (container, _) = await withContactAndStage(tester);
       await tapText(tester, 'Pets');
       await tester.pumpAndSettle();
       await typeInto(tester, 'Title', '');
@@ -545,34 +589,23 @@ void main() {
       );
 
       await typeInto(tester, 'Title', 'Pets');
-      await tester.enterText(
-        find.widgetWithText(TextField, 'What should they know?'),
-        '',
-      );
+      await tester.enterText(_field('What should they know?'), '');
       await tester.pump();
       await tapText(tester, 'Save instruction');
-      expect(find.text('Please fill this in.'), findsWidgets);
-
-      await tester.enterText(
-        find.widgetWithText(TextField, 'What should they know?'),
-        'Feed twice',
+      expect(
+        tester
+            .widget<TextField>(_field('What should they know?'))
+            .decoration
+            ?.errorText,
+        'Please fill this in.',
       );
-      await tester.pump();
-      tester
-          .widget<CheckboxListTile>(
-            find.widgetWithText(CheckboxListTile, 'Mom'),
-          )
-          .onChanged!(false);
-      await tester.pump();
-      expect(find.text('Choose at least one person.'), findsOneWidget);
-      await tapText(tester, 'Save instruction');
       expect(
         container.read(setupControllerProvider).value!.instructions,
         isEmpty,
       );
     });
 
-    testWidgets('without a contact it cannot be saved and says why', (
+    testWidgets('without a contact it says why and offers to add one', (
       tester,
     ) async {
       await _atStep(tester, OnboardingStep.instruction);
@@ -582,21 +615,102 @@ void main() {
         find.textContaining('Add a trusted contact first'),
         findsOneWidget,
       );
-      final save = tester.widget<FilledButton>(
-        find.widgetWithText(FilledButton, 'Save instruction'),
-      );
-      expect(save.onPressed, isNull);
-      await tapText(tester, 'Choose a different starter');
+      expect(find.text('Add a trusted contact'), findsOneWidget);
+      await tapText(tester, 'Choose a different example');
       expect(find.text('Who to call first'), findsOneWidget);
     });
 
-    testWidgets('after saving, returning shows what was saved', (tester) async {
-      final container = await _atStep(tester, OnboardingStep.contact);
-      await _addContact(tester);
-      container.read(routerProvider).go(OnboardingStep.instruction.path);
-      await tester.pumpAndSettle();
+    testWidgets('with the Standard plan (one stage at the end of the grace '
+        'period) a time is added to the plan and the instruction follows', (
+      tester,
+    ) async {
+      final fakes = TestFakes();
+      fakes.contacts = InMemoryContactsRepository(
+        initial: [testContact(name: 'Mom')],
+      );
+      // The Standard preset: one stage at the end of the 3-hour grace period.
+      fakes.plan.seedStandard(['c1']);
+      final container = await _atStep(
+        tester,
+        OnboardingStep.instruction,
+        fakes: fakes,
+      );
       await tapText(tester, 'Pets');
       await tester.pumpAndSettle();
+      expect(
+        find.text(
+          'Your plan has no stage that far out yet. Choosing a time adds it to your plan, and the people you choose for it are told then too.',
+        ),
+        findsOneWidget,
+      );
+      expect(find.text(oneDay), findsOneWidget);
+      expect(find.text("If you haven't checked in for 2 days"), findsOneWidget);
+      expect(find.text("If you haven't checked in for 3 days"), findsOneWidget);
+
+      await chooseTime(tester, oneDay);
+      expect(
+        find.text(
+          'Saving adds this time to your plan. Whoever you choose for it is told at that time, and receives this.',
+        ),
+        findsOneWidget,
+      );
+      await tapText(tester, 'Save instruction');
+      await tester.pumpAndSettle();
+
+      expect(
+        fakes.events.where(
+          (e) => e == 'plan.save' || e == 'instructions.create',
+        ),
+        ['plan.save', 'instructions.create'],
+        reason: 'the plan first, then the instruction',
+      );
+      final stages = fakes.plan.stages;
+      expect(stages.map((s) => s.offsetMinutes), [180, 1440]);
+      expect(stages.last.contactIds, ['c1']);
+      expect(fakes.instructions.created.single['recipients'], [
+        {'contact_id': 'c1', 'release_stage_id': stages.last.id},
+      ]);
+      expect(
+        container.read(setupControllerProvider).value!.instructions,
+        hasLength(1),
+      );
+      expect(find.text('Stay protected'), findsOneWidget);
+    });
+
+    testWidgets('Review your plan opens the plan step when nothing can be '
+        'added', (tester) async {
+      final fakes = TestFakes();
+      fakes.contacts = InMemoryContactsRepository(
+        initial: [testContact(name: 'Mom')],
+      );
+      // Free: two stages is all it holds, and both are early.
+      fakes.plan.seed(
+        const PlanDraft(
+          graceMinutes: 180,
+          stages: [
+            PlanStageDraft(offsetMinutes: 180, contactIds: ['c1']),
+            PlanStageDraft(offsetMinutes: 360, contactIds: ['c1']),
+          ],
+        ),
+      );
+      await _atStep(tester, OnboardingStep.instruction, fakes: fakes);
+      await tapText(tester, 'Pets');
+      await tester.pumpAndSettle();
+      expect(
+        find.textContaining("so this can't be shared with anyone yet"),
+        findsOneWidget,
+      );
+      await tapText(tester, 'Review your plan');
+      await tester.pumpAndSettle();
+      expect(find.text('Your plan'), findsOneWidget);
+      expect(find.text('Step 6 of 9'), findsOneWidget);
+    });
+
+    testWidgets('after saving, returning shows what was saved', (tester) async {
+      final (container, _) = await withContactAndStage(tester);
+      await tapText(tester, 'Pets');
+      await tester.pumpAndSettle();
+      await chooseTime(tester, oneDay);
       await tapText(tester, 'Save instruction');
       await tester.pumpAndSettle();
       container.read(routerProvider).go(OnboardingStep.instruction.path);
@@ -775,18 +889,18 @@ void main() {
     }
 
     testWidgets(
-      'asks the server to activate, says the invitation went out and that '
-      'instructions are a preview',
+      'asks the server to activate and says the invitation went out',
       (tester) async {
         final fakes = TestFakes();
         final container = await allSetUp(tester, fakes);
         expect(find.text("You're set"), findsOneWidget);
         expect(
           find.text(
-            'Check-ins are on. Mom has been sent an invitation. Instructions are still a preview, so nothing will be shared yet.',
+            'Your plan is active. Mom has been invited, and we\'ll let you know when they accept.',
           ),
           findsOneWidget,
         );
+        expect(find.textContaining('Preview'), findsNothing);
         expect(fakes.server.calls.where((c) => c == 'activate'), hasLength(1));
         expect(fakes.server.status, CheckInStatus.active);
         expect(

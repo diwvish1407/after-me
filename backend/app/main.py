@@ -27,9 +27,11 @@ from app.core.middleware import (
 from app.notifications.email import EmailProvider
 from app.ops.router import router as ops_router
 from app.web.contact_router import router as contact_web_router
+from app.web.release_router import router as release_web_router
 from app.web.router import router as web_router
 
 API_VERSION = "0.1.0"
+API_ROLE = "afterme_api"
 
 
 def create_app(
@@ -44,7 +46,17 @@ def create_app(
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
-        get_logger("afterme.app").info("app.started", env=settings.app_env.value)
+        log = get_logger("afterme.app")
+        if settings.is_production_like:
+            # The database's own limits (column grants, the one-way triggers) are keyed on the
+            # role names of DATABASE §6: a process under another name would run without them.
+            role = await services.db.current_role()
+            if role != API_ROLE:
+                msg = f"the API must connect as {API_ROLE}, not {role}"
+                raise RuntimeError(msg)
+        if "kms_local_key" not in settings.model_fields_set:
+            log.warning("kms.development_key_in_use")
+        log.info("app.started", env=settings.app_env.value)
         yield
         await services.db.dispose()
 
@@ -79,6 +91,7 @@ def create_app(
     include_v1_routers(app)
     app.include_router(ops_router)
     app.include_router(web_router)
+    app.include_router(release_web_router)  # before /c: its paths are more specific
     app.include_router(contact_web_router)
     return app
 

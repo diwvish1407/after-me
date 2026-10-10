@@ -107,10 +107,7 @@ void main() {
         isNull,
         reason: 'the server would say no_contacts',
       );
-      expect(
-        find.textContaining('Preview: your instructions are not saved yet'),
-        findsOneWidget,
-      );
+      expect(find.textContaining('Preview'), findsNothing);
       expect(fakes.server.calls.where((c) => c == 'checkIn'), isEmpty);
     });
 

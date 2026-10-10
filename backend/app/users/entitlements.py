@@ -1,7 +1,6 @@
 """Tier limits and usage (PRD FR-INS-08; API_SPEC §3 ``GET /me/entitlements``).
 
-The server is the only place that enforces limits; the app merely mirrors them. Instruction and
-stage usage is zero until those features exist (Phases 4 to 6).
+The server is the only place that enforces limits; the app merely mirrors them.
 """
 
 from __future__ import annotations
@@ -12,6 +11,7 @@ from typing import Final
 from app.api.deps import CurrentUser
 from app.auth.base import AuthServiceBase
 from app.contacts.repository import ContactRepository
+from app.instructions.repository import InstructionRepository
 from app.plans.repository import PlanRepository
 from app.users.schemas import EntitlementLimits, EntitlementsResponse, EntitlementUsage
 
@@ -40,6 +40,9 @@ class EntitlementService(AuthServiceBase):
         limits = limits_for(current.tier)
         contacts = await ContactRepository(self.session).count_live(owner_id=current.user_id)
         stages = await PlanRepository(self.session).count_steps(owner_id=current.user_id)
+        instructions = await InstructionRepository(self.session).count_live(
+            owner_id=current.user_id
+        )
         await self.session.commit()
         return EntitlementsResponse(
             tier=current.tier,
@@ -49,5 +52,5 @@ class EntitlementService(AuthServiceBase):
                 stages=limits.stages,
                 custom_offsets=limits.custom_offsets,
             ),
-            usage=EntitlementUsage(contacts=contacts, instructions=0, stages=stages),
+            usage=EntitlementUsage(contacts=contacts, instructions=instructions, stages=stages),
         )

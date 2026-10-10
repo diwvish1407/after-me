@@ -28,7 +28,7 @@ from app.core.logging import get_logger
 from app.engine.executor import ActionExecutor, UnitReport
 from app.engine.hold import HoldMonitor, HoldReport
 from app.engine.opener import OpenResult, open_incident
-from app.engine.releases import NoReleases, ReleaseSource
+from app.engine.releases import InstructionReleases, ReleaseSource
 from app.engine.store import DueDeadline, EngineStore
 from app.notifications import outbox
 from app.notifications.outbox import Draft
@@ -95,7 +95,7 @@ class Engine:
         self.db = services.db
         self.clock = services.clock
         self.instance_id = instance_id or f"{socket.gethostname()}:{uuid.uuid4().hex[:8]}"
-        self.releases: ReleaseSource = releases or NoReleases()
+        self.releases: ReleaseSource = releases or InstructionReleases()
         self.hold = HoldMonitor(services)
         self.executor = ActionExecutor(
             settings=self.settings,

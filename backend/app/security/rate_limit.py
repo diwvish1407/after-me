@@ -58,6 +58,15 @@ INVITATION_PER_USER: Final = RateLimit("invitation_user", 10, timedelta(days=1))
 INVITATION_RESEND_PER_CONTACT: Final = RateLimit("invitation_resend_contact", 3, timedelta(days=7))
 WEB_CONTACT_PER_IP: Final = RateLimit("web_contact_ip", 20, timedelta(hours=1))
 
+# --- Phase 6 limits (API_SPEC §16): the recipient portal -------------------------------------
+# Every POST of the release pages, per client address (a visit is about six requests).
+WEB_PORTAL_PER_IP: Final = RateLimit("web_portal_ip", 60, timedelta(hours=1))
+# Codes sent for one access: the fourth request in an hour is refused.
+PORTAL_OTP_SEND_PER_ACCESS: Final = RateLimit("portal_otp_send_access", 3, timedelta(hours=1))
+PORTAL_NEW_LINK_PER_ACCESS: Final = RateLimit("portal_new_link_access", 3, timedelta(days=1))
+# Every code attempt for one access, however many codes were asked for: 20 guesses a day.
+PORTAL_OTP_VERIFY_PER_ACCESS: Final = RateLimit("portal_otp_verify_access", 20, timedelta(days=1))
+
 # Check-ins (API_SPEC §16): generous on purpose. A user who cannot check in can be escalated, so
 # the limit only has to stop a runaway client; retries of one tap replay without counting.
 CHECKIN_PER_USER: Final = RateLimit("checkin_user", 30, timedelta(hours=1))

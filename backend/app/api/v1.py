@@ -13,6 +13,7 @@ from app.checkins.router import router as checkins_router
 from app.contacts.router import router as contacts_router
 from app.home.router import router as home_router
 from app.incidents.router import router as incidents_router
+from app.instructions.router import router as instructions_router
 from app.plans.router import router as plan_router
 from app.users.router import router as users_router
 
@@ -24,6 +25,7 @@ V1_ROUTERS: tuple[APIRouter, ...] = (
     home_router,
     plan_router,
     incidents_router,
+    instructions_router,
 )
 
 

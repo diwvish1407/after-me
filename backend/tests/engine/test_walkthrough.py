@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import os
 import pathlib
+import re
 from datetime import UTC, datetime, timedelta, timezone
 
 import pytest
@@ -51,35 +52,60 @@ class Narrator:
         )
 
 
+_SEEN = {"mails": 0}
+
+
 def mails(world: World, person: Person) -> str:
-    sent = [
+    """The relevant messages sent since the last time this was asked, each template once per
+    recipient, in a fixed order (messages queued together leave in no particular order)."""
+    relevant = (
+        "checkin_pre_reminder",
+        "incident_missed",
+        "incident_last_chance",
+        "stage_executed",
+        "contact_alert",
+        "contact_alert_with_release",
+        "contact_all_clear",
+        "all_clear_confirmation",
+    )
+    fresh = world.mail.messages[_SEEN["mails"] :]
+    _SEEN["mails"] = len(world.mail.messages)
+    names = {
         f"{m.template} → {'the user' if m.to == person.email else m.to.split('.')[0].title()}"
-        for m in world.mail.messages
-        if m.template
-        in (
-            "checkin_pre_reminder",
-            "incident_missed",
-            "incident_last_chance",
-            "stage_executed",
-            "contact_alert",
-            "contact_all_clear",
-            "all_clear_confirmation",
-        )
-    ]
-    # the last three, in a fixed order: messages queued together leave in no particular order
-    return ", ".join(sorted(sent[-3:])) if sent else ""
+        for m in fresh
+        if m.template in relevant
+    }
+    return ", ".join(sorted(names))
 
 
 async def test_write_the_walkthrough(world: World) -> None:
     assert OUT is not None
+    _SEEN["mails"] = 0
     world.clock.set(ist("2026-10-13T19:00"))
     person = await world.ready(
         contacts=("Mom", "Brother"), stages=((180, ("Mom",)), (1440, ("Brother",)))
     )
+    await world.login(person)
+    # choosing who receives something, while check-ins are on, asks for the password
+    assert (await world.h.reauth(person.tokens)).status_code == 204
+    stages = (await world.h.client.get("/v1/plan", headers=person.headers)).json()["stages"]
+    await world.h.client.post(
+        "/v1/instructions",
+        json={
+            "category": "home",
+            "title": "House emergency",
+            "body": "The spare key is with Mrs. Sharma at flat 3B.",
+            "recipients": [
+                {"contact_id": person.contacts["Brother"], "release_stage_id": stages[1]["id"]}
+            ],
+        },
+        headers=person.headers,
+    )
     n = Narrator(world, person)
     n.note(
         "Account set up: daily check-in by 20:00, grace 3 h, stage 1 notifies Mom, "
-        "stage 2 (after 24 h) notifies Brother"
+        "stage 2 (after 24 h) notifies Brother, and the instruction *House emergency* is to be "
+        "shared with Brother at stage 2"
     )
 
     world.clock.set(ist("2026-10-13T19:30"))
@@ -114,7 +140,33 @@ async def test_write_the_walkthrough(world: World) -> None:
     )
 
     await world.advance_to(ist("2026-10-15T20:05"))
-    n.note("24 h after the start: **stage 2 runs**, Brother is emailed", mails(world, person))
+    n.note(
+        "24 h after the start: **stage 2 runs**, Brother is emailed: the alert carries a link, "
+        "never the text",
+        mails(world, person),
+    )
+
+    token = re.search(
+        r"/c/release#(rt_[A-Za-z0-9_-]{43})",
+        world.mail.to(f"brother.{person.user_id[:6]}@example.com", "contact_alert_with_release")[
+            -1
+        ].text,
+    )
+    assert token is not None
+    csrf = await world.h.portal_csrf("/c/release")
+    await world.h.client.post("/c/release/session", data={"token": token[1], "csrf": csrf})
+    await world.h.client.post("/c/release/code", data={"csrf": csrf})
+    code = re.search(
+        r"Your code is (\d{6})",
+        world.mail.to(f"brother.{person.user_id[:6]}@example.com", "portal_code")[-1].text,
+    )
+    assert code is not None
+    shown = await world.h.client.post("/c/release/verify", data={"code": code[1], "csrf": csrf})
+    assert "House emergency" in shown.text
+    n.note(
+        "Brother opens the link, asks for a code (sent to their verified address only), enters "
+        "it, and **reads the instruction**; the view is recorded for the person to see later",
+    )
 
     world.clock.set(ist("2026-10-15T21:00"))
     refused = await world.checkin(person, expect=409)
@@ -138,6 +190,15 @@ async def test_write_the_walkthrough(world: World) -> None:
     n.note(
         "a day of ticks later",
         f"no further contact-facing message for that incident ({after - before} new)",
+    )
+    taken_back = await world.h.client.post(
+        "/c/release/session", data={"token": token[1], "csrf": csrf}
+    )
+    assert "has checked in" in taken_back.text
+    n.note(
+        "Brother opens the same link again",
+        "**refused**: the page says it is no longer available and that the person has checked "
+        "in; the release was taken back when they confirmed they are safe",
     )
 
     lines = [
@@ -163,8 +224,12 @@ async def test_write_the_walkthrough(world: World) -> None:
         "minutes (the *settle delay*): a check-in in that window cancels it and nobody ever knows.",
         "* **Once a contact has been emailed, I'M OK is no longer enough.** The app is told to use "
         "I'M SAFE (which needs the password and sends an all-clear to everyone who was told).",
-        "* **The API cannot start any of this.** Incidents, timeline actions and messages are "
-        "created only by the worker; the database refuses the API role the `INSERT`.",
+        "* **The API cannot start any of this.** Incidents, timeline actions, releases and "
+        "messages are created only by the worker; the database refuses the API role the "
+        "`INSERT`.",
+        "* **The instruction's text is never in an email or a log.** The contact gets a link; "
+        "behind it a one-time code goes to their verified address; only then is the text "
+        "decrypted, for that contact and that incident, until the person checks in.",
         "* **Fail-safe.** If anything is uncertain (inconsistent data, an outage, a Hold), the "
         "engine does nothing and raises an alert instead of contacting anyone.",
         "",

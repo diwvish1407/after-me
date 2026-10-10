@@ -1,0 +1,11 @@
+{% extends "base.html.j2" %}
+{% block title %}Confirm it's you · AfterMe{% endblock %}
+{% block content %}
+<h1>{{ owner_name }} left some information for you</h1>
+<p>For your security, we'll send a one-time code to <strong>{{ masked_email }}</strong>. Enter it on the next page to view what was shared.</p>
+<form method="post" action="/c/release/code">
+<input type="hidden" name="csrf" value="{{ csrf }}">
+<button type="submit">Send me a code</button>
+</form>
+<p class="hint">If this isn't your email address, close this page. Nobody can see anything without the code.</p>
+{% endblock %}

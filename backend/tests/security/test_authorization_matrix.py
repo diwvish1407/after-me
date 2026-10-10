@@ -148,6 +148,25 @@ ROUTE_POLICY: dict[tuple[str, str], Policy] = {
     ("PUT", "/v1/plan"): Authenticated(
         body={"grace_minutes": 180, "stages": [{"offset_minutes": 180, "notify_contact_ids": []}]}
     ),
+    ("GET", "/v1/instruction-categories"): Authenticated(),
+    ("GET", "/v1/instructions"): Authenticated(),
+    ("POST", "/v1/instructions"): Authenticated(
+        body={"category": "home", "title": "House", "body": "Where the key is."}
+    ),
+    ("GET", "/v1/instructions/{instruction_id}"): Owned(
+        "instruction_id", factory="instruction", tables=("instructions", "instruction_recipients")
+    ),
+    ("PATCH", "/v1/instructions/{instruction_id}"): Owned(
+        "instruction_id",
+        factory="instruction",
+        tables=("instructions", "instruction_recipients", "release_events"),
+        body={"title": "Changed"},
+    ),
+    ("DELETE", "/v1/instructions/{instruction_id}"): Owned(
+        "instruction_id",
+        factory="instruction",
+        tables=("instructions", "instruction_recipients", "release_events"),
+    ),
     ("GET", "/a/reset"): Web(),
     ("POST", "/a/reset"): Web(
         form={"token": "pr_" + "A" * 43, "new_password": "a new passphrase 42"}
@@ -167,6 +186,15 @@ ROUTE_POLICY: dict[tuple[str, str], Policy] = {
         form={"token": "oo_" + str(uuid.uuid4()) + "." + "A" * 43, "scope": "everyone"},
         csrf_page="/c/open",
     ),
+    # Phase 6: the release pages. A session and a one-time code stand between the link and any
+    # content; a GET shows a static form only.
+    ("GET", "/c/release"): Web(csrf_page="/c/release"),
+    ("POST", "/c/release/session"): Web(form={"token": "rt_" + "A" * 43}, csrf_page="/c/release"),
+    ("POST", "/c/release/code"): Web(csrf_page="/c/release"),
+    ("POST", "/c/release/verify"): Web(form={"code": "123456"}, csrf_page="/c/release"),
+    ("POST", "/c/release/view"): Web(csrf_page="/c/release"),
+    ("POST", "/c/release/new-link"): Web(form={"token": "rt_" + "A" * 43}, csrf_page="/c/release"),
+    ("POST", "/c/release/end"): Web(csrf_page="/c/release"),
 }
 
 # Routes registered only by the test suite (tests/routes.py).
@@ -208,7 +236,20 @@ def test_no_route_can_trigger_escalation_or_release(settings: Settings) -> None:
     routes only *read* them or *stop* one (a POST on a specific incident's ``/safe``)."""
     routes = app_routes(create_app(settings))
     for forbidden in ("release", "escalat", "trigger", "simulate", "_test", "execute"):
-        assert not any(forbidden in path for _, path in routes), forbidden
+        # The recipient portal is how a release is *read*: it creates nothing (its routes have
+        # their own policies, and the database role it runs as cannot insert one).
+        assert not any(
+            forbidden in path and not path.startswith("/c/release") for _, path in routes
+        ), forbidden
+    assert {(m, p) for m, p in routes if p.startswith("/c/release")} == {
+        ("GET", "/c/release"),
+        ("POST", "/c/release/session"),
+        ("POST", "/c/release/code"),
+        ("POST", "/c/release/verify"),
+        ("POST", "/c/release/view"),
+        ("POST", "/c/release/new-link"),
+        ("POST", "/c/release/end"),
+    }
     incident_routes = {(m, p) for m, p in routes if "incident" in p}
     assert incident_routes == {
         ("GET", "/v1/incidents/current"),
@@ -384,10 +425,21 @@ async def _make_incident(h: Harness, owner: dict[str, Any]) -> str:
     return str(row["id"])
 
 
+async def _make_instruction(h: Harness, owner: dict[str, Any]) -> str:
+    response = await h.client.post(
+        "/v1/instructions",
+        json={"category": "home", "title": "Alice's secret title", "body": "Alice's secret body."},
+        headers=bearer(owner),
+    )
+    assert response.status_code == 201, response.text
+    return str(response.json()["id"])
+
+
 FACTORIES: dict[str, Callable[[Harness, dict[str, Any]], Awaitable[str]]] = {
     "session": _make_session,
     "contact": _make_contact,
     "incident": _make_incident,
+    "instruction": _make_instruction,
 }
 
 

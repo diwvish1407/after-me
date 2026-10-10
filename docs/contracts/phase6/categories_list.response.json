@@ -1,0 +1,48 @@
+{
+  "items": [
+    {
+      "id": "personal",
+      "sort_order": 1
+    },
+    {
+      "id": "family",
+      "sort_order": 2
+    },
+    {
+      "id": "home",
+      "sort_order": 3
+    },
+    {
+      "id": "work",
+      "sort_order": 4
+    },
+    {
+      "id": "business",
+      "sort_order": 5
+    },
+    {
+      "id": "documents",
+      "sort_order": 6
+    },
+    {
+      "id": "insurance",
+      "sort_order": 7
+    },
+    {
+      "id": "pets",
+      "sort_order": 8
+    },
+    {
+      "id": "travel",
+      "sort_order": 9
+    },
+    {
+      "id": "digital_accounts",
+      "sort_order": 10
+    },
+    {
+      "id": "other",
+      "sort_order": 11
+    }
+  ]
+}

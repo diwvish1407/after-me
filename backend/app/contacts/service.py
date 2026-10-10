@@ -52,10 +52,12 @@ from app.core.errors import (
     SessionRevoked,
     ValidationFailed,
 )
+from app.instructions.repository import InstructionRepository
 from app.notifications import outbox
 from app.notifications.email import EmailMessage
 from app.notifications.mailer import EmailTemplate
 from app.plans.repository import PlanRepository
+from app.releases.repository import ReleaseRepository
 from app.security.rate_limit import (
     CONTACT_CREATE_PER_USER,
     INVITATION_PER_USER,
@@ -79,7 +81,9 @@ _AUDIT_FIELD: Final = {
 }
 
 
-def contact_out(contact: TrustedContact) -> ContactOut:
+def contact_out(
+    contact: TrustedContact, *, stages: list[int] | None = None, instructions: int = 0
+) -> ContactOut:
     assert contact.email is not None  # noqa: S101 - live contacts always carry an address
     return ContactOut(
         id=contact.id,
@@ -94,8 +98,8 @@ def contact_out(contact: TrustedContact) -> ContactOut:
         is_active=contact.is_active,
         invitation_sent_at=contact.invitation_sent_at,
         invitation_send_count=contact.invitation_send_count,
-        notified_at_stages=[],
-        receives_instructions=0,
+        notified_at_stages=stages or [],
+        receives_instructions=instructions,
         created_at=contact.created_at,
         updated_at=contact.updated_at,
     )
@@ -118,15 +122,37 @@ class ContactService(AuthServiceBase):
 
     async def list_contacts(self, current: CurrentUser) -> ContactList:
         rows = await self.contacts.list(owner_id=current.user_id)
+        stages, counts = await self._links(current)
         await self.session.commit()
-        return ContactList(items=[contact_out(c) for c in rows])
+        return ContactList(
+            items=[
+                contact_out(c, stages=stages.get(c.id), instructions=counts.get(c.id, 0))
+                for c in rows
+            ]
+        )
 
     async def get_contact(self, current: CurrentUser, contact_id: uuid.UUID) -> ContactOut:
         contact = await self.contacts.get(owner_id=current.user_id, contact_id=contact_id)
         if contact is None:
             raise NotFound
+        stages, counts = await self._links(current)
         await self.session.commit()
-        return contact_out(contact)
+        return contact_out(
+            contact, stages=stages.get(contact.id), instructions=counts.get(contact.id, 0)
+        )
+
+    async def _links(
+        self, current: CurrentUser
+    ) -> tuple[dict[uuid.UUID, list[int]], dict[uuid.UUID, int]]:
+        """What each contact is part of: the stages that notify them, and how many active
+        instructions are assigned to them."""
+        stages = await PlanRepository(self.session).stage_positions_by_contact(
+            owner_id=current.user_id
+        )
+        counts = await InstructionRepository(self.session).counts_by_contact(
+            owner_id=current.user_id
+        )
+        return stages, counts
 
     # ------------------------------------------------------------------ create
 
@@ -201,8 +227,11 @@ class ContactService(AuthServiceBase):
         changes = self._effective_changes(contact, body.changes())
         changed = sorted(name for name, value in changes.items() if getattr(contact, name) != value)
         if not changed:
+            stages, counts = await self._links(current)
             await self.session.commit()
-            return contact_out(contact), []
+            return contact_out(
+                contact, stages=stages.get(contact.id), instructions=counts.get(contact.id, 0)
+            ), []
 
         email_changed = "email" in changed
         user_email = ""
@@ -219,6 +248,7 @@ class ContactService(AuthServiceBase):
             # Taking a contact out of the safety net (or pointing it at another address, which
             # starts again from "pending") is what a thief with a stolen token would do first.
             # Asked after ownership and validation, and before anything is spent or changed.
+            await self._lock_user(current)
             await self._require_step_up(current, contact, now)
         if email_changed:
             # An email change sends a new invitation: it counts against the daily budget, and
@@ -260,8 +290,19 @@ class ContactService(AuthServiceBase):
             ),
         )
         outbox = await self._invite(current, user_email, contact, now) if email_changed else []
+        stages, counts = await self._links(current)
         await self.session.commit()
-        return contact_out(contact), outbox
+        return (
+            contact_out(
+                contact, stages=stages.get(contact.id), instructions=counts.get(contact.id, 0)
+            ),
+            outbox,
+        )
+
+    async def _lock_user(self, current: CurrentUser) -> None:
+        """THE per-user lock (ESCALATION_ENGINE §6.2), taken before a change that decides who is
+        told or who receives what, so the engine sees it wholly before or wholly after."""
+        await CheckinConfigRepository(self.session).get(owner_id=current.user_id, for_update=True)
 
     async def _require_step_up(
         self, current: CurrentUser, contact: TrustedContact, now: datetime
@@ -273,10 +314,12 @@ class ContactService(AuthServiceBase):
         config = await CheckinConfigRepository(self.session).get(owner_id=current.user_id)
         if config is None or config.status == "inactive":
             return
-        in_plan = await PlanRepository(self.session).contact_in_plan(
+        routed = await PlanRepository(self.session).contact_in_plan(
             owner_id=current.user_id, contact_id=contact.id
-        )
-        if in_plan and not has_fresh_reauth(current, now):
+        ) or await InstructionRepository(self.session).is_recipient(
+            owner_id=current.user_id, contact_id=contact.id
+        )  # told by a stage, or the recipient of something that is to be released
+        if routed and not has_fresh_reauth(current, now):
             raise ReauthRequired
 
     @staticmethod
@@ -311,6 +354,7 @@ class ContactService(AuthServiceBase):
         )
         if contact is None:
             raise NotFound
+        await self._lock_user(current)
         await self._require_step_up(current, contact, now)
         await self.contacts.invalidate_invitations(
             owner_id=current.user_id, contact_id=contact.id, now=now
@@ -320,6 +364,14 @@ class ContactService(AuthServiceBase):
         plans = PlanRepository(self.session)
         if await plans.remove_contact(owner_id=current.user_id, contact_id=contact.id):
             await plans.bump_version(owner_id=current.user_id, now=now)
+        # ... and is nobody's recipient any more; what was released to them in an open
+        # incident is taken back (ESCALATION_ENGINE §10).
+        await InstructionRepository(self.session).remove_contact(
+            owner_id=current.user_id, contact_id=contact.id
+        )
+        await ReleaseRepository(self.session).revoke_for_contact(
+            owner_id=current.user_id, contact_id=contact.id, reason="contact_removed", now=now
+        )
         await outbox.cancel_for_contact(
             self.session,
             owner_id=current.user_id,

@@ -10,18 +10,19 @@ import '../features/contacts/data/contacts_repository.dart';
 import '../features/contacts/data/dio_contacts_repository.dart';
 import '../features/home/data/dio_home_repository.dart';
 import '../features/home/data/home_repository.dart';
-import '../features/instructions/data/in_memory_instructions_repository.dart';
+import '../features/instructions/data/dio_instructions_repository.dart';
 import '../features/instructions/data/instructions_repository.dart';
 import '../features/plan/data/dio_plan_repository.dart';
 import '../features/plan/data/plan_repository.dart';
 
 /// The one place where repositories are chosen: the real contacts API (Phase 3), the
 /// real check-in, schedule and Home APIs (Phase 4), the real plan API (Phase 5) and the
-/// temporary in-memory stand-in for instructions, which stays fake until Phase 6.
+/// real instructions API (Phase 6). Nothing in the app runs on a stand-in any more.
 ///
 /// Each of these is rebuilt whenever the sign-in status changes, so signing out (or a
-/// revoked session) drops everything they hold. When a backend phase lands, only the
-/// provider body changes; no screen or controller knows which implementation it uses.
+/// revoked session) drops everything they hold. No screen or controller knows which
+/// implementation it uses; tests override these providers with fakes that live in
+/// `test/`.
 bool _signedIn(Ref ref) =>
     ref.watch(authControllerProvider) == AuthStatus.signedIn;
 
@@ -55,22 +56,9 @@ final planRepositoryProvider = Provider<PlanRepository>((ref) {
   return DioPlanRepository(dio: ref.watch(apiClientProvider));
 });
 
-/// TEMPORARY: replaced by the instructions API in Phase 6.
+/// REAL (Phase 6): the encrypted instructions and their categories. Bodies are never
+/// cached by the repository.
 final instructionsRepositoryProvider = Provider<InstructionsRepository>((ref) {
   _signedIn(ref);
-  return InMemoryInstructionsRepository();
-});
-
-/// True while any screen still runs on a temporary in-memory repository, that is, while
-/// "your plan is active" would be incomplete because the instructions are not stored.
-/// The screens then say so ([PreviewBanner]) and use preview wording. Trusted contacts
-/// (Phase 3), the check-in schedule (Phase 4) and the plan (Phase 5) are real and never
-/// count here.
-///
-/// This follows the repositories above, so replacing the last one in Phase 6 turns the
-/// notice off with no other change. `test/app/preview_mode_test.dart` is the release
-/// gate: it lists the stand-ins still in use.
-final previewModeProvider = Provider<bool>((ref) {
-  return ref.watch(instructionsRepositoryProvider)
-      is InMemoryInstructionsRepository;
+  return DioInstructionsRepository(dio: ref.watch(apiClientProvider));
 });

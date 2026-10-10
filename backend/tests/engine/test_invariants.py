@@ -135,7 +135,9 @@ class _Releases:
                 planned[step.id] = [SnapshotRelease(uuid.uuid4(), contacts[0])]
         return planned
 
-    async def still_valid(self, session: Any, *, user_id: uuid.UUID, release: Any) -> str | None:
+    async def still_valid(
+        self, session: Any, *, user_id: uuid.UUID, release: Any, step_id: Any
+    ) -> str | None:
         return None if self.valid else "instruction_inactive"
 
 

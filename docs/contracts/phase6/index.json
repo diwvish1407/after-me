@@ -1,0 +1,202 @@
+{
+  "contract": "afterme-phase6",
+  "base_path": "/v1",
+  "notes": [
+    "Values are fictional placeholders; IDs are not real.",
+    "Errors are RFC 9457 application/problem+json; see problems[].",
+    "Title and body exist only as ciphertext on the server; the list never carries a body.",
+    "A recipient is a contact of yours and a stage of yours whose offset is at least 1440 minutes; anything else owned by someone else is 404.",
+    "A stage that holds an instruction cannot be removed: 409 stage_in_use with the IDs.",
+    "While the check-in schedule is active, changing the plan and removing, switching off or re-addressing a contact who is in a stage answer 403 reauth_required until the password has been confirmed (POST /v1/auth/reauth, valid 5 minutes)."
+  ],
+  "endpoints": [
+    {
+      "name": "categories_list",
+      "method": "GET",
+      "path": "/v1/instruction-categories",
+      "auth": "bearer",
+      "status": 200,
+      "request": null,
+      "response": "categories_list.response.json"
+    },
+    {
+      "name": "instructions_list_empty",
+      "method": "GET",
+      "path": "/v1/instructions",
+      "auth": "bearer",
+      "status": 200,
+      "request": null,
+      "response": "instructions_list_empty.response.json"
+    },
+    {
+      "name": "instruction_create",
+      "method": "POST",
+      "path": "/v1/instructions",
+      "auth": "bearer",
+      "status": 201,
+      "request": "instruction_create.request.json",
+      "response": "instruction_create.response.json"
+    },
+    {
+      "name": "instruction_get",
+      "method": "GET",
+      "path": "/v1/instructions/{instruction_id}",
+      "auth": "bearer",
+      "status": 200,
+      "request": null,
+      "response": "instruction_get.response.json"
+    },
+    {
+      "name": "instructions_list",
+      "method": "GET",
+      "path": "/v1/instructions?category=home",
+      "auth": "bearer",
+      "status": 200,
+      "request": null,
+      "response": "instructions_list.response.json"
+    },
+    {
+      "name": "instruction_patch",
+      "method": "PATCH",
+      "path": "/v1/instructions/{instruction_id}",
+      "auth": "bearer",
+      "status": 200,
+      "request": "instruction_patch.request.json",
+      "response": "instruction_patch.response.json"
+    },
+    {
+      "name": "plan_with_release_count",
+      "method": "GET",
+      "path": "/v1/plan",
+      "auth": "bearer",
+      "status": 200,
+      "request": null,
+      "response": "plan_with_release_count.response.json",
+      "response_headers": {
+        "ETag": "\"plan-2\""
+      }
+    },
+    {
+      "name": "instruction_activate",
+      "method": "PATCH",
+      "path": "/v1/instructions/{instruction_id}",
+      "auth": "bearer",
+      "status": 200,
+      "request": "instruction_activate.request.json",
+      "response": "instruction_activate.response.json"
+    },
+    {
+      "name": "plan_with_release_count_active",
+      "method": "GET",
+      "path": "/v1/plan",
+      "auth": "bearer",
+      "status": 200,
+      "request": null,
+      "response": "plan_with_release_count_active.response.json",
+      "response_headers": {
+        "ETag": "\"plan-2\""
+      }
+    },
+    {
+      "name": "schedule_activate",
+      "method": "POST",
+      "path": "/v1/checkin/activate",
+      "auth": "bearer",
+      "status": 200,
+      "request": null,
+      "response": "schedule_activate.response.json",
+      "response_headers": {
+        "ETag": "\"sched-2\""
+      }
+    },
+    {
+      "name": "instruction_delete",
+      "method": "DELETE",
+      "path": "/v1/instructions/{instruction_id}",
+      "auth": "bearer",
+      "status": 204,
+      "request": null,
+      "response": null
+    }
+  ],
+  "problems": [
+    {
+      "name": "problem_release_stage_too_early",
+      "method": "POST",
+      "path": "/v1/instructions",
+      "auth": "bearer",
+      "status": 422,
+      "request": "problem_release_stage_too_early.request.json",
+      "response": "problem_release_stage_too_early.response.json"
+    },
+    {
+      "name": "problem_validation_failed",
+      "method": "POST",
+      "path": "/v1/instructions",
+      "auth": "bearer",
+      "status": 422,
+      "request": "problem_validation_failed.request.json",
+      "response": "problem_validation_failed.response.json"
+    },
+    {
+      "name": "problem_not_found",
+      "method": "GET",
+      "path": "/v1/instructions/{instruction_id}",
+      "auth": "bearer",
+      "status": 404,
+      "request": null,
+      "response": "problem_not_found.response.json"
+    },
+    {
+      "name": "problem_stage_in_use",
+      "method": "PUT",
+      "path": "/v1/plan",
+      "auth": "bearer",
+      "status": 409,
+      "request": "problem_stage_in_use.request.json",
+      "response": "problem_stage_in_use.response.json",
+      "request_headers": {
+        "If-Match": "\"plan-2\""
+      }
+    },
+    {
+      "name": "problem_reauth_plan",
+      "method": "PUT",
+      "path": "/v1/plan",
+      "auth": "bearer",
+      "status": 403,
+      "request": "problem_reauth_plan.request.json",
+      "response": "problem_reauth_plan.response.json",
+      "request_headers": {
+        "If-Match": "\"plan-2\""
+      }
+    },
+    {
+      "name": "problem_reauth_contact_delete",
+      "method": "DELETE",
+      "path": "/v1/contacts/{contact_id}",
+      "auth": "bearer",
+      "status": 403,
+      "request": null,
+      "response": "problem_reauth_contact_delete.response.json"
+    },
+    {
+      "name": "problem_reauth_contact_off",
+      "method": "PATCH",
+      "path": "/v1/contacts/{contact_id}",
+      "auth": "bearer",
+      "status": 403,
+      "request": "problem_reauth_contact_off.request.json",
+      "response": "problem_reauth_contact_off.response.json"
+    },
+    {
+      "name": "problem_reauth_instruction",
+      "method": "DELETE",
+      "path": "/v1/instructions/{instruction_id}",
+      "auth": "bearer",
+      "status": 403,
+      "request": null,
+      "response": "problem_reauth_instruction.response.json"
+    }
+  ]
+}

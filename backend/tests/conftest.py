@@ -39,6 +39,7 @@ from psycopg import sql  # noqa: E402
 
 from app.core.clock import FrozenClock  # noqa: E402
 from app.core.config import Settings  # noqa: E402
+from app.instructions.models import CATEGORY_SEED  # noqa: E402
 from app.main import create_app  # noqa: E402
 from app.models import ALL_TABLES  # noqa: E402
 from app.notifications.email import RecordingEmailProvider  # noqa: E402
@@ -77,11 +78,20 @@ def _clean_tables(request: pytest.FixtureRequest) -> None:
     if "no_db" in request.keywords:
         return
     owner: psycopg.Connection[dict[str, Any]] = request.getfixturevalue("owner_db")
+    # ``instruction_categories`` is reference data seeded by the migration: it stays.
+    cleared = [t for t in ALL_TABLES if t != "instruction_categories"]
     owner.execute(
         sql.SQL("TRUNCATE {} RESTART IDENTITY CASCADE").format(
-            sql.SQL(", ").join(sql.Identifier(t) for t in ALL_TABLES)
+            sql.SQL(", ").join(sql.Identifier(t) for t in cleared)
         )
     )
+    # ... and is put back if an earlier run (or a test that truncates everything) lost it.
+    for category_id, sort_order in CATEGORY_SEED:
+        owner.execute(
+            "INSERT INTO instruction_categories (id, sort_order) VALUES (%s, %s) "
+            "ON CONFLICT (id) DO NOTHING",
+            (category_id, sort_order),
+        )
 
 
 @pytest.fixture

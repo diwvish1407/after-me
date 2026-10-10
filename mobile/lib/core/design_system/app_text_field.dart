@@ -31,6 +31,7 @@ class AppTextField extends StatefulWidget {
     this.textCapitalization = TextCapitalization.none,
     this.suffixIcon,
     this.textAlign = TextAlign.start,
+    this.enableIMEPersonalizedLearning = true,
     super.key,
   });
 
@@ -57,6 +58,10 @@ class AppTextField extends StatefulWidget {
   /// Replaces nothing on password fields (they always get the show/hide toggle).
   final Widget? suffixIcon;
   final TextAlign textAlign;
+
+  /// Whether the keyboard may learn from what is typed. Off for content that must not
+  /// end up in a personal dictionary (instructions).
+  final bool enableIMEPersonalizedLearning;
 
   @override
   State<AppTextField> createState() => _AppTextFieldState();
@@ -87,6 +92,7 @@ class _AppTextFieldState extends State<AppTextField> {
       enabled: widget.enabled,
       obscureText: _obscured,
       enableSuggestions: !widget.obscureText,
+      enableIMEPersonalizedLearning: widget.enableIMEPersonalizedLearning,
       autocorrect: !widget.obscureText,
       keyboardType: widget.keyboardType,
       textInputAction: widget.textInputAction,

@@ -166,6 +166,8 @@ class _StageRow extends StatelessWidget {
                   ? l10n.planStageNobody
                   : l10n.planStageNotify(joinNames(l10n, names)),
             ),
+            if (stage.releaseCount > 0)
+              Text(l10n.planStageReleases(stage.releaseCount)),
           ],
         ),
       ),

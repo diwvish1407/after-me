@@ -31,6 +31,14 @@ EXEMPT: dict[tuple[str, str], str] = {
     ("PortalRepository", "get_contact"): "contact ID proven by an invitation hash or opt-out MAC",
     ("PortalRepository", "answer_invitation"): "UPDATE keyed by the SHA-256 of the presented token",
     ("PortalRepository", "invalidate_invitations"): "contact ID proven by a presented token",
+    (
+        "InstructionRepository",
+        "categories",
+    ): "reference data: the categories are the same for everyone",
+    (
+        "InstructionRepository",
+        "category_exists",
+    ): "reference data: the categories are the same for everyone",
     ("SuppressionRepository", "is_suppressed"): "the suppression list is global by design",
     ("SuppressionRepository", "add"): "the suppression list is global by design",
     ("SuppressionRepository", "lock_address"): "advisory lock keyed by an address hash, no rows",

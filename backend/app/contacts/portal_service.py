@@ -37,6 +37,7 @@ from app.contacts.tokens import (
 )
 from app.notifications.email import EmailMessage
 from app.notifications.mailer import EmailTemplate
+from app.releases.repository import ReleaseRepository
 
 OptOutScope = Literal["this_person", "everyone"]
 
@@ -299,6 +300,9 @@ class ContactPortalService:
         contact.status_changed_at = now
         contact.updated_at = now
         await self.portal.invalidate_invitations(contact.id, now=now)
+        await ReleaseRepository(self.session).revoke_for_contact(
+            owner_id=found.owner_id, contact_id=contact.id, reason="contact_opted_out", now=now
+        )
         await self.services.audit.record(
             self.session,
             self._event(
@@ -350,6 +354,9 @@ class ContactPortalService:
         return outbox
 
     async def _record_opt_out(self, row: OptedOutContact, now: datetime) -> None:
+        await ReleaseRepository(self.session).revoke_for_contact(
+            owner_id=row.owner_id, contact_id=row.contact_id, reason="contact_opted_out", now=now
+        )
         await self.services.audit.record(
             self.session,
             self._event(
