@@ -1,0 +1,13 @@
+Hi {{ contact_name }},
+
+Earlier, AfterMe told you that {{ user_name }} hadn't checked in. We are withdrawing that alert.
+{% if reason == "account_deleted" %}
+{{ user_name }} has closed their AfterMe account, so you won't receive any more messages about this. That is not a confirmation that they are safe. If you were worried, you may still want to reach them.
+{% else %}
+We are withdrawing it because it was sent while our service was not working properly. That does not tell you whether {{ user_name }} is safe, so if you were worried, you may still want to reach them.
+{% endif %}
+Any information shared with you during this time is no longer available.
+
+--
+Stop emails like this: {{ optout_link }}
+AfterMe is not an emergency service.

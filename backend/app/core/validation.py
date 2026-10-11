@@ -26,8 +26,12 @@ _BIDI_AND_INVISIBLE: Final = frozenset(
 )
 _URLISH_RE: Final = re.compile(
     r"(?i)(?:[a-z][a-z0-9+.-]*://|www\.|@|"
-    r"\b[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.(?:[a-z]{2,24}|xn--[a-z0-9-]{2,59})\b)"
+    # a label, a dot, and a top-level domain in any script (example.рф), or its punycode form
+    r"\b[^\W_](?:[\w-]{0,61}[^\W_])?\.(?:[^\W\d_]{2,24}|xn--[a-z0-9-]{2,59})\b)"
 )
+# Dots that are not U+002E: the ideographic and halfwidth full stops (NFKC already folds the
+# fullwidth one). "evil。com" is a web address to a person reading it.
+_DOT_LIKES: Final = str.maketrans({"\u3002": ".", "\uff61": ".", "\u2024": ".", "\ufe52": "."})
 # Latin look-alikes from Cyrillic and Greek, folded before the brand check.
 _CONFUSABLES: Final = str.maketrans(
     "\u0430\u0435\u043e\u0440\u0441\u0442\u043c\u0445\u043a\u043d\u0432\u0456\u0455\u0458\u0501"
@@ -68,15 +72,25 @@ def clean_email(value: object) -> str:
     if not candidate or len(candidate) > MAX_EMAIL_LENGTH:
         raise _fail("invalid_email", "Enter a valid email address.")
     try:
-        validate_email(candidate, check_deliverability=False)
+        validated = validate_email(candidate, check_deliverability=False)
     except EmailNotValidError:
         raise _fail("invalid_email", "Enter a valid email address.") from None
-    return candidate
+    # The domain in its ASCII (IDNA) form and the local part in NFC: two spellings of one mailbox
+    # (``bücher.de`` and ``xn--bcher-kva.de``, composed and decomposed accents) are one address,
+    # so the suppression list, the per-address limits and the duplicate checks cannot be walked
+    # around by changing the spelling.
+    return validated.ascii_email or validated.normalized
 
 
 def normalize_email(value: str) -> str:
-    """The lookup key: ``lower(trim(email))`` (DATABASE §3.1)."""
-    return value.strip().lower()
+    """The lookup key: ``lower(canonical(email))`` (DATABASE §3.1). The same canonical form as
+    :func:`clean_email`, so a form field that was not validated through a model keys the same."""
+    candidate = value.strip()
+    try:
+        validated = validate_email(candidate, check_deliverability=False)
+    except EmailNotValidError:
+        return candidate.lower()
+    return (validated.ascii_email or validated.normalized).lower()
 
 
 EmailField = Annotated[str, BeforeValidator(clean_email)]
@@ -86,8 +100,17 @@ EmailField = Annotated[str, BeforeValidator(clean_email)]
 
 
 def _brand_skeleton(value: str) -> str:
-    folded = unicodedata.normalize("NFKC", value).casefold().translate(_CONFUSABLES)
+    # Accents are dropped before the look-alike fold, so "Áfter Mé" is the brand too.
+    decomposed = unicodedata.normalize("NFKD", value)
+    bare = "".join(ch for ch in decomposed if not unicodedata.combining(ch))
+    folded = unicodedata.normalize("NFKC", bare).casefold().translate(_CONFUSABLES)
     return "".join(ch for ch in folded if ch.isalnum())
+
+
+def _looks_like_a_link(value: str) -> bool:
+    """A web address or an email, in any spelling of its dots and letters."""
+    folded = unicodedata.normalize("NFKC", value).translate(_DOT_LIKES)
+    return _URLISH_RE.search(folded) is not None
 
 
 def clean_display_name(value: object) -> str:
@@ -100,7 +123,7 @@ def clean_display_name(value: object) -> str:
         raise _fail("too_long", f"Use at most {DISPLAY_NAME_MAX} characters.")
     if any(unicodedata.category(ch) == "Cc" or ch in _BIDI_AND_INVISIBLE for ch in name):
         raise _fail("invalid_characters", "The name contains characters that aren't allowed.")
-    if _URLISH_RE.search(name):
+    if _looks_like_a_link(name):
         raise _fail("display_name_link", "Names can't contain links, web addresses or emails.")
     if _BRAND_TERM in _brand_skeleton(name):
         raise _fail("display_name_reserved", "Names can't contain the word AfterMe.")
@@ -127,7 +150,7 @@ def clean_relationship_label(value: object) -> str:
         raise _fail("too_long", f"Use at most {RELATIONSHIP_LABEL_MAX} characters.")
     if any(unicodedata.category(ch) == "Cc" or ch in _BIDI_AND_INVISIBLE for ch in label):
         raise _fail("invalid_characters", "The text contains characters that aren't allowed.")
-    if _URLISH_RE.search(label):
+    if _looks_like_a_link(label):
         raise _fail("contains_link", "This can't contain links, web addresses or emails.")
     return label
 

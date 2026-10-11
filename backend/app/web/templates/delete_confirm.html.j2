@@ -1,0 +1,33 @@
+{% extends "base.html.j2" %}
+{% block title %}Confirm deletion · AfterMe{% endblock %}
+{% block content %}
+<h1>Confirm the deletion of your account</h1>
+<p>Enter your password to delete your AfterMe account.</p>
+<p><strong>This cannot be undone.</strong> Your check-ins stop, your instructions are erased and nothing will be shared with your contacts. If your contacts were already told that you hadn't checked in, they receive an all-clear.</p>
+{% if message %}<p class="notice" role="alert">{{ message }}</p>{% endif %}
+<p id="no-token" class="notice" role="alert" hidden>This page opens from the link in your email. Open that link again to continue.</p>
+<noscript><p class="notice" role="alert">This page needs JavaScript to read the link from your email. Turn it on and open the link again.</p></noscript>
+<form method="post" action="/a/delete/confirm" autocomplete="off">
+<input type="hidden" name="csrf" value="{{ csrf }}">
+<input type="hidden" name="token" id="token" value="{{ token }}">
+<label for="password">Password</label>
+<input type="password" name="password" id="password" autocomplete="current-password" maxlength="128" required>
+<button type="submit" id="submit">Delete my account</button>
+</form>
+{% endblock %}
+{% block script %}
+<script nonce="{{ nonce }}">
+(function () {
+  var field = document.getElementById("token");
+  var hash = window.location.hash.replace(/^#/, "");
+  if (hash && field) {
+    field.value = hash;
+    window.history.replaceState(null, "", window.location.pathname + window.location.search);
+  }
+  if (!field || !field.value) {
+    document.getElementById("no-token").hidden = false;
+    document.getElementById("submit").disabled = true;
+  }
+})();
+</script>
+{% endblock %}

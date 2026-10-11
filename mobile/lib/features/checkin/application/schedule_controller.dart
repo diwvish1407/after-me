@@ -4,7 +4,9 @@ import '../../../app/repository_providers.dart';
 import '../../../core/api/failures/app_failure.dart';
 import '../../../core/api/failures/failure_mapper.dart';
 import '../../../core/auth/auth_controller.dart';
+import '../../../core/auth/session_epoch.dart';
 import '../../auth/application/me_controller.dart';
+import '../../incidents/application/safe_controller.dart';
 import '../data/schedule_repository.dart';
 import 'checkin_controller.dart';
 
@@ -16,8 +18,15 @@ import 'checkin_controller.dart';
 /// (the schedule was changed somewhere else) reads the latest version first, so the
 /// screen shows what is really saved when it explains that.
 class ScheduleController extends AsyncNotifier<ScheduleSnapshot?> {
+  /// A read or a change that was started for the account that signed out must never
+  /// land in the one that signed in after it.
+  final SessionEpoch _session = SessionEpoch();
+
+  bool _alive(int session) => ref.mounted && _session.isCurrent(session);
+
   @override
   Future<ScheduleSnapshot?> build() async {
+    _session.next();
     if (ref.watch(authControllerProvider) != AuthStatus.signedIn) {
       return null;
     }
@@ -35,6 +44,14 @@ class ScheduleController extends AsyncNotifier<ScheduleSnapshot?> {
     ref.listen(checkInControllerProvider, (previous, next) {
       if (next.phase == CheckInPhase.success &&
           previous?.phase != CheckInPhase.success) {
+        reload();
+      }
+    });
+    // I'M SAFE restarts the schedule exactly as a check-in does, and the incident that
+    // locked it is over.
+    ref.listen(safeControllerProvider, (previous, next) {
+      if (next.phase == SafePhase.success &&
+          previous?.phase != SafePhase.success) {
         reload();
       }
     });
@@ -59,13 +76,21 @@ class ScheduleController extends AsyncNotifier<ScheduleSnapshot?> {
   /// Reads the schedule again and returns the failure, or null. The snapshot already on
   /// screen stays when the refresh fails.
   Future<AppFailure?> reload() async {
+    final session = _session.current;
     if (!state.hasValue) {
       state = const AsyncLoading<ScheduleSnapshot?>();
     }
     try {
-      state = AsyncData(await _run(_repository.get));
+      final snapshot = await _run(_repository.get);
+      if (!_alive(session)) {
+        return null;
+      }
+      state = AsyncData(snapshot);
       return null;
     } on AppFailure catch (failure) {
+      if (!_alive(session)) {
+        return null;
+      }
       if (!state.hasValue) {
         state = AsyncError<ScheduleSnapshot?>(failure, StackTrace.current);
       }
@@ -79,8 +104,11 @@ class ScheduleController extends AsyncNotifier<ScheduleSnapshot?> {
     if (current != null) {
       return current;
     }
+    final session = _session.current;
     final loaded = await _run(_repository.get);
-    state = AsyncData(loaded);
+    if (_alive(session)) {
+      state = AsyncData(loaded);
+    }
     return loaded;
   }
 
@@ -88,11 +116,14 @@ class ScheduleController extends AsyncNotifier<ScheduleSnapshot?> {
   /// A 412 re-reads the schedule and rethrows.
   Future<ScheduleSnapshot> save(CheckInSchedule schedule) async {
     final base = await _base();
+    final session = _session.current;
     try {
       final saved = await _run(
         () => _repository.save(schedule, ifMatch: base.ifMatch),
       );
-      state = AsyncData(saved);
+      if (_alive(session)) {
+        state = AsyncData(saved);
+      }
       return saved;
     } on ConflictFailure catch (failure) {
       if (failure.code == 'precondition_failed' ||
@@ -106,16 +137,22 @@ class ScheduleController extends AsyncNotifier<ScheduleSnapshot?> {
   /// Turns check-ins on. Already on is a 200 with nothing changed. A 409
   /// `activation_requirements_unmet` is an [ActivationRequirementsFailure].
   Future<ScheduleSnapshot> activate() async {
+    final session = _session.current;
     final saved = await _run(_repository.activate);
-    state = AsyncData(saved);
+    if (_alive(session)) {
+      state = AsyncData(saved);
+    }
     return saved;
   }
 
   /// Turns check-ins off. The server wants a recent re-authentication (403
   /// `reauth_required`): wrap the call in `withReauth`.
   Future<ScheduleSnapshot> deactivate() async {
+    final session = _session.current;
     final saved = await _run(_repository.deactivate);
-    state = AsyncData(saved);
+    if (_alive(session)) {
+      state = AsyncData(saved);
+    }
     return saved;
   }
 }

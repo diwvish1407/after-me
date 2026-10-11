@@ -26,9 +26,15 @@ SECURE_PROD = {
     "argon2_memory_cost_kib": 65536,
     "argon2_parallelism": 4,
     "trusted_proxy_hops": 1,
-    "worker_database_url": "postgresql+psycopg://afterme_worker:secret@db/afterme",
+    "worker_database_url": "postgresql+psycopg://afterme_worker:secret@db/afterme?sslmode=verify-full",
+    "maintenance_database_url": (
+        "postgresql+psycopg://afterme_maintenance:secret@db/afterme?sslmode=verify-full"
+    ),
     "probe_token": "p" * 48,
     "kms_provider": "gcp_kms",  # the local KMS keeps the KEK in the environment: dev/test only
+    "push_provider": "fcm",
+    "fcm_project_id": "afterme-prod",
+    "email_from": "AfterMe <alerts@mail.afterme.example>",
 }
 
 
@@ -336,15 +342,17 @@ def test_production_keeps_the_fail_safe_floors(env: str) -> None:
 @pytest.mark.parametrize("env", ["prod", "staging"])
 def test_production_needs_a_worker_url_and_a_probe_token(env: str) -> None:
     values = make_settings().model_dump()
-    for name in ("worker_database_url", "probe_token"):
-        values.pop(name)
+    names = ("worker_database_url", "maintenance_database_url", "probe_token")
+    for name in names:
+        values.pop(name, None)
     values.update({**SECURE_PROD, "app_env": env, "email_provider": "recording"})
-    for name in ("worker_database_url", "probe_token"):
+    for name in names:
         values.pop(name)
     with pytest.raises(ValidationError) as excinfo:
         Settings(**values)
     message = _problems(excinfo.value)
     assert "WORKER_DATABASE_URL must be set explicitly" in message
+    assert "MAINTENANCE_DATABASE_URL must be set explicitly" in message
     assert "PROBE_TOKEN is required" in message
 
 
@@ -354,3 +362,45 @@ def test_production_refuses_the_local_kms(env: str) -> None:
     with pytest.raises(ValidationError) as excinfo:
         make_settings(**{**SECURE_PROD, "app_env": env, "kms_provider": "local"})
     assert "KMS_PROVIDER=local" in _problems(excinfo.value)
+
+
+# --- Phase 9: refusals that fail closed ---------------------------------------------------------
+
+
+@pytest.mark.parametrize("env", ["prod", "staging"])
+def test_production_refuses_debug_logging_and_an_unprotected_database_link(
+    env: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(config_module, "DEV_ONLY_EMAIL_PROVIDERS", frozenset())
+    values = make_settings().model_dump()
+    values.update({**SECURE_PROD, "app_env": env})
+    assert Settings(**values).log_level == "INFO"
+
+    with pytest.raises(ValidationError, match="LOG_LEVEL must not be DEBUG"):
+        Settings(**{**values, "log_level": "DEBUG"})
+    plain = "postgresql+psycopg://afterme_worker:secret@db.internal/afterme"
+    with pytest.raises(ValidationError, match="WORKER_DATABASE_URL must require TLS"):
+        Settings(**{**values, "worker_database_url": plain})
+    with pytest.raises(ValidationError, match="WORKER_DATABASE_URL must require TLS"):
+        Settings(**{**values, "worker_database_url": plain + "?sslmode=disable"})
+    # a proxy on this machine carries the TLS: loopback is fine
+    local = "postgresql+psycopg://afterme_worker:secret@127.0.0.1/afterme"
+    assert Settings(**{**values, "worker_database_url": local}).app_env.value == env
+
+
+def test_a_development_process_will_not_use_a_database_elsewhere() -> None:
+    """A process that is "dev" only because AFTERME_APP_ENV was forgotten would carry the
+    development key-encryption key and console mail to a real database."""
+    remote = "postgresql+psycopg://afterme_api:secret@db.internal/afterme"
+    with pytest.raises(ValidationError, match="not on this machine"):
+        make_settings(database_url=remote)
+    assert make_settings(database_url=remote.replace("db.internal", "localhost"))
+
+
+def test_the_environment_must_be_chosen_unless_this_is_a_workstation(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.delenv("AFTERME_APP_ENV", raising=False)
+    monkeypatch.setattr(config_module, "DOTENV_PATH", tmp_path / "no.env")
+    with pytest.raises(config_module.ConfigurationError, match="AFTERME_APP_ENV is not set"):
+        config_module.load_settings()

@@ -4,22 +4,26 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
 
+import '../../../app/router.dart';
 import '../../../app/theme/dimens.dart';
 import '../../../core/api/failures/app_failure.dart';
 import '../../../core/design_system/design_system.dart';
+import '../../../core/freshness/stale_data.dart';
 import '../../../core/time/time_format.dart';
 import '../../../l10n/gen/app_localizations.dart';
 import '../../checkin/application/schedule_controller.dart';
 import '../../contacts/application/contacts_controller.dart';
 import '../../contacts/data/contacts_repository.dart';
 import '../../onboarding/application/onboarding_controller.dart';
+import '../../settings/presentation/settings_widgets.dart';
 import '../application/plan_controller.dart';
 import '../data/plan_repository.dart';
 import 'plan_preview.dart';
 
 /// The Plan tab (USER_FLOWS.md §10): the grace period, who is told at each stage and
-/// what would happen, as the server has it. Read-only for now: the plan is changed
-/// through the plan step ("Set up your plan"); a full editor arrives in a later phase.
+/// what would happen, as the server has it, and the way into the plan editor and into
+/// the past incidents. A plan that has no stage yet is set up through the plan step
+/// ("Set up your plan").
 class PlanScreen extends ConsumerWidget {
   const PlanScreen({super.key});
 
@@ -30,7 +34,18 @@ class PlanScreen extends ConsumerWidget {
     final data = plan.value;
     final Widget content;
     if (data != null) {
-      content = data.stages.isEmpty ? const _NoPlan() : _PlanView(plan: data);
+      content = Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const StaleDataNote(area: DataArea.plan),
+          if (data.stages.isEmpty) ...[
+            const _NoPlan(),
+            Gap.md,
+            const _HistoryRow(),
+          ] else
+            _PlanView(plan: data),
+        ],
+      );
     } else if (plan.hasError) {
       content = ErrorView(
         failure: plan.error is AppFailure
@@ -76,6 +91,23 @@ class _NoPlan extends StatelessWidget {
   }
 }
 
+/// "Past incidents": the same screen Settings opens (USER_FLOWS.md §10 puts the history
+/// in the Plan tab, §11 in Settings), not a second copy of it.
+class _HistoryRow extends StatelessWidget {
+  const _HistoryRow();
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return SettingsTile(
+      icon: Icons.history_rounded,
+      title: l10n.settingsIncidents,
+      subtitle: l10n.settingsIncidentsSubtitle,
+      onTap: () => context.push(AppRoutes.settingsIncidents),
+    );
+  }
+}
+
 class _PlanView extends ConsumerWidget {
   const _PlanView({required this.plan});
 
@@ -108,6 +140,13 @@ class _PlanView extends ConsumerWidget {
             ],
           ),
         ),
+        Gap.md,
+        AppButton.primary(
+          label: l10n.planEditAction,
+          icon: Icons.edit_outlined,
+          onPressed: () => context.push(AppRoutes.planEdit),
+          expand: true,
+        ),
         if (schedule != null) ...[
           Gap.lg,
           Semantics(
@@ -124,9 +163,14 @@ class _PlanView extends ConsumerWidget {
               dueMinutes: schedule.dueMinutes,
               plan: plan.toDraft(),
               contacts: contacts,
+              releaseCounts: {
+                for (final stage in plan.stages) stage.id: stage.releaseCount,
+              },
             ),
           ),
         ],
+        Gap.lg,
+        const _HistoryRow(),
       ],
     );
   }

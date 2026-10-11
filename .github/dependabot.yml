@@ -1,0 +1,34 @@
+# Weekly update pull requests for every dependency file in the repository (SECURITY §15: critical
+# advisories are patched within 72 hours; the weekly scan in .github/workflows/security.yml tells
+# us when one lands, and these pull requests are how the fix arrives).
+version: 2
+updates:
+  - package-ecosystem: "uv"
+    directory: "/backend"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    groups:
+      python-minor-and-patch:
+        update-types: ["minor", "patch"]
+
+  - package-ecosystem: "pub"
+    directory: "/mobile"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    groups:
+      dart-minor-and-patch:
+        update-types: ["minor", "patch"]
+
+  - package-ecosystem: "gradle"
+    directory: "/mobile/android"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5

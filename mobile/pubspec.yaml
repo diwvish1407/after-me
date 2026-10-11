@@ -18,8 +18,11 @@ dependencies:
   cupertino_icons: ^2.0.0
   device_info_plus: ^13.3.0
   dio: ^5.11.1
+  firebase_core: ^4.15.0
+  firebase_messaging: ^16.7.0
   flutter:
     sdk: flutter
+  flutter_local_notifications: ^22.3.1
   flutter_localizations:
     sdk: flutter
   flutter_riverpod: ^3.4.3
@@ -41,6 +44,11 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  # Part of the Flutter SDK. Drives the real app on an emulator against the dev backend
+  # (integration_test/, MOB-61..65). Dev-only: it never reaches a release build or the
+  # merged prod manifest.
+  integration_test:
+    sdk: flutter
   flutter_lints: ^6.0.0
   build_runner: ^2.16.2
   freezed: ^4.0.2
@@ -49,6 +57,9 @@ dev_dependencies:
   shared_preferences_platform_interface: ^2.4.2
   fake_async: ^1.3.3
   url_launcher_platform_interface: ^2.3.2
+  firebase_core_platform_interface: ^8.1.1
+  firebase_messaging_platform_interface: ^4.10.0
+  plugin_platform_interface: ^2.1.8
 
 flutter:
   # Material icon font (used by package:material_ui Icons).

@@ -503,23 +503,30 @@ void main() {
       expect(_buttonState(tester), CheckInButtonState.success);
     });
 
-    testWidgets('safe_required: explains, and I\'M OK is off', (tester) async {
+    testWidgets('safe_required: explains, I\'M OK is off and I\'M SAFE is '
+        'offered', (tester) async {
       final fakes = _fakes(contacts: [testContact()], active: true);
       fakes.server
         ..openIncident(details: {'id': 'i-1'})
         ..contactsMessaged = true;
       await openApp(tester, fakes: fakes, route: AppRoutes.home);
-      // An incident is open: the neutral placeholder first.
+      // An incident this app version cannot read: the neutral placeholder first.
       expect(find.text('Your check-in is overdue'), findsOneWidget);
       await _tapCheckIn(tester);
       await tester.pumpAndSettle();
       expect(find.text("Please confirm you're safe"), findsOneWidget);
       expect(
-        find.textContaining(
-          'That isn\'t available in this version of AfterMe yet',
+        find.text(
+          "Your contacts have been notified, so confirming that you're safe "
+          'is what stops your plan.',
         ),
         findsOneWidget,
       );
+      expect(
+        find.textContaining('isn\'t available in this version'),
+        findsNothing,
+      );
+      expect(find.text("I'M SAFE"), findsOneWidget);
       expect(_buttonState(tester), CheckInButtonState.disabled);
       expect(fakes.server.recorded, 0);
     });
@@ -796,9 +803,8 @@ void main() {
       expect(fakes.server.recorded, 1);
     });
 
-    testWidgets('an error that retrying cannot fix is shown plainly', (
-      tester,
-    ) async {
+    testWidgets('an error that retrying cannot fix is shown plainly, and I\'M '
+        'OK stays within reach', (tester) async {
       final fakes = _fakes();
       fakes.server.failures['home'] = [const UpgradeRequiredFailure()];
       await openApp(tester, fakes: fakes, route: AppRoutes.home);
@@ -806,7 +812,57 @@ void main() {
         find.text('Please update AfterMe to keep your plan running.'),
         findsOneWidget,
       );
-      expect(find.byType(CheckInButton), findsNothing);
+      expect(find.text('We can\'t show your latest status'), findsOneWidget);
+      expect(
+        find.text('Offline — showing last known status'),
+        findsNothing,
+        reason: 'it is not "offline"',
+      );
+      // It used to be only the message: no I'M OK, no way to retry.
+      expect(find.byType(CheckInButton), findsOneWidget);
+      expect(_buttonState(tester), CheckInButtonState.idle);
+      expect(find.text('Try again'), findsOneWidget);
+    });
+
+    testWidgets('a refusal of the aggregate does not hide a check-in that is '
+        'still waiting', (tester) async {
+      final fakes = _fakes(contacts: [testContact()], active: true);
+      await _keepTap(fakes, age: const Duration(hours: 1));
+      // The phone is offline for check-ins; the aggregate is refused (not "offline").
+      fakes.server.failures['checkIn'] = [
+        for (var i = 0; i < 5; i++) const NetworkFailure(),
+      ];
+      fakes.server.failures['home'] = [
+        const ForbiddenFailure(code: 'forbidden'),
+      ];
+      await openApp(tester, fakes: fakes, route: AppRoutes.home);
+
+      expect(
+        find.text("That isn't available for your account."),
+        findsOneWidget,
+      );
+      expect(
+        find.text("Not received yet — we'll keep trying"),
+        findsOneWidget,
+        reason: 'the waiting tap is shown, with its own button',
+      );
+      expect(_buttonState(tester), CheckInButtonState.pending);
+      expect(
+        find.textContaining('You can still tap I\'M OK'),
+        findsNothing,
+        reason: 'a tap is already waiting',
+      );
+    });
+
+    testWidgets('a refused aggregate with nothing waiting says I\'M OK still '
+        'works, and it does', (tester) async {
+      final fakes = _fakes(contacts: [testContact()], active: true);
+      fakes.server.failures['home'] = [const NotFoundFailure()];
+      await openApp(tester, fakes: fakes, route: AppRoutes.home);
+      expect(find.textContaining('You can still tap I\'M OK'), findsOneWidget);
+      await _tapCheckIn(tester);
+      await tester.pumpAndSettle();
+      expect(fakes.server.recorded, 1);
     });
 
     testWidgets('a status from a newer server claims nothing', (tester) async {
@@ -1022,8 +1078,9 @@ void main() {
 
       await tapText(tester, 'Review your plan');
       await tester.pumpAndSettle();
-      expect(find.text('Your plan'), findsOneWidget);
-      expect(find.text('Use this plan'), findsOneWidget);
+      // Check-ins are on: the plan editor, not the set-up step of onboarding.
+      expect(find.text('Edit your plan'), findsWidgets);
+      expect(find.text('Use this plan'), findsNothing);
     });
 
     testWidgets('a stage that tells nobody: review the plan', (tester) async {
@@ -1210,10 +1267,29 @@ void main() {
       expect(find.text(noContacts), findsNothing);
       expect(find.text(noStages), findsOneWidget);
 
-      // Save the plan through the step the banner opens (check-ins are on: password).
+      // Save the plan through the editor the banner opens (check-ins are on: password).
       await tapText(tester, 'Review your plan');
       await tester.pumpAndSettle();
-      await tapText(tester, 'Use this plan');
+      expect(find.text('Edit your plan'), findsWidgets);
+      await tapText(tester, 'Add a stage');
+      await tester.pumpAndSettle();
+      final choose = find.byWidgetPredicate(
+        (w) =>
+            w is Semantics &&
+            w.properties.label == 'Choose who is told at stage 1',
+      );
+      await tester.ensureVisible(choose);
+      await tester.pump();
+      await tester.tap(choose);
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(CheckboxListTile, 'Mom'));
+      await tester.pump();
+      await tester.tap(find.widgetWithText(FilledButton, 'Use these people'));
+      await tester.pumpAndSettle();
+      final save = find.widgetWithText(FilledButton, 'Save changes');
+      await tester.ensureVisible(save);
+      await tester.pump();
+      await tester.tap(save);
       for (var i = 0; i < 10; i++) {
         await tester.pump(const Duration(milliseconds: 100));
       }

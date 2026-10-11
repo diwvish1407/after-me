@@ -1,0 +1,7 @@
+{
+  "platform": "android",
+  "app_version": "1.0.0+12",
+  "os_version": "15",
+  "locale": "en-IN",
+  "push_token": "fcm-token-example-xxxxxxxxxxxxxxxxxxxxxxxx"
+}

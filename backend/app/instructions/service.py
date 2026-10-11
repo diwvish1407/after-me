@@ -17,6 +17,7 @@ from app.api.container import AppServices
 from app.api.deps import CurrentUser, RequestContext, has_fresh_reauth
 from app.audit import writer as audit
 from app.auth.base import AuthServiceBase
+from app.auth.guards import ensure_owner_active
 from app.checkins.models import CheckinConfiguration
 from app.checkins.repository import CheckinConfigRepository
 from app.contacts.repository import ContactRepository
@@ -75,6 +76,16 @@ class InstructionService(AuthServiceBase):
             await self._summary(row, [r for r in recipients if r.instruction_id == row.id])
             for row in rows
         ]
+        await self.services.audit.record(
+            self.session,
+            self._event(
+                audit.INSTRUCTION_VIEWED,
+                await self._now(),
+                current.user_id,
+                resource_type="instruction",
+                count=len(rows),
+            ),
+        )
         await self.session.commit()
         return InstructionList(items=summaries)
 
@@ -85,6 +96,17 @@ class InstructionService(AuthServiceBase):
         if row is None:
             raise NotFound
         out = await self._full(row)
+        await self.services.audit.record(
+            self.session,
+            self._event(
+                audit.INSTRUCTION_VIEWED,
+                await self._now(),
+                current.user_id,
+                resource_type="instruction",
+                resource_id=row.id,
+                count=1,
+            ),
+        )
         await self.session.commit()
         return out
 
@@ -294,6 +316,7 @@ class InstructionService(AuthServiceBase):
         )
         if config is None:  # pragma: no cover - created at signup verification
             raise NotFound
+        await ensure_owner_active(self.session, current.user_id)
         return config
 
     @staticmethod
@@ -387,7 +410,7 @@ class InstructionService(AuthServiceBase):
             category=row.category_id,
             title=title,
             status=row.status,  # type: ignore[arg-type]
-            recipients=[_recipient_out(r) for r in recipients],
+            recipients=[recipient_out(r) for r in recipients],
             updated_at=row.updated_at,
         )
 
@@ -400,13 +423,13 @@ class InstructionService(AuthServiceBase):
             title=title,
             body=text,
             status=row.status,  # type: ignore[arg-type]
-            recipients=[_recipient_out(r) for r in recipients],
+            recipients=[recipient_out(r) for r in recipients],
             updated_at=row.updated_at,
             created_at=row.created_at,
         )
 
 
-def _recipient_out(row: RecipientRow) -> RecipientOut:
+def recipient_out(row: RecipientRow) -> RecipientOut:
     return RecipientOut(
         contact_id=row.contact_id,
         display_name=row.display_name,

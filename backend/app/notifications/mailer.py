@@ -6,7 +6,7 @@ for a new code). Phase 8 replaces this with the transactional outbox and dispatc
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Awaitable, Callable, Sequence
 from enum import StrEnum
 from pathlib import Path
 from typing import Any, Final
@@ -14,7 +14,13 @@ from typing import Any, Final
 from jinja2 import Environment, FileSystemLoader, StrictUndefined, select_autoescape
 
 from app.core.logging import get_logger
-from app.notifications.email import EmailMessage, EmailProvider, new_idempotency_key
+from app.notifications.email import (
+    EmailMessage,
+    EmailProvider,
+    ProviderResult,
+    new_idempotency_key,
+)
+from app.notifications.html import text_to_html
 
 _TEMPLATE_DIR: Final = Path(__file__).with_name("templates") / "email"
 _log = get_logger("afterme.email")
@@ -51,7 +57,14 @@ class EmailTemplate(StrEnum):
     CONTACT_ALERT_WITH_RELEASE = "contact_alert_with_release"
     CONTACT_RELEASE = "contact_release"
     CONTACT_ALL_CLEAR = "contact_all_clear"
+    CONTACT_ALERT_WITHDRAWN = "contact_alert_withdrawn"
+    ALERT_WITHDRAWN_NOTICE = "alert_withdrawn_notice"
+    CONTACT_UNREACHABLE = "contact_unreachable"
     PORTAL_CODE = "portal_code"
+    # Phase 7: account deletion.
+    ACCOUNT_DELETION_LINK = "account_deletion_link"
+    ACCOUNT_DELETION_REQUESTED = "account_deletion_requested"
+    WEB_LOGIN_NOTICE = "web_login_notice"
 
 
 _SUBJECTS: Final[dict[EmailTemplate, str]] = {
@@ -85,7 +98,18 @@ _SUBJECTS: Final[dict[EmailTemplate, str]] = {
     EmailTemplate.CONTACT_RELEASE: "{user_name} left information for you",
     EmailTemplate.PORTAL_CODE: "Your AfterMe code",
     EmailTemplate.CONTACT_ALL_CLEAR: "{user_name} has checked in. All clear.",
+    EmailTemplate.CONTACT_ALERT_WITHDRAWN: "The earlier alert about {user_name} is withdrawn",
+    EmailTemplate.ALERT_WITHDRAWN_NOTICE: "We withdrew an alert about you. Please check in",
+    EmailTemplate.CONTACT_UNREACHABLE: "We couldn't reach {contact_name}",
+    EmailTemplate.ACCOUNT_DELETION_LINK: "Confirm the deletion of your AfterMe account",
+    EmailTemplate.ACCOUNT_DELETION_REQUESTED: "Your AfterMe account is scheduled for deletion",
+    EmailTemplate.WEB_LOGIN_NOTICE: "Your AfterMe account was signed in on the web",
 }
+
+
+# The address a deleted account is given: it cannot receive mail, and nothing should be sent
+# to it. ``Mailer.deliver`` drops anything addressed here.
+DELETED_ADDRESS_SUFFIX: Final = "@deleted.invalid"
 
 
 def mask_email(address: str) -> str:
@@ -95,9 +119,17 @@ def mask_email(address: str) -> str:
     return f"{local[:1]}***@{domain}" if domain else "***"
 
 
+# Called with each message the provider accepted and its result: used to remember who a
+# contact-bound direct message was about (``email_receipts``). Must not raise into the caller.
+ReceiptSink = Callable[[EmailMessage, ProviderResult], Awaitable[None]]
+
+
 class Mailer:
-    def __init__(self, provider: EmailProvider, *, sender: str) -> None:
+    def __init__(
+        self, provider: EmailProvider, *, sender: str, receipts: ReceiptSink | None = None
+    ) -> None:
         self.provider = provider
+        self._receipts = receipts
         self._sender = sender
         self._env = Environment(
             loader=FileSystemLoader(_TEMPLATE_DIR),
@@ -115,14 +147,22 @@ class Mailer:
             text=body,
             template=template.value,
             sender=self._sender,
+            html=text_to_html(body),
         )
 
     async def deliver(self, messages: Sequence[EmailMessage]) -> None:
         """Send after COMMIT. A failure is logged (template and error class only) and swallowed:
         the request already succeeded and must not fail because of email."""
         for message in messages:
+            if message.to.lower().endswith(DELETED_ADDRESS_SUFFIX):
+                continue  # the account was closed: there is nobody to tell
             try:
-                await self.provider.send(message, idempotency_key=new_idempotency_key())
+                result = await self.provider.send(message, idempotency_key=new_idempotency_key())
+                if self._receipts is not None and message.contact_id is not None:
+                    try:
+                        await self._receipts(message, result)
+                    except Exception as exc:  # a receipt is a convenience, never a failure
+                        _log.warning("email.receipt_failed", error_class=type(exc).__name__)
             except Exception as exc:  # provider failures must not fail the request
                 _log.warning(
                     "email.send_failed",

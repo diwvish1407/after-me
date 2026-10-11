@@ -62,13 +62,14 @@ class RecordingSecureStore extends InMemorySecureStore {
 TokenResponse tokenResponse({
   String access = 'access-1',
   String refresh = 'refresh-1',
+  String userId = 'user-1',
 }) => TokenResponse(
   accessToken: access,
   accessTokenExpiresAt: DateTime.utc(2026, 10, 8, 10, 15),
   refreshToken: refresh,
   sessionId: 'session-1',
   deviceId: 'device-1',
-  user: const TokenUser(id: 'user-1', email: 'd@example.com', tier: 'free'),
+  user: TokenUser(id: userId, email: 'd@example.com', tier: 'free'),
 );
 
 RefreshResponse refreshResponse({

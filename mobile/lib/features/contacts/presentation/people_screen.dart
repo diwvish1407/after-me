@@ -9,6 +9,7 @@ import '../../../app/theme/dimens.dart';
 import '../../../app/theme/tokens.dart';
 import '../../../core/api/failures/app_failure.dart';
 import '../../../core/design_system/design_system.dart';
+import '../../../core/freshness/stale_data.dart';
 import '../../../l10n/gen/app_localizations.dart';
 import '../../onboarding/application/setup_controller.dart';
 import '../application/contacts_controller.dart';
@@ -36,11 +37,44 @@ void addContactOrExplainLimit(BuildContext context, WidgetRef ref) {
 }
 
 /// People: the trusted contacts, their status, and the way to add more (USER_FLOWS §8).
-class PeopleScreen extends ConsumerWidget {
+///
+/// A contact accepts the invitation somewhere this app cannot see, so the list is read
+/// again whenever the tab comes back into view (and when Home's counts disagree with it,
+/// see `HomeController`). It is read silently: the list on screen stays, with its scroll
+/// position, until the new one replaces it.
+class PeopleScreen extends ConsumerStatefulWidget {
   const PeopleScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<PeopleScreen> createState() => _PeopleScreenState();
+}
+
+class _PeopleScreenState extends ConsumerState<PeopleScreen> {
+  /// Whether the screen was on view the last time its surroundings changed; null before
+  /// the first build (which loads the list by itself).
+  bool? _onView;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // The shell keeps every tab alive and switches off the animations of the hidden ones
+    // (and a page pushed above also hides this one), so this is "became visible".
+    final onView = TickerMode.valuesOf(context).enabled;
+    final cameBack = _onView == false && onView;
+    _onView = onView;
+    if (cameBack) {
+      unawaited(
+        Future<void>.microtask(() {
+          if (mounted) {
+            unawaited(ref.read(contactsControllerProvider.notifier).reload());
+          }
+        }),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final contacts = ref.watch(contactsControllerProvider);
     // Loaded here so that Add knows the limit before it opens.
@@ -85,15 +119,22 @@ class PeopleScreen extends ConsumerWidget {
             child: contacts.when(
               skipLoadingOnReload: true,
               data: (items) => items.isEmpty
-                  ? EmptyState(
-                      icon: Icons.people_outline_rounded,
-                      title: l10n.peopleEmptyTitle,
-                      message: l10n.peopleEmptyBody,
-                      action: AppButton.primary(
-                        label: l10n.peopleAddContact,
-                        icon: Icons.person_add_alt_1_outlined,
-                        onPressed: () => addContactOrExplainLimit(context, ref),
-                      ),
+                  ? Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        const StaleDataNote(area: DataArea.contacts),
+                        EmptyState(
+                          icon: Icons.people_outline_rounded,
+                          title: l10n.peopleEmptyTitle,
+                          message: l10n.peopleEmptyBody,
+                          action: AppButton.primary(
+                            label: l10n.peopleAddContact,
+                            icon: Icons.person_add_alt_1_outlined,
+                            onPressed: () =>
+                                addContactOrExplainLimit(context, ref),
+                          ),
+                        ),
+                      ],
                     )
                   : _ContactList(
                       contacts: items,
@@ -133,6 +174,7 @@ class _ContactList extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        const StaleDataNote(area: DataArea.contacts),
         _ReadinessHint(
           readiness: peopleReadiness(contacts, planContactIds: planContactIds),
           unreachable: unreachableCount(contacts),

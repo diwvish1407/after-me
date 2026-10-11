@@ -25,7 +25,10 @@ from app.core.middleware import (
     RequestContextMiddleware,
 )
 from app.notifications.email import EmailProvider
+from app.notifications.router import router as webhooks_router
 from app.ops.router import router as ops_router
+from app.testsupport.router import router as test_support_router
+from app.web.account_router import router as account_web_router
 from app.web.contact_router import router as contact_web_router
 from app.web.release_router import router as release_web_router
 from app.web.router import router as web_router
@@ -90,9 +93,16 @@ def create_app(
     app.include_router(health_router)
     include_v1_routers(app)
     app.include_router(ops_router)
+    app.include_router(webhooks_router)
     app.include_router(web_router)
+    app.include_router(account_web_router)
     app.include_router(release_web_router)  # before /c: its paths are more specific
     app.include_router(contact_web_router)
+    if settings.test_support_enabled:  # refused by configuration in production
+        if settings.is_production_like:  # a second lock: Settings validation is the first
+            msg = "test support must never be mounted in a production-like environment"
+            raise RuntimeError(msg)
+        app.include_router(test_support_router)
     return app
 
 

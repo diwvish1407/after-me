@@ -1,0 +1,59 @@
+{
+  "contract": "afterme-phase8",
+  "base_path": "/v1",
+  "notes": [
+    "Values are fictional placeholders; IDs are not real.",
+    "Errors are RFC 9457 application/problem+json; see problems[].",
+    "PUT /v1/devices/current is how the app hands over its FCM registration token; the token is never echoed back. Omitting push_token keeps the registered one, null removes it.",
+    "push_payloads.json lists, for every push type, the `message` the server sends to FCM (minus the token). The app must act only on `data.type` and `data.incident_id` and must fetch everything else from the API: a payload carries no authority (SECURITY T21)."
+  ],
+  "endpoints": [
+    {
+      "name": "device_register",
+      "method": "PUT",
+      "path": "/v1/devices/current",
+      "auth": "bearer",
+      "status": 200,
+      "request": "device_register.request.json",
+      "response": "device_register.response.json"
+    },
+    {
+      "name": "device_keep_token",
+      "method": "PUT",
+      "path": "/v1/devices/current",
+      "auth": "bearer",
+      "status": 200,
+      "request": "device_keep_token.request.json",
+      "response": "device_keep_token.response.json"
+    },
+    {
+      "name": "device_remove_token",
+      "method": "PUT",
+      "path": "/v1/devices/current",
+      "auth": "bearer",
+      "status": 200,
+      "request": "device_remove_token.request.json",
+      "response": "device_remove_token.response.json"
+    },
+    {
+      "name": "device_push_token_delete",
+      "method": "DELETE",
+      "path": "/v1/devices/current/push-token",
+      "auth": "bearer",
+      "status": 204,
+      "request": null,
+      "response": null
+    }
+  ],
+  "problems": [
+    {
+      "name": "problem_device_bad_token",
+      "method": "PUT",
+      "path": "/v1/devices/current",
+      "auth": "bearer",
+      "status": 422,
+      "request": "problem_device_bad_token.request.json",
+      "response": "problem_device_bad_token.response.json"
+    }
+  ]
+}

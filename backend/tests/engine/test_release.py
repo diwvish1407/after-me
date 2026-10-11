@@ -811,6 +811,7 @@ async def test_r1_a_failed_first_instruction_does_not_lose_the_next_ones_key(
     )
     assert made.status_code == 201
     world.h.app.state.services.vault.forget(uuid.UUID(person.user_id))  # a cold cache
+    assert (await world.h.reauth(person.tokens)).status_code == 204  # reading asks for it
     again = await world.h.client.get(
         f"/v1/instructions/{made.json()['id']}", headers=person.headers
     )
@@ -1096,3 +1097,27 @@ async def test_a_contact_sees_only_their_own_instructions_and_gets_the_right_not
     mom = await portal.reach_content(person, "Mom")
     assert "For Mom only" in mom.text
     assert "For Brother only" not in mom.text
+
+
+async def test_the_owner_sees_what_was_shared_with_whom_and_when_it_was_viewed(
+    world: World,
+) -> None:
+    person = await _released(world)
+    await world.login(person)
+    before = (await world.h.client.get("/v1/incidents/current", headers=person.headers)).json()
+    [shared] = before["incident"]["releases"]
+    assert shared["instruction_title"] == TITLE  # opened for the owner only
+    assert shared["contact_display_name"] == "Brother"
+    assert shared["stage_position"] == 2
+    assert shared["view_count"] == 0
+    assert shared["first_viewed_at"] is None
+
+    assert TITLE in (await Portal(world).reach_content(person)).text
+    await world.login(person)
+    after = (await world.h.client.get("/v1/incidents/current", headers=person.headers)).json()
+    [seen] = after["incident"]["releases"]
+    assert seen["view_count"] == 1
+    assert seen["first_viewed_at"] is not None
+    assert "Sharma" not in str(after)  # the title, never the text
+    home = (await world.h.client.get("/v1/home", headers=person.headers)).json()
+    assert home["incident"]["releases"] == after["incident"]["releases"]

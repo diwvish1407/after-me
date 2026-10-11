@@ -165,7 +165,11 @@ async def test_an_unabsorbed_checkin_is_never_escalated_over(world: World) -> No
 @pytest.mark.parametrize("status", ["pending_deletion", "suspended"])
 async def test_an_account_that_is_not_active_is_not_escalated(world: World, status: str) -> None:
     person = await world.ready()
-    world.db.execute("UPDATE users SET status = %s WHERE id = %s", (status, person.user_id))
+    world.db.execute(
+        "UPDATE users SET status = %s, deletion_requested_at = "
+        "CASE WHEN %s = 'pending_deletion' THEN now() END WHERE id = %s",
+        (status, status, person.user_id),
+    )
     await world.advance_to(DUE + timedelta(hours=1))
     assert world.incidents(person) == []
 

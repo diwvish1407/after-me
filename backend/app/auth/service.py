@@ -10,7 +10,6 @@ Transaction discipline:
 
 from __future__ import annotations
 
-import math
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -57,17 +56,17 @@ from app.core.errors import (
     InvalidCode,
     InvalidCredentials,
     NotFound,
-    RateLimited,
     SessionRevoked,
 )
 from app.notifications.email import EmailMessage
 from app.notifications.mailer import EmailTemplate
 from app.plans.repository import PlanRepository
 from app.security.rate_limit import (
-    LOGIN_PER_ACCOUNT,
+    LOGIN_PER_ACCOUNT_NETWORK,
     REAUTH_PER_SESSION,
     REFRESH_PER_SESSION,
     REGISTER_PER_EMAIL,
+    REGISTER_PER_EMAIL_NETWORK,
 )
 
 SIGNUP_PURPOSE: Final = "signup_verify"
@@ -184,7 +183,7 @@ class AuthService(AuthServiceBase):
         """Always the same outcome for the caller (no account enumeration, T18)."""
         now = await self._now()
         email_norm = body.email_normalized
-        await self._limit(REGISTER_PER_EMAIL, email_norm, now)
+        await self._limit_email(REGISTER_PER_EMAIL_NETWORK, REGISTER_PER_EMAIL, email_norm, now)
 
         # Hash in every branch so the response time does not reveal which branch ran.
         password_hash = await self.services.passwords.hash(body.password)
@@ -230,7 +229,7 @@ class AuthService(AuthServiceBase):
     async def register_resend(self, body: RegisterResendRequest) -> None:
         now = await self._now()
         email_norm = body.email_normalized
-        await self._limit(REGISTER_PER_EMAIL, email_norm, now)
+        await self._limit_email(REGISTER_PER_EMAIL_NETWORK, REGISTER_PER_EMAIL, email_norm, now)
 
         outbox: list[EmailMessage] = []
         user = await self.users.get_by_email(email_norm, for_update=True)
@@ -311,16 +310,18 @@ class AuthService(AuthServiceBase):
     async def login(self, body: LoginRequest) -> IssuedSession:
         now = await self._now()
         email_norm = body.email_normalized
-        # Only failed attempts consume the per-account budget (API_SPEC §16): read it here,
-        # count failures below. Successful logins on several devices never lock a user out.
+        # Only failed attempts consume the budget (API_SPEC §16): read it here, count failures
+        # below. The budget is per (account, network), never per account alone: a stranger who
+        # knows an address must not be able to keep its owner out (Phase 9, F1).
+        budget = self._budget_subject(email_norm)
         self.ctx.note_rate_limit(
-            await self.services.limiter.check(LOGIN_PER_ACCOUNT, email_norm, now=now)
+            await self.services.limiter.check(LOGIN_PER_ACCOUNT_NETWORK, budget, now=now)
         )
 
         user = await self.users.get_by_email(email_norm)
         if user is None:
             await self.services.passwords.dummy_verify(body.password)  # equalise timing
-            await self.services.limiter.hit([(LOGIN_PER_ACCOUNT, email_norm)], now=now)
+            await self.services.limiter.hit([(LOGIN_PER_ACCOUNT_NETWORK, budget)], now=now)
             await self.services.audit.record_independent(
                 self._event(
                     audit.LOGIN_FAILED, now, None, unauthenticated=True, reason="unknown_account"
@@ -328,23 +329,31 @@ class AuthService(AuthServiceBase):
             )
             raise InvalidCredentials
 
-        if user.locked_until is not None and user.locked_until > now:
-            await self.services.audit.record_independent(
-                self._event(audit.LOGIN_FAILED, now, user.id, unauthenticated=True, reason="locked")
+        # A locked account answers exactly like a wrong password: same work, same 401, nothing
+        # that tells a stranger the address exists or that it is locked. The lock does not bind
+        # a phone the account already knows (an unguessable device id) with the right password.
+        lock_applies = user.locked_until is not None and user.locked_until > now
+        lock_exempt = False
+        if lock_applies:
+            known = body.device.id is not None and (
+                await self.devices.get(owner_id=user.id, device_id=body.device.id) is not None
             )
-            retry_after = max(1, math.ceil((user.locked_until - now).total_seconds()))
-            raise RateLimited(
-                retry_after=retry_after,
-                headers={
-                    "RateLimit-Limit": str(LOCK_THRESHOLD),
-                    "RateLimit-Remaining": "0",
-                    "RateLimit-Reset": str(retry_after),
-                },
-            )
+            correct = await self.services.passwords.verify(user.password_hash, body.password)
+            if not (known and correct):
+                await self.services.limiter.hit([(LOGIN_PER_ACCOUNT_NETWORK, budget)], now=now)
+                await self.services.audit.record_independent(
+                    self._event(
+                        audit.LOGIN_FAILED, now, user.id, unauthenticated=True, reason="locked"
+                    )
+                )
+                raise InvalidCredentials
+            lock_exempt = True
 
         verified_hash = user.password_hash
-        if not await self.services.passwords.verify(verified_hash, body.password):
-            await self._record_failed_login(user, now)
+        if not lock_exempt and not await self.services.passwords.verify(
+            verified_hash, body.password
+        ):
+            await self._record_failed_login(user, now, budget)
             raise InvalidCredentials
 
         # Serialise with a concurrent reset / password change: they lock the user row, revoke
@@ -354,7 +363,7 @@ class AuthService(AuthServiceBase):
         if (
             locked is None
             or locked.password_hash != verified_hash
-            or (locked.locked_until is not None and locked.locked_until > now)
+            or (not lock_exempt and locked.locked_until is not None and locked.locked_until > now)
         ):
             await self.services.audit.record_independent(
                 self._event(
@@ -441,9 +450,9 @@ class AuthService(AuthServiceBase):
         await self._commit_and_send(outbox)
         return issued
 
-    async def _record_failed_login(self, user: User, now: datetime) -> None:
+    async def _record_failed_login(self, user: User, now: datetime, budget: str) -> None:
         """Count the failure and maybe lock, on a separate connection (survives the 401)."""
-        await self.services.limiter.hit([(LOGIN_PER_ACCOUNT, user.email_normalized)], now=now)
+        await self.services.limiter.hit([(LOGIN_PER_ACCOUNT_NETWORK, budget)], now=now)
         async with self.services.db.independent_session() as bookkeeping:
             outcome = await UserRepository(bookkeeping).record_failed_login(
                 user.id, now=now, threshold=LOCK_THRESHOLD, lock_until=now + LOCK_DURATION

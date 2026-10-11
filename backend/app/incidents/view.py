@@ -8,7 +8,7 @@ from datetime import datetime
 from typing import Literal
 
 from app.incidents.models import OPEN_STATUSES, EscalationIncident, IncidentAction
-from app.incidents.schemas import IncidentOut, TimelineContact, TimelineItem
+from app.incidents.schemas import IncidentOut, ReleaseOut, TimelineContact, TimelineItem
 from app.incidents.snapshot import PlanSnapshot, SnapshotError, parse_snapshot
 
 
@@ -18,6 +18,7 @@ def build_incident(
     names: dict[uuid.UUID, str],
     *,
     now: datetime,
+    releases: list[ReleaseOut] | None = None,
 ) -> IncidentOut:
     try:
         snapshot: PlanSnapshot | None = parse_snapshot(incident.plan_snapshot)
@@ -63,6 +64,7 @@ def build_incident(
         closed_at=incident.closed_at,
         closed_by=incident.closed_by,
         timeline=timeline,
+        releases=releases or [],
         server_time=now,
     )
 

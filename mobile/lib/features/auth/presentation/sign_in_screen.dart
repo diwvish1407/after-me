@@ -9,6 +9,7 @@ import '../../../core/api/failures/app_failure.dart';
 import '../../../core/auth/session_ended_notice.dart';
 import '../../../core/design_system/design_system.dart';
 import '../../../core/forms/validators.dart';
+import '../../../core/security/secure_screen.dart';
 import '../../../l10n/gen/app_localizations.dart';
 import '../application/login_controller.dart';
 
@@ -74,88 +75,90 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
     final l10n = AppLocalizations.of(context);
     final state = ref.watch(loginControllerProvider);
     final failure = state.failure;
-    return FormPage(
-      title: l10n.signInTitle,
-      children: [
-        PageHeading(l10n.signInHeading),
-        Gap.lg,
-        if (ref.watch(sessionEndedNoticeProvider)) ...[
-          Semantics(
-            liveRegion: true,
-            container: true,
-            child: StatusBanner(
-              kind: StatusBannerKind.info,
-              message: l10n.errorSessionExpired,
+    return SecureScreen(
+      child: FormPage(
+        title: l10n.signInTitle,
+        children: [
+          PageHeading(l10n.signInHeading),
+          Gap.lg,
+          if (ref.watch(sessionEndedNoticeProvider)) ...[
+            Semantics(
+              liveRegion: true,
+              container: true,
+              child: StatusBanner(
+                kind: StatusBannerKind.info,
+                message: l10n.errorSessionExpired,
+              ),
             ),
+            Gap.md,
+          ],
+          if (failure != null) ...[
+            FailureNotice(
+              message: failure is UnauthorizedFailure
+                  ? l10n.signInWrongDetails
+                  : failureMessage(l10n, failure),
+            ),
+            Gap.md,
+          ],
+          AppTextField(
+            label: l10n.fieldEmail,
+            controller: _email,
+            errorText: _emailIssue == null
+                ? null
+                : issueMessage(l10n, _emailIssue!),
+            keyboardType: TextInputType.emailAddress,
+            textInputAction: TextInputAction.next,
+            autofillHints: const [AutofillHints.email],
+            enabled: !state.busy,
+            onChanged: (_) {
+              ref.read(loginControllerProvider.notifier).clearFailure();
+              setState(() => _emailIssue = null);
+            },
           ),
           Gap.md,
-        ],
-        if (failure != null) ...[
-          FailureNotice(
-            message: failure is UnauthorizedFailure
-                ? l10n.signInWrongDetails
-                : failureMessage(l10n, failure),
+          AppTextField(
+            label: l10n.fieldPassword,
+            controller: _password,
+            obscureText: true,
+            errorText: _passwordIssue == null
+                ? null
+                : issueMessage(l10n, _passwordIssue!),
+            textInputAction: TextInputAction.done,
+            autofillHints: const [AutofillHints.password],
+            enabled: !state.busy,
+            onChanged: (_) {
+              ref.read(loginControllerProvider.notifier).clearFailure();
+              setState(() => _passwordIssue = null);
+            },
+            onSubmitted: (_) => _submit(),
           ),
-          Gap.md,
+          Gap.lg,
+          AppButton.primary(
+            label: l10n.signInSubmit,
+            isLoading: state.busy,
+            onPressed: _submit,
+            expand: true,
+          ),
+          Gap.xs,
+          AppButton.text(
+            label: l10n.signInForgot,
+            onPressed: state.busy
+                ? null
+                : () => context.push(
+                    AppRoutes.forgotPassword,
+                    extra: _email.text.trim(),
+                  ),
+            expand: true,
+          ),
+          AppButton.text(
+            label: l10n.signInCreateAccount,
+            onPressed: state.busy
+                ? null
+                : () => context.push(AppRoutes.createAccount),
+            expand: true,
+          ),
         ],
-        AppTextField(
-          label: l10n.fieldEmail,
-          controller: _email,
-          errorText: _emailIssue == null
-              ? null
-              : issueMessage(l10n, _emailIssue!),
-          keyboardType: TextInputType.emailAddress,
-          textInputAction: TextInputAction.next,
-          autofillHints: const [AutofillHints.email],
-          enabled: !state.busy,
-          onChanged: (_) {
-            ref.read(loginControllerProvider.notifier).clearFailure();
-            setState(() => _emailIssue = null);
-          },
-        ),
-        Gap.md,
-        AppTextField(
-          label: l10n.fieldPassword,
-          controller: _password,
-          obscureText: true,
-          errorText: _passwordIssue == null
-              ? null
-              : issueMessage(l10n, _passwordIssue!),
-          textInputAction: TextInputAction.done,
-          autofillHints: const [AutofillHints.password],
-          enabled: !state.busy,
-          onChanged: (_) {
-            ref.read(loginControllerProvider.notifier).clearFailure();
-            setState(() => _passwordIssue = null);
-          },
-          onSubmitted: (_) => _submit(),
-        ),
-        Gap.lg,
-        AppButton.primary(
-          label: l10n.signInSubmit,
-          isLoading: state.busy,
-          onPressed: _submit,
-          expand: true,
-        ),
-        Gap.xs,
-        AppButton.text(
-          label: l10n.signInForgot,
-          onPressed: state.busy
-              ? null
-              : () => context.push(
-                  AppRoutes.forgotPassword,
-                  extra: _email.text.trim(),
-                ),
-          expand: true,
-        ),
-        AppButton.text(
-          label: l10n.signInCreateAccount,
-          onPressed: state.busy
-              ? null
-              : () => context.push(AppRoutes.createAccount),
-          expand: true,
-        ),
-      ],
+      ),
     );
   }
 }

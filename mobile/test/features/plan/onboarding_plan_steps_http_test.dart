@@ -551,7 +551,10 @@ void main() {
       });
       await tapText(tester, 'Use this plan');
       await tester.pumpAndSettle();
-      expect(find.textContaining("You're offline"), findsOneWidget);
+      expect(
+        find.textContaining("We couldn't confirm that this was saved"),
+        findsOneWidget,
+      );
       expect(_to(adapter, 'PUT', '/v1/plan'), hasLength(1));
       await tapText(tester, 'Use this plan');
       await tester.pumpAndSettle();

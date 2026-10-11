@@ -2,20 +2,19 @@ import 'dart:async';
 
 import 'package:afterme/core/api/failures/app_failure.dart';
 import 'package:afterme/core/auth/auth_controller.dart';
-import 'package:afterme/core/storage/preferences_store.dart';
 import 'package:afterme/core/storage/secure_store.dart';
 import 'package:afterme/features/checkin/application/checkin_controller.dart';
 import 'package:afterme/features/checkin/application/pending_checkin_store.dart';
 import 'package:afterme/features/checkin/data/models/checkin_models.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../helpers/in_memory_contacts_repository.dart';
 import '../../helpers/test_app.dart';
 
-TestFakes _fakes({Map<String, Object>? prefs}) => TestFakes()
-  ..prefs = freshPreferences({'afterme.onboardingUserId': 'user-1', ...?prefs});
+/// The account is signed in as `user-1`: its id is in the session (`TestFakes` seeds
+/// `session.user_id`), where the pending check-in reads it from.
+TestFakes _fakes() => TestFakes();
 
 ProviderContainer _container(TestFakes fakes) {
   final container = ProviderContainer.test(
@@ -681,10 +680,7 @@ void main() {
         overrides: [
           ...testOverrides(authStatus: AuthStatus.signedIn, fakes: fakes),
           pendingCheckInStoreProvider.overrideWithValue(
-            PendingCheckInStore(
-              secure: _BrokenSecureStore(),
-              prefs: _BrokenPreferences(),
-            ),
+            PendingCheckInStore(secure: _BrokenSecureStore()),
           ),
         ],
       );
@@ -827,10 +823,7 @@ void main() {
         overrides: [
           ...testOverrides(authStatus: AuthStatus.signedIn, fakes: fakes),
           pendingCheckInStoreProvider.overrideWithValue(
-            PendingCheckInStore(
-              secure: _BrokenSecureStore(),
-              prefs: _BrokenPreferences(),
-            ),
+            PendingCheckInStore(secure: _BrokenSecureStore()),
           ),
         ],
       );
@@ -912,22 +905,6 @@ void main() {
       expect(a, isNot(const CheckInState()));
     });
   });
-}
-
-/// Preferences whose every call fails, like unreadable storage.
-class _BrokenPreferences extends PreferencesStore {
-  _BrokenPreferences() : super(SharedPreferencesAsync());
-
-  @override
-  Future<String?> getString(PreferenceKey key) async =>
-      throw StateError('storage');
-
-  @override
-  Future<void> setString(PreferenceKey key, String value) async =>
-      throw StateError('storage');
-
-  @override
-  Future<void> remove(PreferenceKey key) async => throw StateError('storage');
 }
 
 /// Secure storage whose every call fails, like a lost Keystore key.

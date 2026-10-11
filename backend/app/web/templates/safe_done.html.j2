@@ -1,0 +1,11 @@
+{% extends "base.html.j2" %}
+{% block title %}You're marked safe · AfterMe{% endblock %}
+{% block content %}
+<h1>You're marked safe</h1>
+{% if names %}<p>We told {{ names | join(", ") }} that you are safe. Anything that was going to be shared has been taken back.</p>{% else %}<p>Nobody had been told, so there was nobody to update. Everything that was going to happen next has been stopped.</p>{% endif %}
+{% if next_due %}<p>Your next check-in is due <strong>{{ next_due }}</strong>.</p>{% endif %}
+<form method="post" action="/a/logout">
+<input type="hidden" name="csrf" value="{{ csrf }}">
+<button type="submit" class="secondary">Sign out</button>
+</form>
+{% endblock %}

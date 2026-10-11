@@ -1,0 +1,16 @@
+{% extends "base.html.j2" %}
+{% block title %}Sign in · AfterMe{% endblock %}
+{% block content %}
+<h1>Sign in to check in</h1>
+<p>Use this page if you don't have your phone. Sign in with the email and password of your AfterMe account.</p>
+{% if message %}<p class="notice" role="alert">{{ message }}</p>{% endif %}
+<form method="post" action="/a/login" autocomplete="on">
+<input type="hidden" name="csrf" value="{{ csrf }}">
+<label for="email">Email address</label>
+<input type="email" name="email" id="email" autocomplete="username" maxlength="254" required>
+<label for="password">Password</label>
+<input type="password" name="password" id="password" autocomplete="current-password" maxlength="128" required>
+<button type="submit">Sign in</button>
+</form>
+<p class="hint">Only use this on a device you trust. You are signed out after an hour.</p>
+{% endblock %}

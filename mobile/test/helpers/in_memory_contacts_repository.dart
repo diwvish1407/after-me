@@ -77,6 +77,10 @@ class InMemoryContactsRepository implements ContactsRepository {
   /// (`TestFakes` wires it to the instructions "server").
   int Function()? instructionUsage;
 
+  /// How many stages the plan has, for `usage.stages` (`TestFakes` wires it to the plan
+  /// "server").
+  int Function()? stageUsage;
+
   /// The step-up rule (`TestFakes` sets it). Null: a change never asks for the password,
   /// which is what the contact tests that have no plan or schedule need.
   ContactStepUp? stepUp;
@@ -255,6 +259,7 @@ class InMemoryContactsRepository implements ContactsRepository {
       usage: EntitlementUsage(
         contacts: _contacts.length,
         instructions: instructionUsage?.call() ?? 0,
+        stages: stageUsage?.call() ?? 0,
       ),
     );
   }

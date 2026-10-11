@@ -18,6 +18,9 @@ import 'package:afterme/features/checkin/presentation/schedule_labels.dart';
 import 'package:afterme/features/home/application/home_status.dart';
 import 'package:afterme/features/home/data/dio_home_repository.dart';
 import 'package:afterme/features/home/data/models/home_models.dart';
+import 'package:afterme/features/incidents/application/safe_controller.dart';
+import 'package:afterme/features/incidents/data/dio_incidents_repository.dart';
+import 'package:afterme/features/incidents/data/incidents_repository.dart';
 import 'package:afterme/features/plan/data/dio_plan_repository.dart';
 import 'package:afterme/features/plan/data/plan_repository.dart';
 import 'package:afterme/features/plan/presentation/plan_labels.dart';
@@ -38,10 +41,11 @@ import '../helpers/test_app.dart';
 /// what the golden responses contain (bodies and `ETag`), and map every problem file.
 ///
 /// Phase 5's mobile half is the plan (`GET` / `PUT /v1/plan`), the activation
-/// requirements `no_stages` / `stage_empty` and the Home aggregate; the incident
-/// timeline and I'M SAFE screens are Phase 7, so the incident endpoints are checked for
-/// shape, headers and failures only (there is no incident model to parse them with yet),
-/// and Home must tolerate an `incident` object without a screen for it.
+/// requirements `no_stages` / `stage_empty` and the Home aggregate. Phase 7 adds the
+/// incident screens, so the incident endpoints are parsed by the real models and
+/// repository (`GET /incidents`, `GET /incidents/{id}`, `POST /incidents/{id}/safe`, and
+/// the incident inside `GET /home`), and every incident problem is mapped to the failure
+/// the I'M SAFE flow reacts to.
 ///
 /// Until the backend writes the folder, the whole file is skipped with a message, so
 /// the suite stays green; once it exists, nothing here needs changing.
@@ -410,12 +414,19 @@ void main() {
       },
     );
 
-    test('a Home with an incident: the object is tolerated and counted '
+    test('a Home with an incident: the object is kept, read, and counted '
         'as an incident', () async {
       final e = endpoint('home_incident');
       final home = await load('home_incident');
       final raw = _json(e['response'] as String);
       expect(home.incident, raw['incident'], reason: 'kept as it came');
+      final incident = home.incidentDetails!;
+      expect(incident.id, (raw['incident'] as Map)['id']);
+      expect(incident.status, IncidentStatus.grace);
+      expect(incident.requires, IncidentRequires.checkin);
+      expect(incident.timeline, hasLength(4));
+      expect(incident.releases, isEmpty);
+      expect(incident.isOpen, isTrue);
       expect(home.checkin.status, CheckInStatus.incidentOpen);
       expect(home.planSummary.stages, 1, reason: 'the real count');
       expect(home.readiness.ready, isTrue);
@@ -514,88 +525,224 @@ void main() {
     );
   });
 
-  group('incidents (no screens until Phase 7)', () {
+  group('incidents', () {
     const requires = {'checkin', 'safe'};
 
-    void expectIncident(Map<String, dynamic> incident, {String? where}) {
-      expect(
-        incident.keys,
-        containsAll(<String>[
-          'id',
-          'status',
-          'requires',
-          'missed_due_at',
-          'anchor_at',
-          'grace_ends_at',
-          'contacts_messaged',
-          'closed_at',
-          'closed_by',
-          'timeline',
-          'server_time',
-        ]),
-        reason: where,
-      );
-      expect(requires, contains(incident['requires']), reason: where);
-      expect(
-        incident['requires'] == 'safe',
-        incident['contacts_messaged'],
-        reason: 'I\'M SAFE is needed exactly when somebody was told',
-      );
-      final timeline = (incident['timeline'] as List)
-          .cast<Map<String, dynamic>>();
-      for (final row in timeline) {
-        expect(
-          row.keys,
-          containsAll(<String>['kind', 'scheduled_for', 'status']),
-          reason: where,
-        );
-        DateTime.parse(row['scheduled_for'] as String);
-      }
+    Map<String, dynamic> incidentOf(String name) {
+      final raw = _json(endpoint(name)['response'] as String);
+      return name == 'incident_get'
+          ? raw
+          : raw['incident'] as Map<String, dynamic>;
     }
 
-    test('the current incident, by id, and after a stage', () {
-      expectIncident(
-        _json(endpoint('incident_get')['response'] as String),
-        where: 'incident_get',
+    /// Every field of [model] is what [json] says.
+    void expectSameIncident(Incident model, Map<String, dynamic> json) {
+      expect(model.id, json['id']);
+      expect(model.status.name, json['status']);
+      expect(
+        model.requires?.name,
+        json['requires'],
+        reason: '`requires` is "checkin" or "safe", null once closed',
       );
-      for (final name in ['incident_current', 'incident_after_stage']) {
-        final raw = _json(endpoint(name)['response'] as String);
-        expectIncident(raw['incident'] as Map<String, dynamic>, where: name);
+      expect(model.missedDueAt, instant(json['missed_due_at']));
+      expect(model.anchorAt, instant(json['anchor_at']));
+      expect(model.graceEndsAt, instant(json['grace_ends_at']));
+      expect(model.contactsMessaged, json['contacts_messaged']);
+      expect(model.closedAt, instant(json['closed_at']));
+      expect(model.serverTime, instant(json['server_time']));
+      final timeline = (json['timeline'] as List).cast<Map<String, dynamic>>();
+      expect(model.timeline, hasLength(timeline.length));
+      for (var i = 0; i < timeline.length; i++) {
+        final row = timeline[i];
+        final item = model.timeline[i];
+        expect(
+          item.kind,
+          isNot(TimelineKind.unknown),
+          reason: '${row['kind']} is known to the app',
+        );
+        expect(item.status, isNot(TimelineStatus.unknown));
+        expect(item.scheduledFor, instant(row['scheduled_for']));
+        expect(item.stagePosition, row['stage_position']);
+        expect(item.releaseCount, row['release_count']);
+        final contacts = row['contacts'] as List?;
+        expect(item.contacts?.length, contacts?.length);
+        for (var c = 0; c < (contacts?.length ?? 0); c++) {
+          final contact = contacts![c] as Map<String, dynamic>;
+          expect(item.contacts![c].id, contact['id']);
+          expect(item.contacts![c].displayName, contact['display_name']);
+          expect(item.contacts![c].result?.name, contact['result']);
+        }
       }
+      expect(model.releases, hasLength((json['releases'] as List).length));
+    }
+
+    test('the current incident, by id, in Home and after a stage are read '
+        'by the model, field for field', () async {
+      for (final name in [
+        'incident_current',
+        'incident_get',
+        'incident_after_stage',
+        'home_incident',
+      ]) {
+        final raw = name == 'home_incident'
+            ? _json(endpoint(name)['response'] as String)['incident']
+                  as Map<String, dynamic>
+            : incidentOf(name);
+        final incident = Incident.fromJson(raw);
+        expectSameIncident(incident, raw);
+        expect(requires, contains(raw['requires']), reason: name);
+        expect(
+          incident.needsSafe,
+          raw['contacts_messaged'],
+          reason: 'I\'M SAFE is needed exactly when somebody was told',
+        );
+        expect(
+          raw.containsKey('releases'),
+          isTrue,
+          reason: '$name has `releases`',
+        );
+      }
+      final after = Incident.fromJson(incidentOf('incident_after_stage'));
+      expect(after.status, IncidentStatus.escalated);
+      expect(after.needsSafe, isTrue);
+      expect(after.notifiedContacts.single.displayName, 'Mom');
+      expect(
+        after.timeline.last.contacts!.single.result,
+        ContactResult.messaged,
+      );
+      expect(after.nextStage, isNull);
       expect(
         _json(
           endpoint('incidents_current_none')['response'] as String,
         )['incident'],
         isNull,
       );
-      final after =
-          _json(
-                endpoint('incident_after_stage')['response'] as String,
-              )['incident']
-              as Map<String, dynamic>;
-      expect(after['requires'], 'safe');
-      expect(after['contacts_messaged'], isTrue);
     });
 
-    test('the history lists, newest first, with a cursor', () {
+    test('GET by id reads the golden through the repository', () async {
+      final e = endpoint('incident_get');
+      final wire = await apiWire((_, _) => replyFor(e));
+      final json = _json(e['response'] as String);
+      final incident = await DioIncidentsRepository(dio: wire.dio)
+          .get(json['id'] as String);
+      expect(wire.request.method, 'GET');
+      expect(wire.request.path, '/v1/incidents/${json['id']}');
+      expectSameIncident(incident, json);
+    });
+
+    test('a release as the backend\'s ReleaseOut describes it is read, with '
+        'a title only the owner sees', () {
+      // No golden carries a release yet: this object has the keys of `ReleaseOut`
+      // (backend/app/incidents/schemas.py).
+      final json = {
+        ...incidentOf('incident_after_stage'),
+        'releases': [
+          {
+            'contact_id': '00000000-0000-4000-8000-000000000003',
+            'contact_display_name': 'Brother',
+            'instruction_id': '00000000-0000-4000-8000-000000000020',
+            'instruction_title': 'House emergency',
+            'stage_position': 2,
+            'released_at': '2026-10-10T14:30:01Z',
+            'visible_after': '2026-10-10T14:35:01Z',
+            'first_viewed_at': '2026-10-10T14:50:05Z',
+            'last_viewed_at': '2026-10-10T14:50:05Z',
+            'view_count': 1,
+            'revoked_at': null,
+            'revoke_reason': null,
+          },
+          {
+            'contact_id': '00000000-0000-4000-8000-000000000003',
+            'contact_display_name': 'Brother',
+            'instruction_id': '00000000-0000-4000-8000-000000000021',
+            'instruction_title': null,
+            'stage_position': null,
+            'released_at': '2026-10-10T14:30:01Z',
+            'visible_after': '2026-10-10T14:35:01Z',
+            'first_viewed_at': null,
+            'last_viewed_at': null,
+            'view_count': 0,
+            'revoked_at': '2026-10-10T15:00:00Z',
+            'revoke_reason': 'user_safe',
+          },
+        ],
+      };
+      final incident = Incident.fromJson(json);
+      final viewed = incident.releases.first;
+      expect(viewed.contactDisplayName, 'Brother');
+      expect(viewed.instructionTitle, 'House emergency');
+      expect(viewed.stagePosition, 2);
+      expect(viewed.firstViewedAt, DateTime.utc(2026, 10, 10, 14, 50, 5));
+      expect(viewed.viewCount, 1);
+      expect(viewed.isRevoked, isFalse);
+      final revoked = incident.releases.last;
+      expect(revoked.instructionTitle, isNull);
+      expect(revoked.stagePosition, isNull);
+      expect(revoked.wasViewed, isFalse);
+      expect(revoked.revokeReason, ReleaseRevokeReason.userSafe);
+    });
+
+    test('the history lists, newest first, with a cursor', () async {
       for (final name in ['incidents_list', 'incidents_list_after']) {
-        final raw = _json(endpoint(name)['response'] as String);
+        final e = endpoint(name);
+        final wire = await apiWire((_, _) => replyFor(e));
+        final page = await DioIncidentsRepository(dio: wire.dio).list();
+        final raw = _json(e['response'] as String);
+        expect(wire.request.method, 'GET');
+        expect(wire.request.path, '/v1/incidents');
         expect(raw.keys, {'items', 'next_cursor'}, reason: name);
         final items = (raw['items'] as List).cast<Map<String, dynamic>>();
-        expect(items, isNotEmpty);
-        final opened = [
-          for (final i in items) DateTime.parse(i['opened_at'] as String),
-        ];
+        expect(page.items, hasLength(items.length));
+        expect(page.nextCursor, raw['next_cursor']);
+        for (var i = 0; i < items.length; i++) {
+          final item = page.items[i];
+          expect(item.id, items[i]['id']);
+          expect(item.status.name, items[i]['status']);
+          expect(item.closedBy?.name, isNotNull);
+          expect(item.closedBy, isNot(IncidentClosedBy.unknown));
+          expect(_snake(item.closedBy!.name), items[i]['closed_by']);
+          expect(item.missedDueAt, instant(items[i]['missed_due_at']));
+          expect(item.openedAt, instant(items[i]['opened_at']));
+          expect(item.closedAt, instant(items[i]['closed_at']));
+          expect(item.contactsMessaged, items[i]['contacts_messaged']);
+          expect(item.isClosed, isTrue);
+        }
+        final opened = [for (final i in page.items) i.openedAt];
         expect([...opened]..sort((a, b) => b.compareTo(a)), opened);
       }
     });
 
-    test('I\'M SAFE answers with who was told, and a replay says the same', () {
-      final raw = _json(endpoint('incident_safe')['response'] as String);
-      expect(raw['status'], 'cancelled');
-      expect(raw['incident_id'], isNotNull);
-      expect(raw['all_clear_sent_to'], isNotEmpty);
-      expect(DateTime.parse(raw['next_due_at'] as String), isA<DateTime>());
+    test('I\'M SAFE sends the golden key and no body, and reads who is told; '
+        'a replay reads the same', () async {
+      final first = endpoint('incident_safe');
+      final replay = endpoint('incident_safe_replay');
+      final key = _headers(first, 'request_headers')['Idempotency-Key']!;
+      final raw = _json(first['response'] as String);
+      Future<SafeResult> run(Map<String, dynamic> e) async {
+        final wire = await apiWire((_, _) => replyFor(e));
+        final result = await DioIncidentsRepository(dio: wire.dio)
+            .markSafe(raw['incident_id'] as String, idempotencyKey: key);
+        expect(wire.request.method, 'POST');
+        expect(wire.request.path, '/v1/incidents/${raw['incident_id']}/safe');
+        expect(wire.request.header('Idempotency-Key'), key);
+        expect(wire.request.data, isNull);
+        return result;
+      }
+
+      final result = await run(first);
+      expect(result.incidentId, raw['incident_id']);
+      expect(result.nextDueAt, instant(raw['next_due_at']));
+      expect(result.serverTime, instant(raw['server_time']));
+      final told = (raw['all_clear_sent_to'] as List)
+          .cast<Map<String, dynamic>>();
+      expect(result.allClearSentTo, hasLength(told.length));
+      expect(result.allClearSentTo.first.contactId, told.first['contact_id']);
+      expect(
+        result.allClearSentTo.first.displayName,
+        told.first['display_name'],
+      );
+      // The replay is the same answer (its key order may differ).
+      expect(await run(replay), result);
     });
   });
 
@@ -622,13 +769,8 @@ void main() {
             await DioCheckInRepository(dio: wire.dio)
                 .checkIn(idempotencyKey: 'a-key-of-16-chars');
           case 'POST /v1/incidents/{}/safe':
-            // Phase 7 adds the repository; the failure mapper is the same.
-            await wire.dio.post<Object?>(
-              '/v1/incidents/x/safe',
-              options: Options(
-                headers: {'Idempotency-Key': 'a-key-of-16-chars'},
-              ),
-            );
+            await DioIncidentsRepository(dio: wire.dio)
+                .markSafe('incident-1', idempotencyKey: 'a-key-of-16-chars');
           default:
             fail('no call for ${route(p)}');
         }
@@ -777,6 +919,42 @@ void main() {
       expect(failureMessage(l10n, state), l10n.errorInvalidState);
     });
 
+    test(
+      'the I\'M SAFE flow reacts to reauth_required and invalid_state',
+      () async {
+        for (final (name, check) in <(String, bool Function(SafeState))>[
+          ('problem_reauth_required', (s) => s.needsPassword),
+          ('problem_invalid_state', (s) => s.alreadyClosed),
+        ]) {
+          final p = problem(name);
+          final wire = await apiWire((_, _) => problemReply(p));
+          final fakes = TestFakes()..realIncidentsRepository = true;
+          final container = ProviderContainer.test(
+            retry: (retryCount, error) => null,
+            overrides: [
+              ...testOverrides(authStatus: AuthStatus.signedIn, fakes: fakes),
+              incidentsRepositoryProvider.overrideWithValue(
+                DioIncidentsRepository(dio: wire.dio),
+              ),
+            ],
+          );
+          container.listen(safeControllerProvider, (_, _) {});
+          await expectLater(
+            container
+                .read(safeControllerProvider.notifier)
+                .markSafe('incident-1'),
+            throwsA(isA<AppFailure>()),
+            reason: name,
+          );
+          final state = container.read(safeControllerProvider);
+          expect(state.phase, SafePhase.failed, reason: name);
+          expect(check(state), isTrue, reason: name);
+          expect(state.result, isNull, reason: 'never claimed: $name');
+          expect(wire.request.header('Idempotency-Key'), isNotNull);
+        }
+      },
+    );
+
     test('the server\'s text is never what the person reads', () async {
       for (final p in problems) {
         final golden = _json(p['response'] as String);
@@ -791,3 +969,7 @@ void main() {
     });
   });
 }
+
+/// `userSafe` -> `user_safe`.
+String _snake(String name) =>
+    name.replaceAllMapped(RegExp('[A-Z]'), (m) => '_${m[0]!.toLowerCase()}');

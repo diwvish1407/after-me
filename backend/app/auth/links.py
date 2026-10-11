@@ -36,3 +36,23 @@ def looks_like_reset_token(token: str) -> bool:
 
 def reset_link(public_base_url: str, token: str) -> str:
     return f"{public_base_url}/a/reset#{token}"
+
+
+# Account deletion from the web (Play Store requirement): the same shape as a reset link, with
+# its own prefix and purpose so one kind of link can never be used as the other.
+DELETE_TOKEN_PREFIX: Final = "ad_"  # noqa: S105
+DELETE_LINK_TTL: Final = timedelta(minutes=30)
+DELETE_PURPOSE: Final = "account_delete_web"
+_DELETE_TOKEN_RE: Final = re.compile(r"^ad_[A-Za-z0-9_-]{43}$")
+
+
+def new_delete_token() -> str:
+    return DELETE_TOKEN_PREFIX + secrets.token_urlsafe(32)
+
+
+def looks_like_delete_token(token: str) -> bool:
+    return _DELETE_TOKEN_RE.fullmatch(token) is not None
+
+
+def delete_link(public_base_url: str, token: str) -> str:
+    return f"{public_base_url}/a/delete/confirm#{token}"

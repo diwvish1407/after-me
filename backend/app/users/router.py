@@ -5,10 +5,25 @@ from __future__ import annotations
 from typing import Annotated
 
 from fastapi import APIRouter, Depends
+from fastapi.responses import JSONResponse
 
-from app.api.deps import ContextDep, CurrentUserDep, DbSession, ServicesDep
+from app.api.deps import (
+    ContextDep,
+    CurrentUserDep,
+    DbSession,
+    FreshReauthUserDep,
+    ServicesDep,
+)
+from app.users.deletion import DeletionService
 from app.users.entitlements import EntitlementService
-from app.users.schemas import EntitlementsResponse, MeResponse, ProfilePatchRequest
+from app.users.export import ExportService
+from app.users.schemas import (
+    DeleteAccountRequest,
+    DeletionResponse,
+    EntitlementsResponse,
+    MeResponse,
+    ProfilePatchRequest,
+)
 from app.users.service import UserService
 
 router = APIRouter(prefix="/v1", tags=["me"])
@@ -40,3 +55,34 @@ async def get_entitlements(
     return await EntitlementService(session=session, services=services, ctx=ctx).entitlements(
         current
     )
+
+
+@router.post("/me/export")
+async def export_account(
+    current: FreshReauthUserDep, session: DbSession, services: ServicesDep, ctx: ContextDep
+) -> JSONResponse:
+    """Everything held about the account, as one downloadable JSON file. Needs a fresh
+    password confirmation: the document contains the decrypted instructions."""
+    body = await ExportService(session=session, services=services, ctx=ctx).build(current)
+    return JSONResponse(
+        body,
+        headers={
+            "Content-Disposition": 'attachment; filename="afterme-export.json"',
+            "Cache-Control": "no-store",
+        },
+    )
+
+
+@router.delete("/me", status_code=202)
+async def delete_account(
+    body: DeleteAccountRequest,
+    current: FreshReauthUserDep,
+    session: DbSession,
+    services: ServicesDep,
+    ctx: ContextDep,
+) -> DeletionResponse:
+    """Close the account (DATABASE §4). Needs a fresh password confirmation and the word
+    DELETE. Everything that can reach another person stops in the same transaction."""
+    del body  # validated: the confirmation word is the whole body
+    result = await DeletionService(session=session, services=services, ctx=ctx).request(current)
+    return DeletionResponse(status="pending_deletion", purge_after=result.purge_after)

@@ -175,6 +175,168 @@ void main() {
       );
     });
 
+    test('the Play Store link: the app\'s own page unless one is configured, '
+        'and always https', () {
+      final config = AppConfig.parse(
+        appEnv: 'dev',
+        apiBaseUrl: 'http://10.0.2.2:8000',
+      );
+      expect(config.playStoreUrl, AppConfig.defaultPlayStoreUrl);
+      expect(
+        AppConfig.defaultPlayStoreUrl.toString(),
+        'https://play.google.com/store/apps/details?id=app.afterme',
+      );
+      expect(
+        AppConfig.parse(
+          appEnv: 'prod',
+          apiBaseUrl: 'https://api.afterme.invalid',
+          publicBaseUrl: 'https://afterme.invalid',
+          playStoreUrl: ' https://play.google.com/store/apps/details?id=app.afterme.other ',
+        ).playStoreUrl.queryParameters['id'],
+        'app.afterme.other',
+      );
+      for (final bad in [
+        'http://play.google.com/store/apps/details?id=app.afterme',
+        'market://details?id=app.afterme',
+        'play.google.com/store',
+        'https://user:pw@play.google.com/store',
+      ]) {
+        expect(
+          () => AppConfig.parse(
+            appEnv: 'dev',
+            apiBaseUrl: 'http://10.0.2.2:8000',
+            playStoreUrl: bad,
+          ),
+          throwsA(isA<AppConfigException>()),
+          reason: bad,
+        );
+      }
+      // It takes part in equality.
+      expect(
+        config,
+        isNot(
+          AppConfig.parse(
+            appEnv: 'dev',
+            apiBaseUrl: 'http://10.0.2.2:8000',
+            playStoreUrl: 'https://play.google.com/store/apps/details?id=x',
+          ),
+        ),
+      );
+    });
+
+    test('the Firebase values: all empty means push is not configured, all set '
+        'means it is', () {
+      final none = AppConfig.parse(
+        appEnv: 'dev',
+        apiBaseUrl: 'http://10.0.2.2:8000',
+      );
+      expect(none.firebase, isNull);
+      expect(
+        AppConfig.parse(
+          appEnv: 'dev',
+          apiBaseUrl: 'http://10.0.2.2:8000',
+          firebaseApiKey: '  ',
+          firebaseAppId: '',
+        ).firebase,
+        isNull,
+        reason: 'blank is empty',
+      );
+      final set = AppConfig.parse(
+        appEnv: 'dev',
+        apiBaseUrl: 'http://10.0.2.2:8000',
+        firebaseApiKey: ' AIzaExample ',
+        firebaseAppId: '1:123456789:android:abcdef',
+        firebaseMessagingSenderId: '123456789',
+        firebaseProjectId: 'afterme-dev',
+      );
+      expect(set.firebase, isNotNull);
+      expect(set.firebase!.apiKey, 'AIzaExample');
+      expect(set.firebase!.appId, '1:123456789:android:abcdef');
+      expect(set.firebase!.messagingSenderId, '123456789');
+      expect(set.firebase!.projectId, 'afterme-dev');
+      // The values are identifiers of the deployment, not for logs.
+      expect('${set.firebase}', isNot(contains('afterme-dev')));
+      expect('$set', isNot(contains('afterme-dev')));
+      expect(set, isNot(none));
+      expect(set.hashCode, isNot(none.hashCode));
+      expect(
+        set,
+        AppConfig.parse(
+          appEnv: 'dev',
+          apiBaseUrl: 'http://10.0.2.2:8000',
+          firebaseApiKey: 'AIzaExample',
+          firebaseAppId: '1:123456789:android:abcdef',
+          firebaseMessagingSenderId: '123456789',
+          firebaseProjectId: 'afterme-dev',
+        ),
+      );
+    });
+
+    test('some of the Firebase values without the others is refused, naming '
+        'what is missing', () {
+      const all = {
+        'firebaseApiKey': 'k',
+        'firebaseAppId': 'a',
+        'firebaseMessagingSenderId': 's',
+        'firebaseProjectId': 'p',
+      };
+      for (final omitted in all.keys) {
+        final values = {...all}..remove(omitted);
+        expect(
+          () => AppConfig.parse(
+            appEnv: 'dev',
+            apiBaseUrl: 'http://10.0.2.2:8000',
+            firebaseApiKey: values['firebaseApiKey'] ?? '',
+            firebaseAppId: values['firebaseAppId'] ?? '',
+            firebaseMessagingSenderId:
+                values['firebaseMessagingSenderId'] ?? '',
+            firebaseProjectId: values['firebaseProjectId'] ?? '',
+          ),
+          throwsA(
+            isA<AppConfigException>().having(
+              (e) => e.message,
+              'message',
+              contains(switch (omitted) {
+                'firebaseApiKey' => 'FIREBASE_API_KEY',
+                'firebaseAppId' => 'FIREBASE_APP_ID',
+                'firebaseMessagingSenderId' => 'FIREBASE_MESSAGING_SENDER_ID',
+                _ => 'FIREBASE_PROJECT_ID',
+              }),
+            ),
+          ),
+          reason: omitted,
+        );
+      }
+      expect(
+        () => AppConfig.parse(
+          appEnv: 'dev',
+          apiBaseUrl: 'http://10.0.2.2:8000',
+          firebaseApiKey: 'k',
+        ),
+        throwsA(
+          isA<AppConfigException>().having(
+            (e) => e.message,
+            'message',
+            allOf(contains('FIREBASE_APP_ID'), contains('are not set')),
+          ),
+        ),
+      );
+    });
+
+    test('Firebase values with spaces are refused', () {
+      expect(
+        () => AppConfig.parse(
+          appEnv: 'dev',
+          apiBaseUrl: 'http://10.0.2.2:8000',
+          firebaseApiKey: 'a b',
+          firebaseAppId: 'a',
+          firebaseMessagingSenderId: 's',
+          firebaseProjectId: 'p',
+        ),
+        throwsA(isA<AppConfigException>()),
+      );
+    });
+
     test('fromEnvironment fails fast when no config was compiled in', () {
       // `flutter test` runs without --dart-define-from-file.
       expect(AppConfig.fromEnvironment, throwsA(isA<AppConfigException>()));
@@ -212,6 +374,11 @@ void main() {
             'API_BASE_URL',
             'PUBLIC_BASE_URL',
             'SENTRY_DSN',
+            'PLAY_STORE_URL',
+            'FIREBASE_API_KEY',
+            'FIREBASE_APP_ID',
+            'FIREBASE_MESSAGING_SENDER_ID',
+            'FIREBASE_PROJECT_ID',
           ]),
         );
         final config = AppConfig.parse(
@@ -219,8 +386,21 @@ void main() {
           apiBaseUrl: json['API_BASE_URL'] as String,
           publicBaseUrl: json['PUBLIC_BASE_URL'] as String,
           sentryDsn: json['SENTRY_DSN'] as String,
+          playStoreUrl: json['PLAY_STORE_URL'] as String,
+          firebaseApiKey: json['FIREBASE_API_KEY'] as String,
+          firebaseAppId: json['FIREBASE_APP_ID'] as String,
+          firebaseMessagingSenderId:
+              json['FIREBASE_MESSAGING_SENDER_ID'] as String,
+          firebaseProjectId: json['FIREBASE_PROJECT_ID'] as String,
         );
         expect(config.env, env);
+        // The owner fills these in when the Firebase projects exist (DEPLOYMENT §4);
+        // until then the app builds and push says it is not configured.
+        if (json['FIREBASE_PROJECT_ID'] == '') {
+          expect(config.firebase, isNull);
+        }
+        expect(config.playStoreUrl.scheme, 'https');
+        expect(config.playStoreUrl.host, 'play.google.com');
         if (env != AppEnv.dev) {
           expect(config.apiBaseUrl.scheme, 'https');
           expect(config.publicBaseUrl.scheme, 'https');

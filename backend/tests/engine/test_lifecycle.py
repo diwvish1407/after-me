@@ -224,8 +224,11 @@ async def test_account_deletion_voids_the_incident_and_tells_those_already_messa
     incident = world.incidents(person)[0]
     assert (incident["status"], incident["closed_by"]) == ("voided", "account_deleted")
     await world.advance_to(ist("2026-10-15T21:00"))
-    assert len(world.mail.to(_address(person, "Mom"), "contact_all_clear")) == 1
+    assert world.mail.to(_address(person, "Mom"), "contact_all_clear") == []
+    [withdrawn] = world.mail.to(_address(person, "Mom"), "contact_alert_withdrawn")
+    assert "closed their AfterMe account" in withdrawn.text
     assert world.mail.to(_address(person, "Dad"), "contact_alert") == []
+    assert world.mail.to(_address(person, "Dad"), "contact_alert_withdrawn") == []
     assert world.mail.to(_address(person, "Dad"), "contact_all_clear") == []
 
 

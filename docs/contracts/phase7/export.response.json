@@ -1,0 +1,154 @@
+{
+  "format_version": 1,
+  "exported_at": "2026-10-08T09:02:00Z",
+  "account": {
+    "id": "00000000-0000-4000-8000-000000000002",
+    "email": "asha@example.com",
+    "tier": "premium",
+    "status": "active",
+    "profile": {
+      "display_name": "Test User",
+      "phone_e164": null,
+      "country_code": null,
+      "timezone": "Asia/Kolkata",
+      "locale": "en"
+    },
+    "created_at": "2026-10-08T09:00:00Z"
+  },
+  "contacts": [
+    {
+      "id": "00000000-0000-4000-8000-000000000001",
+      "display_name": "Mom",
+      "relationship": "mother",
+      "relationship_label": null,
+      "email": "mom@example.com",
+      "phone_e164": null,
+      "priority": 1,
+      "verification_status": "verified",
+      "verified_at": "2026-10-08T09:00:00Z",
+      "is_active": true,
+      "invitation_sent_at": "2026-10-08T09:00:00Z",
+      "invitation_send_count": 1,
+      "notified_at_stages": [
+        1
+      ],
+      "receives_instructions": 0,
+      "created_at": "2026-10-08T09:00:00Z",
+      "updated_at": "2026-10-08T09:00:00Z"
+    }
+  ],
+  "schedule": {
+    "interval_days": 1,
+    "due_local_time": "20:00",
+    "reminder_lead_minutes": 60,
+    "timezone": "Asia/Kolkata",
+    "status": "active",
+    "next_due_at": "2026-10-09T14:30:00Z",
+    "last_checkin_at": "2026-10-08T09:00:00Z",
+    "version": 2
+  },
+  "plan": {
+    "id": "00000000-0000-4000-8000-000000000003",
+    "version": 2,
+    "grace_minutes": 180,
+    "stages": [
+      {
+        "id": "00000000-0000-4000-8000-000000000004",
+        "position": 1,
+        "offset_minutes": 180,
+        "notify_contact_ids": [
+          "00000000-0000-4000-8000-000000000001"
+        ],
+        "release_count": 0
+      }
+    ],
+    "rules": {
+      "grace_min": 60,
+      "grace_max": 4320,
+      "stage_gap_min": 30,
+      "offset_max": 43200,
+      "release_offset_min": 1440,
+      "max_stages": 10,
+      "custom_offsets": true,
+      "presets": [
+        180,
+        360,
+        720,
+        1440,
+        2880,
+        4320
+      ]
+    }
+  },
+  "instructions": [
+    {
+      "id": "00000000-0000-4000-8000-000000000005",
+      "category": "home",
+      "status": "active",
+      "created_at": "2026-10-08T09:00:00Z",
+      "updated_at": "2026-10-08T09:00:00Z",
+      "recipients": [],
+      "title": "House emergency",
+      "body": "The spare key is with Mrs. Sharma at flat 3B."
+    }
+  ],
+  "checkins": [
+    {
+      "id": "00000000-0000-4000-8000-000000000006",
+      "kind": "ok",
+      "source": "app",
+      "received_at": "2026-10-08T09:00:00Z"
+    }
+  ],
+  "incidents": [],
+  "activity": [
+    {
+      "id": 8,
+      "action": "checkin.recorded",
+      "occurred_at": "2026-10-08T09:00:00Z",
+      "params": {
+        "kind": "ok",
+        "source": "app"
+      }
+    },
+    {
+      "id": 7,
+      "action": "schedule.activated",
+      "occurred_at": "2026-10-08T09:00:00Z",
+      "params": {}
+    },
+    {
+      "id": 5,
+      "action": "plan.updated",
+      "occurred_at": "2026-10-08T09:00:00Z",
+      "params": {
+        "stages": 1,
+        "removed": 0
+      }
+    },
+    {
+      "id": 4,
+      "action": "contact.invitation_sent",
+      "occurred_at": "2026-10-08T09:00:00Z",
+      "params": {
+        "send_count": 1,
+        "contact_id": "00000000-0000-4000-8000-000000000001",
+        "contact_display_name": "Mom"
+      }
+    },
+    {
+      "id": 3,
+      "action": "contact.created",
+      "occurred_at": "2026-10-08T09:00:00Z",
+      "params": {
+        "contact_id": "00000000-0000-4000-8000-000000000001",
+        "contact_display_name": "Mom"
+      }
+    }
+  ],
+  "truncated": {
+    "checkins": false,
+    "incidents": false,
+    "activity": false
+  }
+}

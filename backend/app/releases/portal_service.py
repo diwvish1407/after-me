@@ -436,6 +436,10 @@ class ReleasePortalService:
     async def send_code(self, cookie: str | None) -> CodeSent:
         now = await self._now()
         portal_session, resolved = await self._load(cookie, now)
+        if not await self._has_open_release(resolved.access):
+            # Nothing to unlock any more (the incident closed and a closing path left the
+            # access unrevoked): no code is mailed for it. ``view`` would refuse anyway.
+            raise PortalInvalidError
         result = await self.services.limiter.enforce(
             [(PORTAL_OTP_SEND_PER_ACCESS, str(resolved.access.id))], now=now
         )

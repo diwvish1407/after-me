@@ -13,6 +13,8 @@ import 'package:afterme/features/checkin/data/dio_schedule_repository.dart';
 import 'package:afterme/features/checkin/data/models/checkin_models.dart';
 import 'package:afterme/features/contacts/data/contacts_repository.dart';
 import 'package:afterme/features/contacts/data/dio_contacts_repository.dart';
+import 'package:afterme/features/home/data/models/home_models.dart';
+import 'package:afterme/features/incidents/data/incidents_repository.dart';
 import 'package:afterme/features/instructions/data/dio_instructions_repository.dart';
 import 'package:afterme/features/instructions/data/instructions_repository.dart';
 import 'package:afterme/features/instructions/presentation/instruction_labels.dart';
@@ -42,6 +44,14 @@ import '../helpers/fake_http_adapter.dart';
 final Directory _dir = Directory('../docs/contracts/phase6');
 
 bool get _present => File('${_dir.path}/index.json').existsSync();
+
+/// Phase 6 added `releases` to the incident object of Phase 5, so the incident goldens
+/// of that folder are read here too.
+final Directory _incidentDir = Directory('../docs/contracts/phase5');
+
+Map<String, dynamic> _incidentGolden(String file) =>
+    jsonDecode(File('${_incidentDir.path}/$file').readAsStringSync())
+        as Map<String, dynamic>;
 
 Map<String, dynamic> _json(String file) =>
     jsonDecode(File('${_dir.path}/$file').readAsStringSync())
@@ -452,6 +462,8 @@ void main() {
                 body: body['body'] as String,
               ),
             );
+          case 'GET /v1/instructions':
+            await instructions.list();
           case 'GET /v1/instructions/{}':
             await instructions.get('9e7a1f3c-0000-4000-8000-000000000000');
           case 'PUT /v1/plan':
@@ -558,6 +570,9 @@ void main() {
         'problem_reauth_contact_delete',
         'problem_reauth_contact_off',
         'problem_reauth_instruction',
+        // Reading the instructions asks for it too (Phase 9): the app reads it through
+        // withReauth, never as a failure of the session.
+        'problem_reauth_instruction_read',
       ]) {
         final failure = await failureOf(problem(name));
         expect(failure, isA<ForbiddenFailure>(), reason: name);
@@ -572,6 +587,7 @@ void main() {
         'problem_reauth_contact_delete',
         'problem_reauth_contact_off',
         'problem_reauth_instruction',
+        'problem_reauth_instruction_read',
       };
       final reauth = {
         for (final p in problems)
@@ -600,4 +616,67 @@ void main() {
       }
     });
   });
+
+  group(
+    'the incident\'s releases (added to the incident object in Phase 6)',
+    () {
+      final present = File('${_incidentDir.path}/index.json').existsSync();
+
+      test('every incident golden has a `releases` list the app reads', () {
+        expect(present, isTrue, reason: 'docs/contracts/phase5 is read here');
+        final objects = <String, Map<String, dynamic>>{
+          'incident_current':
+              _incidentGolden('incident_current.response.json')['incident']
+                  as Map<String, dynamic>,
+          'incident_after_stage':
+              _incidentGolden('incident_after_stage.response.json')['incident']
+                  as Map<String, dynamic>,
+          'incident_get': _incidentGolden('incident_get.response.json'),
+          'home_incident':
+              _incidentGolden('home_incident.response.json')['incident']
+                  as Map<String, dynamic>,
+        };
+        for (final MapEntry(key: name, value: json) in objects.entries) {
+          expect(json['releases'], isA<List<dynamic>>(), reason: name);
+          final incident = Incident.fromJson(json);
+          expect(
+            incident.releases,
+            hasLength((json['releases'] as List).length),
+            reason: name,
+          );
+          // The same object, read through Home.
+          final home = HomeSnapshot.fromJson({
+            'server_time': json['server_time'],
+            'user': {'display_name': 'Test User', 'timezone': 'Asia/Kolkata'},
+            'checkin': {'status': 'incident_open'},
+            'incident': json,
+          });
+          expect(home.incidentDetails, incident, reason: name);
+        }
+      });
+
+      test(
+        'a stage that shares instructions counts them without naming them',
+        () {
+          // `release_count` is on the stage and the warning before it; titles are only on
+          // `releases`, which the server fills once a stage has run.
+          final json =
+              _incidentGolden('incident_after_stage.response.json')['incident']
+                  as Map<String, dynamic>;
+          final withStage = {
+            ...json,
+            'timeline': [
+              for (final row in json['timeline'] as List)
+                (row as Map<String, dynamic>)['kind'] == 'execute_stage'
+                    ? {...row, 'status': 'pending', 'release_count': 2}
+                    : row,
+            ],
+          };
+          final incident = Incident.fromJson(withStage);
+          expect(incident.timeline.last.releaseCount, 2);
+          expect(incident.releases, isEmpty);
+        },
+      );
+    },
+  );
 }

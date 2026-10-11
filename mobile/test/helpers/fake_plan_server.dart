@@ -7,7 +7,8 @@ import 'package:afterme/features/plan/data/plan_repository.dart';
 
 /// The plan "server" for tests: `GET` and `PUT /v1/plan` behaving like the contract in
 /// `docs/contracts/phase5` and the backend's rules (ETag / If-Match, stage 1 at the end
-/// of the grace period, ordering and gaps, the free tier's presets and stage limit, 404
+/// of the grace period, ordering and gaps, the free tier's presets (and the times a
+/// downgraded account already has) and stage limit, 404
 /// for a contact that is not yours, 409 during an incident, and the step-up: a plan that
 /// really changes while check-ins are on needs a fresh password, 403 `reauth_required`,
 /// asked only after everything else was checked). It implements [PlanRepository], so
@@ -264,7 +265,12 @@ class FakePlanServer implements PlanRepository {
   List<ApiFieldError> _validate(PlanDraft draft) {
     final r = rules;
     final errors = <ApiFieldError>[];
-    bool allowed(int value) => r.customOffsets || r.presets.contains(value);
+    // A downgraded account keeps the times its plan already has (PRD §10): they stay
+    // allowed, only new custom values are refused.
+    bool allowed(int value) =>
+        r.customOffsets ||
+        r.presets.contains(value) ||
+        _stages.any((s) => s.offsetMinutes == value);
     ApiFieldError error(String field, String code, String message) =>
         ApiFieldError(field: field, code: code, message: message);
 

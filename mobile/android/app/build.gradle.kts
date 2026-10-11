@@ -31,6 +31,10 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+        // flutter_local_notifications (foreground notifications, Phase 8) is built with core
+        // library desugaring, and the app module must agree or the AAR metadata check
+        // fails the build. minSdk 26 already has java.time; this changes nothing at runtime.
+        isCoreLibraryDesugaringEnabled = true
     }
 
     defaultConfig {
@@ -80,6 +84,15 @@ android {
 
     buildTypes {
         release {
+            // Code and resource shrinking (R8) are part of the release, stated here and
+            // not left to the Flutter Gradle plugin's default (Phase 9 review M-04).
+            // The plugin also adds proguard-android-optimize.txt, its own
+            // flutter_proguard_rules.pro and android/app/proguard-rules.pro (this app's,
+            // next to this file); the libraries ship their consumer rules. Release builds
+            // are made with tool/build_release.sh, which adds --obfuscate and
+            // --split-debug-info and runs the manifest check.
+            isMinifyEnabled = true
+            isShrinkResources = true
             signingConfig =
                 if (hasReleaseKeystore) {
                     signingConfigs.getByName("release")
@@ -98,6 +111,11 @@ kotlin {
     compilerOptions {
         jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
     }
+}
+
+dependencies {
+    // Required by isCoreLibraryDesugaringEnabled above (flutter_local_notifications 22).
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
 }
 
 flutter {

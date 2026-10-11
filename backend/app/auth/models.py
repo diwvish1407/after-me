@@ -52,6 +52,10 @@ class User(Base):
         CheckConstraint("char_length(email) <= 254", name="email_length"),
         CheckConstraint(in_list("status", USER_STATUSES), name="status"),
         CheckConstraint(in_list("tier", USER_TIERS), name="tier"),
+        CheckConstraint(
+            "status <> 'pending_deletion' OR deletion_requested_at IS NOT NULL",
+            name="pending_has_request",
+        ),
     )
 
     id: Mapped[uuid.UUID] = _uuid_pk()

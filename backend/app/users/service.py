@@ -13,7 +13,7 @@ from app.users.models import UserProfile
 from app.users.schemas import MeResponse, ProfileOut, ProfilePatchRequest
 
 
-def _me(user: User, profile: UserProfile | None) -> MeResponse:
+def me_out(user: User, profile: UserProfile | None) -> MeResponse:
     return MeResponse(
         id=user.id,
         email=user.email,
@@ -41,7 +41,7 @@ class UserService(AuthServiceBase):
             raise SessionRevoked
         profile = await self.profiles.get(owner_id=current.user_id)
         await self.session.commit()
-        return _me(user, profile)
+        return me_out(user, profile)
 
     async def update_profile(self, current: CurrentUser, patch: ProfilePatchRequest) -> MeResponse:
         """Apply the fields present in ``patch``. Only real changes are audited; a timezone change
@@ -109,4 +109,4 @@ class UserService(AuthServiceBase):
                     ),
                 )
         await self.session.commit()
-        return _me(user, profile)
+        return me_out(user, profile)

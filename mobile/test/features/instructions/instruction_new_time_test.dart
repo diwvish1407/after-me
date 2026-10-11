@@ -683,7 +683,10 @@ void main() {
       await time(tester, _day1);
       await tapText(tester, 'Save instruction');
       await tester.pumpAndSettle();
-      expect(find.textContaining("You're offline"), findsOneWidget);
+      expect(
+        find.textContaining("We couldn't confirm that this was saved"),
+        findsOneWidget,
+      );
       expect(fakes.instructions.calls, isNot(contains('create')));
       expect(fakes.plan.stages, hasLength(1));
       // Trying again works.
@@ -710,7 +713,10 @@ void main() {
         ),
         findsOneWidget,
       );
-      expect(find.textContaining("You're offline"), findsOneWidget);
+      expect(
+        find.textContaining("We couldn't confirm that this was saved"),
+        findsOneWidget,
+      );
       expect(fakes.plan.stages.map((s) => s.offsetMinutes), [180, 1440]);
       expect(fakes.instructions.liveCount, 0);
       final container = ProviderScope.containerOf(

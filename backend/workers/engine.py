@@ -16,7 +16,7 @@ from app.core.config import load_settings
 from app.core.logging import configure_logging, get_logger
 from app.engine.dispatcher import Dispatcher
 from app.engine.runtime import Engine, TickReport
-from app.notifications.push import LogOnlyPushProvider
+from app.notifications.providers.factory import build_push_provider
 
 
 async def run() -> None:
@@ -30,7 +30,7 @@ async def run() -> None:
             msg = f"the worker must connect as afterme_worker, not {role}"
             raise RuntimeError(msg)
     engine = Engine(services)
-    dispatcher = Dispatcher(services, push=LogOnlyPushProvider())
+    dispatcher = Dispatcher(services, push=build_push_provider(settings))
     stop = asyncio.Event()
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGTERM, signal.SIGINT):

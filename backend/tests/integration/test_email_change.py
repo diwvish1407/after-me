@@ -76,14 +76,14 @@ async def test_start_sends_a_code_to_the_new_address_and_a_notice_to_the_old_one
     assert response.json() == {"status": "code_sent"}
 
     assert {(m.to, m.template) for m in h.mail.messages} == {
-        ("New.Address@Example.com", "email_change_code"),
+        ("New.Address@example.com", "email_change_code"),
         ("old@example.com", "email_change_requested"),
     }
-    code = _code(h, "New.Address@Example.com")
+    code = _code(h, "New.Address@example.com")
     notice = h.mail.to("old@example.com", "email_change_requested")[0]
     assert code not in notice.text  # the old mailbox never sees the code
-    assert "New.Address@Example.com" not in notice.text  # nor the whole new address
-    assert "N***@Example.com" in notice.text
+    assert "New.Address@example.com" not in notice.text  # nor the whole new address
+    assert "N***@example.com" in notice.text
 
     row = owner_db.execute(
         "SELECT kind, secret_hash, payload, attempts, expires_at, created_at FROM auth_tokens "
@@ -93,7 +93,7 @@ async def test_start_sends_a_code_to_the_new_address_and_a_notice_to_the_old_one
     assert row["kind"] == "code"
     assert code.encode() not in bytes(row["secret_hash"])
     assert row["payload"] == {
-        "email": "New.Address@Example.com",
+        "email": "New.Address@example.com",
         "email_normalized": "new.address@example.com",
     }
     assert row["expires_at"] - row["created_at"] == timedelta(minutes=15)
@@ -243,10 +243,11 @@ async def test_verify_changes_the_email_and_keeps_every_session(h: Harness, owne
     assert response.status_code == 200
     me = await h.client.get("/v1/me", headers=bearer(tokens))
     assert response.json() == me.json()  # same body as GET /me
-    assert me.json()["email"] == "After@Example.com"  # original casing kept for display
+    # the local part keeps its casing; the domain is lower-cased (canonical spelling)
+    assert me.json()["email"] == "After@example.com"
 
     row = owner_db.execute("SELECT email, email_normalized FROM users").fetchone()
-    assert row == {"email": "After@Example.com", "email_normalized": "after@example.com"}
+    assert row == {"email": "After@example.com", "email_normalized": "after@example.com"}
     # Both sessions survive.
     assert (await h.client.get("/v1/me", headers=bearer(other))).status_code == 200
     # Sign-in works with the new address only.
@@ -255,8 +256,8 @@ async def test_verify_changes_the_email_and_keeps_every_session(h: Harness, owne
     # The notice goes to the OLD address, not the new one.
     notices = h.mail.to("before@example.com", "email_changed")
     assert len(notices) == 1
-    assert "A***@Example.com" in notices[0].text
-    assert h.mail.to("After@Example.com", "email_changed") == []
+    assert "A***@example.com" in notices[0].text
+    assert h.mail.to("After@example.com", "email_changed") == []
     changed = owner_db.execute(
         "SELECT actor_type, user_visible, metadata FROM audit_logs WHERE action = %s",
         (audit.EMAIL_CHANGED,),

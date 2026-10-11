@@ -7,6 +7,7 @@ import 'package:uuid/uuid.dart';
 import '../../../app/repository_providers.dart';
 import '../../../core/api/failures/app_failure.dart';
 import '../../../core/api/failures/failure_mapper.dart';
+import '../../../core/api/upgrade_gate.dart';
 import '../../../core/auth/auth_controller.dart';
 import '../../../core/time/clock.dart';
 import '../data/checkin_repository.dart';
@@ -85,6 +86,19 @@ class CheckInState {
       phase == CheckInPhase.rateLimited ||
       phase == CheckInPhase.signInRequired;
 
+  /// Whether the `safe_required` answer on hand is about the open incident
+  /// [incidentId]. It is never about another one: an answer that outlived its incident
+  /// must not make the next incident (nobody told yet) read as "contacts have been
+  /// notified". An answer that names no incident cannot be told apart and applies to
+  /// whatever is open; the next read of Home settles it.
+  bool safeRequiredApplies(String incidentId) {
+    if (phase != CheckInPhase.safeRequired) {
+      return false;
+    }
+    final named = failure?.problem?.incidentId;
+    return named == null || named == incidentId;
+  }
+
   @override
   bool operator ==(Object other) =>
       other is CheckInState &&
@@ -154,6 +168,14 @@ class CheckInController extends Notifier<CheckInState> {
     _cancelTimers();
     ref.onDispose(_cancelTimers);
     _restored = signedIn ? _restore(_epoch) : Future<void>.value();
+    // A tap that the server refused because this version is too old is kept; the moment
+    // the server accepts the app again (the update screen was lifted by a request that
+    // worked) it is sent, with its own key, without waiting for the next foreground.
+    ref.listen<bool>(upgradeGateProvider, (previous, next) {
+      if (previous == true && !next) {
+        unawaited(retryNow());
+      }
+    });
     return const CheckInState();
   }
 
@@ -269,7 +291,7 @@ class CheckInController extends Notifier<CheckInState> {
       }
       _record = null;
       _failures = 0;
-      await _store.clear();
+      await _store.clearFor(_userId);
       if (!_alive(epoch)) {
         return;
       }
@@ -348,7 +370,7 @@ class CheckInController extends Notifier<CheckInState> {
   Future<void> _drop() async {
     _record = null;
     _failures = 0;
-    await _store.clear();
+    await _store.clearFor(_userId);
   }
 
   /// [record] is too old to count: nothing is sent for it, its retry is cancelled and it
@@ -362,7 +384,28 @@ class CheckInController extends Notifier<CheckInState> {
       phase: CheckInPhase.expired,
       tappedAt: record.reportedAt,
     );
-    await _store.clear();
+    await _store.clearFor(_userId);
+  }
+
+  /// The I'M SAFE path took over (or the incident is over): "confirm you're safe" is no
+  /// longer what the last tap was answered with.
+  void dismissSafeRequired() {
+    if (state.phase == CheckInPhase.safeRequired) {
+      state = const CheckInState();
+    }
+  }
+
+  /// The incident [incidentId] is known to be over (a read of it says so, or I'M SAFE for
+  /// it was answered "already closed"). Drops a `safe_required` answer that is about it,
+  /// or that names no incident; one that names another incident is left alone.
+  void dismissSafeRequiredFor(String? incidentId) {
+    if (state.phase != CheckInPhase.safeRequired) {
+      return;
+    }
+    final named = state.failure?.problem?.incidentId;
+    if (incidentId == null || named == null || named == incidentId) {
+      state = const CheckInState();
+    }
   }
 
   /// The person read (or dismissed) the notice of a tap that was too old to count.

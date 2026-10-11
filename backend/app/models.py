@@ -12,7 +12,7 @@ from app.core.db import Base
 from app.core.models import SystemFlag
 from app.incidents.models import EscalationIncident, IncidentAction
 from app.instructions.models import Instruction, InstructionCategory, InstructionRecipient
-from app.notifications.models import Notification, NotificationLog
+from app.notifications.models import EmailReceipt, Notification, NotificationLog
 from app.ops.models import IngestionProbe, ServiceHeartbeat, SystemHold
 from app.plans.models import EscalationPlan, EscalationStep, EscalationStepContact
 from app.releases.models import (
@@ -33,6 +33,7 @@ __all__ = [
     "CheckinEvent",
     "ContactVerification",
     "Device",
+    "EmailReceipt",
     "EmailSuppression",
     "EscalationIncident",
     "EscalationPlan",
@@ -113,6 +114,8 @@ PHASE6_TABLES: tuple[str, ...] = (
     "portal_sessions",
     "portal_otp_challenges",
 )
+# Phase 8: what a provider told us about mail that was sent straight to a contact.
+PHASE8_TABLES: tuple[str, ...] = ("email_receipts",)
 ALL_TABLES: tuple[str, ...] = (
-    PHASE1_TABLES + PHASE3_TABLES + PHASE4_TABLES + PHASE5_TABLES + PHASE6_TABLES
+    PHASE1_TABLES + PHASE3_TABLES + PHASE4_TABLES + PHASE5_TABLES + PHASE6_TABLES + PHASE8_TABLES
 )

@@ -118,6 +118,30 @@ void main() {
       expect(gateway.calls, [true, false, true]);
     });
 
+    testWidgets('can be switched on and off while it stays in the tree (Home '
+        'holds it only while a title is on screen)', (tester) async {
+      final gateway = FakeSecureScreenGateway();
+      Widget tree({required bool enabled}) => ProviderScope(
+        overrides: [secureScreenGatewayProvider.overrideWithValue(gateway)],
+        child: Directionality(
+          textDirection: TextDirection.ltr,
+          child: SecureScreen(enabled: enabled, child: const Text('content')),
+        ),
+      );
+      await tester.pumpWidget(tree(enabled: false));
+      expect(gateway.calls, isEmpty, reason: 'not needed, not held');
+      await tester.pumpWidget(tree(enabled: true));
+      expect(gateway.secure, isTrue);
+      await tester.pumpWidget(tree(enabled: false));
+      await tester.pump();
+      expect(gateway.secure, isFalse);
+      expect(gateway.calls, [true, false]);
+      await tester.pumpWidget(tree(enabled: true));
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump();
+      expect(gateway.secure, isFalse, reason: 'removed while held');
+    });
+
     testWidgets('nested screens hold it together', (tester) async {
       final gateway = await pump(
         tester,

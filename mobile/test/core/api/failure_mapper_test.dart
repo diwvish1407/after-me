@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:afterme/core/api/failures/app_failure.dart';
@@ -301,6 +302,93 @@ void main() {
       expect(failure, isA<ForbiddenFailure>());
       expect(failure.problem, isNull);
       expect(failure.requestId, isNull);
+    });
+  });
+
+  group('Phase 7 problems (export, deletion, activity)', () {
+    test('403 reauth_required of the export or the deletion', () {
+      final failure = mapDioException(
+        _response(403, body: _problem(403, 'reauth_required')),
+      );
+      expect(failure, isA<ForbiddenFailure>());
+      expect((failure as ForbiddenFailure).code, 'reauth_required');
+      expect(failure.isTransient, isFalse);
+      expect(failure.requestId, 'req-1');
+    });
+
+    test('the same problem arrives as bytes when the request asked for bytes '
+        '(the export)', () {
+      final bytes = utf8.encode(jsonEncode(_problem(403, 'reauth_required')));
+      final failure = mapDioException(_response(403, body: bytes));
+      expect(failure, isA<ForbiddenFailure>());
+      expect((failure as ForbiddenFailure).code, 'reauth_required');
+      expect(failure.requestId, 'req-1');
+      expect(
+        mapDioException(
+          _response(
+            426,
+            body: utf8.encode(jsonEncode(_problem(426, 'upgrade_required'))),
+          ),
+        ),
+        isA<UpgradeRequiredFailure>(),
+      );
+    });
+
+    test('429 on the export carries how long to wait', () {
+      final failure = mapDioException(
+        _response(
+          429,
+          body: utf8.encode(jsonEncode(_problem(429, 'rate_limited'))),
+          headers: {
+            'retry-after': ['2400'],
+          },
+        ),
+      );
+      expect(
+        (failure as RateLimitedFailure).retryAfter,
+        const Duration(minutes: 40),
+      );
+    });
+
+    test('422 on `confirm` of the deletion keeps the field and its code', () {
+      final failure = mapDioException(
+        _response(
+          422,
+          body: _problem(422, 'validation_failed', {
+            'errors': [
+              {
+                'field': 'confirm',
+                'code': 'invalid_choice',
+                'message': "Input should be 'DELETE'",
+              },
+            ],
+          }),
+        ),
+      );
+      final validation = failure as ValidationFailure;
+      expect(validation.fieldErrors.single.field, 'confirm');
+      expect(validation.fieldErrors.single.code, 'invalid_choice');
+    });
+
+    test('422 on `cursor` of the activity feed keeps the field', () {
+      final failure = mapDioException(
+        _response(
+          422,
+          body: _problem(422, 'validation_failed', {
+            'errors': [
+              {'field': 'cursor', 'code': 'invalid'},
+            ],
+          }),
+        ),
+      );
+      expect((failure as ValidationFailure).fieldErrors.single.field, 'cursor');
+    });
+
+    test('401 after a deletion is an UnauthorizedFailure like any other', () {
+      final failure = mapDioException(
+        _response(401, body: _problem(401, 'session_revoked')),
+      );
+      expect((failure as UnauthorizedFailure).code, 'session_revoked');
     });
   });
 

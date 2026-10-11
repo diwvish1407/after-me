@@ -7,12 +7,15 @@ import '../../../app/repository_providers.dart';
 import '../../../core/api/failures/app_failure.dart';
 import '../../../core/api/failures/failure_mapper.dart';
 import '../../../core/auth/auth_controller.dart';
+import '../../../core/auth/session_epoch.dart';
 import '../../../core/time/clock.dart';
 import '../../auth/application/me_controller.dart';
 import '../../checkin/application/checkin_controller.dart';
 import '../../checkin/application/schedule_controller.dart';
 import '../../checkin/data/models/checkin_models.dart';
 import '../../contacts/application/contacts_controller.dart';
+import '../../incidents/application/safe_controller.dart';
+import '../../incidents/data/models/incident_models.dart';
 import '../../instructions/application/instructions_controller.dart';
 import '../../plan/application/plan_controller.dart';
 import '../data/home_repository.dart';
@@ -59,11 +62,20 @@ class HomeData {
 /// a contact change and a timezone change, and by pull-to-refresh and when the app
 /// returns.
 class HomeController extends AsyncNotifier<HomeData?> {
+  /// Counts the changes applied to the aggregate (a check-in, I'M SAFE, a `safe_required`
+  /// answer). A read that started before one may be older than what is on screen.
   int _epoch = 0;
+
+  /// Counts sessions: a read that was started for the account that signed out must never
+  /// land in the one that signed in after it.
+  final SessionEpoch _session = SessionEpoch();
   Future<AppFailure?>? _refreshing;
 
   @override
   Future<HomeData?> build() async {
+    final session = _session.next();
+    // Another account's read in flight is not this one's: it is not joined.
+    _refreshing = null;
     if (ref.watch(authControllerProvider) != AuthStatus.signedIn) {
       return null;
     }
@@ -74,6 +86,30 @@ class HomeController extends AsyncNotifier<HomeData?> {
             result != null &&
             result != previous?.result) {
           _applyCheckIn(result);
+        }
+        // The server says contacts were already told, which the aggregate on screen
+        // may not: read it again so Home shows the I'M SAFE path. A read that is already
+        // on its way may be older than that answer, so it is read once more after it.
+        if (next.phase == CheckInPhase.safeRequired &&
+            previous?.phase != CheckInPhase.safeRequired) {
+          _epoch++;
+          unawaited(refresh());
+        }
+      })
+      ..listen(safeControllerProvider, (previous, next) {
+        final result = next.result;
+        if (next.phase == SafePhase.success &&
+            result != null &&
+            result != previous?.result) {
+          _applyMarkedSafe(result);
+        }
+        // The incident was already closed (somewhere else, or by the worker): Home must
+        // not keep showing it, and no "confirm you're safe" about it may stay behind.
+        if (next.alreadyClosed && !(previous?.alreadyClosed ?? false)) {
+          ref
+              .read(checkInControllerProvider.notifier)
+              .dismissSafeRequiredFor(next.incidentId);
+          unawaited(refresh());
         }
       })
       ..listen(scheduleControllerProvider, (previous, next) {
@@ -123,7 +159,11 @@ class HomeController extends AsyncNotifier<HomeData?> {
         }
       });
     try {
-      return _data(await ref.watch(homeRepositoryProvider).load());
+      final snapshot = await ref.watch(homeRepositoryProvider).load();
+      if (ref.mounted && _session.isCurrent(session)) {
+        _reconcile(snapshot);
+      }
+      return _data(snapshot);
     } on Object catch (error) {
       throw toAppFailure(error);
     }
@@ -141,7 +181,13 @@ class HomeController extends AsyncNotifier<HomeData?> {
     if (running != null) {
       return running;
     }
-    final future = _refresh().whenComplete(() => _refreshing = null);
+    late final Future<AppFailure?> future;
+    future = _refresh().whenComplete(() {
+      // Only its own entry: another account's read may have taken the slot meanwhile.
+      if (identical(_refreshing, future)) {
+        _refreshing = null;
+      }
+    });
     return _refreshing = future;
   }
 
@@ -149,10 +195,12 @@ class HomeController extends AsyncNotifier<HomeData?> {
     if (ref.read(authControllerProvider) != AuthStatus.signedIn) {
       return null;
     }
+    final session = _session.current;
     final epoch = _epoch;
     try {
       final snapshot = await ref.read(homeRepositoryProvider).load();
-      if (!ref.mounted) {
+      if (!ref.mounted || !_session.isCurrent(session)) {
+        // Another account's answer: nothing of it is applied or reported.
         return null;
       }
       if (epoch != _epoch) {
@@ -162,19 +210,84 @@ class HomeController extends AsyncNotifier<HomeData?> {
         return await refresh();
       }
       state = AsyncData(_data(snapshot));
+      _reconcile(snapshot);
       return null;
     } on Object catch (error) {
       final failure = toAppFailure(error);
-      if (!ref.mounted) {
-        return failure;
+      if (!ref.mounted || !_session.isCurrent(session)) {
+        return null;
       }
       final current = state.value;
       if (current != null) {
-        state = AsyncData(current.copyWith(stale: failure.isTransient));
+        // Whatever the failure, this is no longer confirmed to be current.
+        state = AsyncData(current.copyWith(stale: true));
       } else {
         state = AsyncError<HomeData?>(failure, StackTrace.current);
       }
       return failure;
+    }
+  }
+
+  /// What a read that was just applied says about what other controllers hold.
+  void _reconcile(HomeSnapshot snapshot) {
+    _reconcileSafeRequired(snapshot);
+    _reconcileContacts(snapshot.planSummary);
+  }
+
+  /// A `safe_required` answer is "contacts were already told, use I'M SAFE" **for one
+  /// incident**. When that incident is closed somewhere else (the web I'M SAFE, the
+  /// lost-phone flow, the operator) the answer outlives it, and it must not keep Home
+  /// asking for I'M SAFE, nor make the next incident (nobody told yet) read as "your
+  /// contacts have been notified". The read that just arrived is the truth: the answer
+  /// stays only while it still describes the open incident.
+  void _reconcileSafeRequired(HomeSnapshot snapshot) {
+    final checkIn = ref.read(checkInControllerProvider);
+    if (checkIn.phase != CheckInPhase.safeRequired) {
+      return;
+    }
+    final controller = ref.read(checkInControllerProvider.notifier);
+    final raw = snapshot.incident;
+    if (raw == null) {
+      // No open incident. (A schedule that says "incident open" without one cannot
+      // happen through the API; what the server said is kept then.)
+      if (snapshot.checkin.status != CheckInStatus.incidentOpen) {
+        controller.dismissSafeRequired();
+      }
+      return;
+    }
+    final named = checkIn.failure?.problem?.incidentId;
+    final id = raw['id'];
+    if (named != null && id is String && id != named) {
+      // Another incident is open now: the answer was about one that is over.
+      controller.dismissSafeRequired();
+      return;
+    }
+    final incident = snapshot.incidentDetails;
+    if (incident == null) {
+      // This version cannot read it: nothing is judged from it.
+      return;
+    }
+    // An answer that named its incident stays while that incident is open (contacts are
+    // never "un-told"). One that did not cannot be tied to this incident, so an incident
+    // that says nobody was told settles it.
+    if (incident.isClosed || (named == null && !incident.needsSafe)) {
+      controller.dismissSafeRequired();
+    }
+  }
+
+  /// A contact can accept (or decline) out of band, which only the server sees: the
+  /// People tab would keep saying "Pending" while Home says "1 of 1 accepted". When the
+  /// counts of the aggregate disagree with the list on hand, the list is read again. It
+  /// is read silently (the list stays on screen until the new one replaces it).
+  void _reconcileContacts(PlanSummary summary) {
+    final contacts = ref.read(contactsControllerProvider).value;
+    if (contacts == null) {
+      return;
+    }
+    final verified = contacts.where((c) => c.isAccepted).length;
+    if (verified != summary.contactsVerified ||
+        contacts.length != summary.contactsTotal) {
+      unawaited(ref.read(contactsControllerProvider.notifier).reload());
     }
   }
 
@@ -206,6 +319,39 @@ class HomeController extends AsyncNotifier<HomeData?> {
                 : checkin.status,
             nextDueAt: result.nextDueAt,
             lastCheckinAt: result.checkin.receivedAt,
+          ),
+        ),
+      ),
+    );
+    unawaited(refresh());
+  }
+
+  /// Puts a confirmed I'M SAFE on screen straight away (the server's own numbers: the
+  /// incident is closed and the schedule restarted), then reads the aggregate to catch
+  /// up with everything else.
+  void _applyMarkedSafe(SafeResult result) {
+    // Whatever the check-in tap said about I'M SAFE being needed is over.
+    ref.read(checkInControllerProvider.notifier).dismissSafeRequired();
+    final current = state.value;
+    if (current == null) {
+      unawaited(refresh());
+      return;
+    }
+    _epoch++;
+    final checkin = current.snapshot.checkin;
+    state = AsyncData(
+      current.copyWith(
+        stale: false,
+        snapshot: current.snapshot.copyWith(
+          incident: null,
+          checkin: checkin.copyWith(
+            status: checkin.status == CheckInStatus.incidentOpen
+                ? (result.nextDueAt == null
+                      ? CheckInStatus.inactive
+                      : CheckInStatus.active)
+                : checkin.status,
+            nextDueAt: result.nextDueAt,
+            lastCheckinAt: result.serverTime,
           ),
         ),
       ),

@@ -29,7 +29,7 @@ async def test_start_creates_unverified_user_profile_and_code(h: Harness, owner_
 
     user = _user(owner_db, "new.user@example.com")
     assert user is not None
-    assert user["email"] == "New.User@Example.com"
+    assert user["email"] == "New.User@example.com"
     assert user["email_verified_at"] is None
     assert user["password_hash"].startswith("$argon2id$")
     assert PASSWORD not in user["password_hash"]
@@ -99,7 +99,7 @@ async def test_start_for_pending_signup_replaces_password_and_profile(
     )
     user = _user(owner_db, "pending@example.com")
     assert user is not None
-    assert user["email"] == "Pending@Example.com"
+    assert user["email"] == "Pending@example.com"
     profile = owner_db.execute(
         "SELECT display_name FROM user_profiles WHERE user_id = %s", (user["id"],)
     ).fetchone()

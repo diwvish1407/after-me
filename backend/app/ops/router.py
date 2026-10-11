@@ -11,23 +11,20 @@ from __future__ import annotations
 import secrets
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Header, Response, status
+from fastapi import APIRouter, Header, Response, status
 from sqlalchemy import text
 
-from app.api.deps import ClockDep, ContextDep, DbSession, ServicesDep, ip_rate_limit
+from app.api.deps import ClockDep, ContextDep, DbSession, ServicesDep
 from app.core.errors import NotFound, Unauthenticated
-from app.security.rate_limit import PROBE_PER_IP
+from app.core.net import rate_limit_subject
+from app.security.rate_limit import PROBE_FAILURES_PER_IP, PROBE_PER_IP
 
 router = APIRouter(tags=["internal"])
 
 _SOURCE_MAX = 40
 
 
-@router.post(
-    "/internal/probe",
-    status_code=status.HTTP_204_NO_CONTENT,
-    dependencies=[Depends(ip_rate_limit(PROBE_PER_IP))],
-)
+@router.post("/internal/probe", status_code=status.HTTP_204_NO_CONTENT)
 async def probe(
     session: DbSession,
     services: ServicesDep,
@@ -39,14 +36,20 @@ async def probe(
     expected = services.settings.probe_token
     if expected is None:
         raise NotFound  # not configured: the route does not exist
+    now = await clock.now(session)
+    network = rate_limit_subject(ctx.client_ip)
     if token is None or not secrets.compare_digest(
         token.encode(), expected.get_secret_value().encode()
     ):
+        # The token is compared before anything is counted against the monitor, and a wrong
+        # one spends its own, separate budget: a stranger cannot starve the real probe.
+        await services.limiter.enforce([(PROBE_FAILURES_PER_IP, network)], now=now)
         raise Unauthenticated
+    await services.limiter.enforce([(PROBE_PER_IP, network)], now=now)
     # A Core INSERT with no RETURNING: the API role may insert probes but not read them back.
     await session.execute(
         text("INSERT INTO ingestion_probes (received_at, source) VALUES (:at, :source)"),
-        {"at": await clock.now(session), "source": (source or "monitor")[:_SOURCE_MAX]},
+        {"at": now, "source": (source or "monitor")[:_SOURCE_MAX]},
     )
     await session.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)

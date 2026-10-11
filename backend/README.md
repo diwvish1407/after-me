@@ -40,7 +40,7 @@ make setup
    database URLs and appends a fresh Ed25519 JWT signing key and HMAC pepper from
    `scripts/generate_jwt_key.py --with-pepper`. The file is built in a private temporary file
    (mode 0600) and renamed into place, so a failure never leaves a half-written `.env`.
-   `.env` is git-ignored and is read only when `AFTERME_APP_ENV` is unset or `dev`.
+   `.env` is git-ignored and is read only when `AFTERME_APP_ENV` is unset or `dev`. With no `.env` file and `AFTERME_APP_ENV` unset the process **refuses to start** (Phase 9: a forgotten variable must not silently switch every production refusal off).
 4. `alembic upgrade head` against `afterme_dev`, as `afterme_owner`.
 
 ## Everyday commands
@@ -58,6 +58,8 @@ make setup
 | `make latest-mail` | prints the newest file in `.dev_mail/` (signup code, reset link, notices) |
 | `make contracts` | regenerates `docs/contracts/phase2` to `phase5` (`*.json`) after an intentional API change |
 | `make worker` | the escalation worker: engine tick + outbox dispatcher (`python -m workers.engine`, connects as `afterme_worker`) |
+| `make maintenance` | the retention job once (`python -m workers.maintenance`, `--every N` loops): scrubs the contacts of closed accounts once their all-clear has left and hard-deletes accounts 30 days after the request |
+| `make admin ARGS="email-test --to ADDRESS"` / `ARGS="push-test --token TOKEN"` | prove a provider configuration end to end (DNS, keys, project) without touching an account: prints `ok: provider=… message_id=…` or the failure kind |
 | `make admin ARGS="status"` | operator CLI: `status` (exit 1 if anything would page), `hold status`, `hold enter --reason "…"`, `hold exit [--include-ingestion]`, `incident void <id>`, `action retry <id>` |
 | `make engine-gate` | the Phase 5 exit gate: the T0-T8 lifecycle 100 times in a row, then every engine suite |
 | `make check` | format check, lint, types, tests with the coverage gate, audit (CI additionally runs the migration round trip: `make migrate-check`) |
@@ -204,9 +206,9 @@ is held as `SecretStr`, and never appears in logs or validation errors.
 
 | Variable | Default | Required in staging/prod | Constraint |
 |---|---|---|---|
-| `APP_ENV` | `dev` | yes | `dev`, `test`, `staging`, `prod`. A `.env` file can never change it. |
+| `APP_ENV` | none (`dev` when `.env` exists) | yes | `dev`, `test`, `staging`, `prod`. A `.env` file can never change it. Unset with no `.env`: startup is refused. In `dev` and `test` a database URL that is not on this machine is refused. |
 | `DEBUG` | `false` | no | Must be `false` in staging/prod. |
-| `LOG_LEVEL` | `INFO` | no | `DEBUG`, `INFO`, `WARNING`, `ERROR`. JSON logs in staging/prod, console in dev. |
+| `LOG_LEVEL` | `INFO` | no | `DEBUG`, `INFO`, `WARNING`, `ERROR`. JSON logs in staging/prod, console in dev. `DEBUG` is refused in staging/prod. |
 | `PUBLIC_BASE_URL`, `API_BASE_URL` | `http://localhost:8000` | yes | Absolute URL, no trailing `/`; `https` in staging/prod. `PUBLIC_BASE_URL` forms the problem `type` URLs and the origin of the password-reset link `{PUBLIC_BASE_URL}/a/reset#<token>` in emails: it must be the address of the web pages as users reach them. |
 | `DATABASE_URL` **(S)** | dev URL (`afterme_api`) | yes | `postgresql+psycopg://` URL of the `afterme_api` role. |
 | `MIGRATION_DATABASE_URL` **(S)** | dev URL (`afterme_owner`) | yes (migration job) | Role `afterme_owner`; used by Alembic only. |
@@ -326,6 +328,14 @@ Error codes: §1.1.
 | `POST /v1/incidents/{id}/safe` | re-auth + `Idempotency-Key` | I'M SAFE: cancels, queues the all-clear, restarts the schedule |
 | `GET /v1/instruction-categories`, `GET /v1/instructions`, `POST`, `GET/PATCH/DELETE /v1/instructions/{id}` | authenticated / owned | Phase 6: content is sealed with the owner's key; the list has no body; 403 `plan_limit_reached`, 422 `release_stage_too_early`; a route to someone, switching one off or deleting it needs a fresh password while check-ins are on |
 | `GET /c/release`, `POST /c/release/{session,code,verify,view,new-link,end}` | public web + CSRF + portal session | the recipient portal: link → session → one-time code → content (every content page is a POST response); a withdrawn release says so |
+| `GET /v1/activity` | authenticated | Phase 7: the Activity feed, newest first, `cursor` paged; names and titles composed for the owner at read time |
+| `POST /v1/me/export` | re-auth | Phase 7: the whole account as one JSON download (instructions decrypted); 3 per hour; audited |
+| `DELETE /v1/me` | re-auth + `{"confirm":"DELETE"}` | Phase 7: closes the account (incident voided with an all-clear, content erased, key deleted, sessions ended); 202 with `purge_after` |
+| `GET/POST /a/delete`, `GET/POST /a/delete/confirm` | public web + CSRF | Phase 7: delete without the app: an emailed single-use link, then the password |
+| `GET/POST /a/login`, `GET/POST /a/checkin`, `POST /a/safe`, `POST /a/logout` | public web + CSRF + web session | Phase 7: I'M OK and I'M SAFE from a browser when the phone is lost (a one-hour session) |
+| `PUT /v1/devices/current`, `DELETE /v1/devices/current/push-token` | authenticated | Phase 8: the phone's push registration (a token has one holder; omitted keeps it, `null` removes it) |
+| `POST /webhooks/email/{resend,postmark}` | provider signature / Basic auth | Phase 8: delivery, bounce and complaint events (bare 404 when unconfigured, 401 when unverified, 204 otherwise) |
+| `GET /test/clock`, `POST /test/clock/{advance,reset}`, `GET /test/mail` | `X-Test-Token`, only when enabled | Phase 7: the movable clock and the mail reader for integration tests (never in production) |
 | `POST /internal/probe` | `X-Probe-Token` | the uptime monitor's heartbeat (feeds Hold); 404 where no token is configured |
 | `GET /health/live`, `GET /health/ready` | public | liveness; readiness (database reachable and Alembic at head, else 503) |
 
@@ -412,21 +422,28 @@ then the start command above is the reference.
   email, as above. A pending (unverified) signup never expires yet (the purge job arrives with the
   maintenance work), but a signup holding an address is superseded when its mailbox owner verifies
   an email change to it.
-* Engine (Phase 5): messages are delivered by the recording and console providers only; the real
-  email and push providers, bounce webhooks and the secondary-provider fallback are Phase 8, and
-  until then a message that cannot be delivered for 24 hours is `failed` with an audit record and
-  a page, but the user is not yet told that a contact could not be reached. Releases and the
-  recipient portal are Phase 6 (seams exist). The account-deletion endpoint does not exist yet;
-  its engine side (`void_open_incident`) is built and tested. Web check-in (`/a/checkin`,
-  FR-CHK-07) has no phase assigned (`docs/ROADMAP.md`).
-* The web pages cover the password reset (`/a`) and the contact invitation, decline and opt-out
-  pages (`/c`); `/a/login`, `/a/checkin`, `/a/delete` and the release pages (`/c/release*`) come in
-  later phases. The "new link" page links to the app
-  by name only, because App Links (`assetlinks.json`) are set up with the deployment phase.
+* Notifications (Phase 8): the adapters (FCM HTTP v1, Resend, Postmark, SMTP), the fallback chain,
+  the webhooks and the "contact unreachable" notices are built and tested against mocked
+  transports; **nothing has been run against a real provider or a real phone** (that needs the
+  owner's accounts: DEPLOYMENT §10). Emails that carry a secret (codes, reset links) go through
+  the same provider chain but not the outbox, so a crash between commit and send loses one and the
+  person asks again.
+* The web pages cover the password reset, the account-deletion page and the lost-phone
+  check-in pages (`/a`), and the contact invitation, decline, opt-out and release pages (`/c`).
+  The "new link" page links to the app by name only, because App Links (`assetlinks.json`) are
+  set up with the deployment phase.
+* Test support (Phase 7): the clock offset is read by every `now()` of the API and the worker but
+  not by database column defaults (`now()` in DDL), so a few `created_at` values are real time
+  while a test clock is on. Mail reading works with the `console` provider on the same machine
+  only. Both exist for the integration suite and are refused in production.
+* Retention (Phase 7): the maintenance job removes closed accounts and scrubs their contacts. The
+  other retention rows of DATABASE §5 (old check-in events, notifications, probes, expired
+  tokens and sessions) have their grants but no job yet.
 * Only the `console` (dev) and `recording` (tests) email providers exist, so `staging`/`prod`
   cannot start until Phase 8 adds a real provider. This is deliberate.
-* No maintenance job yet: unverified signups older than 24 h, expired tokens and expired
-  rate-limit windows are not purged (rate-limit rows of a key are trimmed when that key is hit).
+* The maintenance job (Phase 7) does not yet purge unverified signups older than 24 h, expired
+  tokens and expired rate-limit windows (rate-limit rows of a key are trimmed when that key is
+  hit).
 * Contacts (Phase 3): stage and recipient links do not exist yet, so deleting a contact removes
   none; bounce handling (`bounced`) and the retention purge of expired invitations arrive with the
   email provider and maintenance work. An opt-out link of a contact that was deleted since does

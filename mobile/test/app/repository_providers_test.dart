@@ -6,6 +6,7 @@ import 'package:afterme/features/checkin/data/dio_schedule_repository.dart';
 import 'package:afterme/features/contacts/data/dio_contacts_repository.dart';
 import 'package:afterme/features/home/data/dio_home_repository.dart';
 import 'package:afterme/features/instructions/data/dio_instructions_repository.dart';
+import 'package:afterme/features/notifications/data/dio_devices_repository.dart';
 import 'package:afterme/features/onboarding/application/onboarding_controller.dart';
 import 'package:afterme/features/plan/data/dio_plan_repository.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -17,7 +18,8 @@ import '../helpers/test_app.dart';
 void main() {
   group('release gate: no temporary stand-in is left', () {
     // Contacts are real since Phase 3, the schedule, check-ins and Home since Phase 4,
-    // the plan since Phase 5 and the instructions since Phase 6. If a repository is ever
+    // the plan since Phase 5, the instructions since Phase 6 and the devices (push token)
+    // since Phase 8. If a repository is ever
     // replaced by an in-memory stand-in again, this list is where it must be named, and
     // the screens' preview wording (which no longer exists) has to come back with it.
     test('every repository is the real API', () {
@@ -26,7 +28,8 @@ void main() {
           ..realContactsRepository = true
           ..realCheckInRepositories = true
           ..realPlanRepository = true
-          ..realInstructionsRepository = true;
+          ..realInstructionsRepository = true
+          ..realDevicesRepository = true;
         final container = ProviderContainer.test(
           overrides: testOverrides(config: config, fakes: fakes),
         );
@@ -53,6 +56,10 @@ void main() {
         expect(
           container.read(instructionsRepositoryProvider),
           isA<DioInstructionsRepository>(),
+        );
+        expect(
+          container.read(devicesRepositoryProvider),
+          isA<DioDevicesRepository>(),
         );
       }
     });

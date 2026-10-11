@@ -63,6 +63,10 @@ ALTER ROLE afterme_worker WITH LOGIN NOCREATEDB NOSUPERUSER NOCREATEROLE NOREPLI
 -- Group roles (granted to people or jobs later); they cannot log in themselves.
 ALTER ROLE afterme_maintenance WITH NOLOGIN NOCREATEDB NOSUPERUSER NOCREATEROLE NOREPLICATION NOBYPASSRLS;
 ALTER ROLE afterme_readonly WITH NOLOGIN NOCREATEDB NOSUPERUSER NOCREATEROLE NOREPLICATION NOBYPASSRLS;
+-- Tests run the retention job's SQL as the real afterme_maintenance role (SET ROLE) so that its
+-- column grants are exercised, not only inspected. Development and CI only: the owner role is
+-- the migration job in staging and production, and is never made a member there.
+GRANT afterme_maintenance TO afterme_owner;
 SQL
 
 for db in "$DEV_DB" "$TEST_DB"; do

@@ -32,6 +32,7 @@ class AppTextField extends StatefulWidget {
     this.suffixIcon,
     this.textAlign = TextAlign.start,
     this.enableIMEPersonalizedLearning = true,
+    this.autocorrect = true,
     super.key,
   });
 
@@ -63,6 +64,10 @@ class AppTextField extends StatefulWidget {
   /// end up in a personal dictionary (instructions).
   final bool enableIMEPersonalizedLearning;
 
+  /// Whether the keyboard may correct and suggest words. Off for a word that must be
+  /// typed exactly (the confirmation of an account deletion).
+  final bool autocorrect;
+
   @override
   State<AppTextField> createState() => _AppTextFieldState();
 }
@@ -91,9 +96,9 @@ class _AppTextFieldState extends State<AppTextField> {
       textAlign: widget.textAlign,
       enabled: widget.enabled,
       obscureText: _obscured,
-      enableSuggestions: !widget.obscureText,
+      enableSuggestions: widget.autocorrect && !widget.obscureText,
       enableIMEPersonalizedLearning: widget.enableIMEPersonalizedLearning,
-      autocorrect: !widget.obscureText,
+      autocorrect: widget.autocorrect && !widget.obscureText,
       keyboardType: widget.keyboardType,
       textInputAction: widget.textInputAction,
       autofillHints: widget.autofillHints,

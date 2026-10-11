@@ -6,6 +6,8 @@ import '../../../app/repository_providers.dart';
 import '../../../core/api/failures/app_failure.dart';
 import '../../../core/api/failures/failure_mapper.dart';
 import '../../../core/auth/auth_controller.dart';
+import '../../../core/auth/session_epoch.dart';
+import '../../../core/freshness/stale_data.dart';
 import '../../contacts/application/contacts_controller.dart';
 import '../../contacts/data/contacts_repository.dart';
 import '../../plan/application/plan_controller.dart';
@@ -37,6 +39,21 @@ List<InstructionSummary> sortInstructions(Iterable<InstructionSummary> items) {
   return [for (final entry in indexed) entry.value];
 }
 
+/// Whether [error] is the server asking for the password before it shows instruction
+/// content: 403 `reauth_required` on `GET /instructions` or `GET /instructions/{id}`
+/// (SECURITY.md §7: a password entered in the last 5 minutes). It is never a reason to
+/// end the session; it is a request, answered through `withReauth`.
+bool isPasswordRequired(Object? error) =>
+    error is ForbiddenFailure && error.code == 'reauth_required';
+
+/// The list state, read for the password rule.
+extension InstructionsListState on AsyncValue<List<InstructionSummary>> {
+  /// The list could not be read yet because the person has not entered their password
+  /// recently. Nothing is shown and nothing is lost: the Instructions tab says so and
+  /// asks for it.
+  bool get needsPassword => !hasValue && isPasswordRequired(error);
+}
+
 /// The plan got the stage(s) a chosen time needed, but the instruction itself could not
 /// be saved afterwards ([failure] says why). The stage stays, which is harmless: the next
 /// try finds it and uses it, as it does any stage the plan has.
@@ -50,6 +67,12 @@ class StageAddedButNotSaved implements Exception {
 }
 
 /// The signed-in person's instructions (`GET /instructions`) and every change to them.
+///
+/// The server answers a read with 403 `reauth_required` unless the password was entered
+/// in the last 5 minutes. That is an ordinary state of this list, not a failure: the state
+/// is then an `AsyncError` holding the `ForbiddenFailure` ([InstructionsListState.needsPassword]),
+/// every consumer that reads `.value` sees "nothing yet", and the Instructions tab asks for
+/// the password through `withReauth` and reads again ([refresh]). Nothing is kept on disk.
 ///
 /// The list holds **summaries only**: a body is never part of it and never kept here.
 /// The list is replaced only with what the server confirmed: an instruction appears
@@ -66,8 +89,15 @@ class InstructionsController extends AsyncNotifier<List<InstructionSummary>> {
   /// older data, so it is read again instead of replacing what the change put there.
   int _epoch = 0;
 
+  /// A read or a change that was started for the account that signed out must never
+  /// land in the one that signed in after it.
+  final SessionEpoch _session = SessionEpoch();
+
+  bool _alive(int session) => ref.mounted && _session.isCurrent(session);
+
   @override
   Future<List<InstructionSummary>> build() async {
+    _session.next();
     if (ref.watch(authControllerProvider) != AuthStatus.signedIn) {
       return const [];
     }
@@ -126,22 +156,56 @@ class InstructionsController extends AsyncNotifier<List<InstructionSummary>> {
       state = const AsyncLoading<List<InstructionSummary>>();
     }
     final epoch = _epoch;
+    final session = _session.current;
     try {
       final items = sortInstructions(await _run(_repository.list));
+      if (!_alive(session)) {
+        return null;
+      }
       if (epoch != _epoch) {
         return await reload();
       }
       state = AsyncData(items);
+      ref.read(staleDataProvider.notifier).clear(DataArea.instructions);
       return null;
     } on AppFailure catch (failure) {
+      if (!_alive(session)) {
+        return null;
+      }
       if (!state.hasValue) {
         state = AsyncError<List<InstructionSummary>>(
           failure,
           StackTrace.current,
         );
+      } else {
+        ref.read(staleDataProvider.notifier).mark(DataArea.instructions);
       }
       return failure;
     }
+  }
+
+  /// Reads the list again and **throws** what went wrong, a 403 `reauth_required`
+  /// included, for a caller that wraps it in `withReauth` (the server wants the password
+  /// before it shows instruction content). The state is kept as [reload] keeps it: the
+  /// list on hand stays, and with none the failure is the state.
+  Future<void> refresh() async {
+    final failure = await reload();
+    if (failure != null) {
+      throw failure;
+    }
+  }
+
+  /// Puts a change the server confirmed into the list on hand. A list that could not be
+  /// read (it waits for the password, or the read failed) is not guessed from the one
+  /// item that changed: it is read again, which says the same thing once it can be read.
+  void _apply(
+    List<InstructionSummary> Function(List<InstructionSummary> current) change,
+  ) {
+    if (state.hasError && !state.hasValue) {
+      unawaited(reload());
+      return;
+    }
+    state = AsyncData(sortInstructions(change(_current)));
   }
 
   /// What changed on the server that screens elsewhere count: the usage against the
@@ -163,17 +227,20 @@ class InstructionsController extends AsyncNotifier<List<InstructionSummary>> {
   /// field errors are rethrown as they are; a 404 reads the contacts, the plan and the
   /// list again first.
   Future<Instruction> addInstruction(InstructionDraft draft) async {
+    final session = _session.current;
     try {
       final created = await _run(() => _repository.create(draft));
-      _epoch++;
-      state = AsyncData(
-        sortInstructions([
-          created.summary,
-          for (final item in _current)
-            if (item.id != created.id) item,
-        ]),
-      );
-      _changed();
+      if (_alive(session)) {
+        _epoch++;
+        _apply(
+          (current) => [
+            created.summary,
+            for (final item in current)
+              if (item.id != created.id) item,
+          ],
+        );
+        _changed();
+      }
       return created;
     } on NotFoundFailure {
       await _notFound();
@@ -187,16 +254,19 @@ class InstructionsController extends AsyncNotifier<List<InstructionSummary>> {
     String id,
     InstructionPatch patch,
   ) async {
+    final session = _session.current;
     try {
       final updated = await _run(() => _repository.update(id, patch));
-      _epoch++;
-      state = AsyncData(
-        sortInstructions([
-          for (final item in _current)
-            if (item.id == updated.id) updated.summary else item,
-        ]),
-      );
-      _changed();
+      if (_alive(session)) {
+        _epoch++;
+        _apply(
+          (current) => [
+            for (final item in current)
+              if (item.id == updated.id) updated.summary else item,
+          ],
+        );
+        _changed();
+      }
       return updated;
     } on NotFoundFailure {
       await _notFound();
@@ -371,6 +441,7 @@ class InstructionsController extends AsyncNotifier<List<InstructionSummary>> {
 
   /// Deletes an instruction: its content is wiped and nothing it released stays open.
   Future<void> removeInstruction(String id) async {
+    final session = _session.current;
     try {
       await _run(() => _repository.delete(id));
     } on NotFoundFailure {
@@ -378,11 +449,16 @@ class InstructionsController extends AsyncNotifier<List<InstructionSummary>> {
       await reload();
       rethrow;
     }
+    if (!_alive(session)) {
+      return;
+    }
     _epoch++;
-    state = AsyncData([
-      for (final item in _current)
-        if (item.id != id) item,
-    ]);
+    _apply(
+      (current) => [
+        for (final item in current)
+          if (item.id != id) item,
+      ],
+    );
     _changed();
   }
 }

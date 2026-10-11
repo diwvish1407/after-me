@@ -9,6 +9,7 @@ Hashing runs in a worker thread so the event loop keeps serving other requests.
 from __future__ import annotations
 
 import asyncio
+import os
 import secrets
 import unicodedata
 from functools import cache
@@ -74,7 +75,19 @@ def check_password_policy(password: str, *, email: str | None = None) -> str:
 class PasswordHasher:
     """Argon2id hashing with parameters from configuration."""
 
-    def __init__(self, *, time_cost: int, memory_cost_kib: int, parallelism: int) -> None:
+    def __init__(
+        self,
+        *,
+        time_cost: int,
+        memory_cost_kib: int,
+        parallelism: int,
+        max_concurrent: int | None = None,
+    ) -> None:
+        # Every sign-in attempt, including for an address that does not exist, runs one Argon2
+        # (64 MiB by default). Unbounded, a burst spread over many addresses is an out-of-memory
+        # kill and so an outage during which nobody can check in (Phase 9, F11): at most this
+        # many run at once, the rest wait their turn.
+        self._gate = asyncio.Semaphore(max_concurrent or max(2, os.cpu_count() or 2))
         self._hasher = _Argon2Hasher(
             time_cost=time_cost,
             memory_cost=memory_cost_kib,
@@ -87,7 +100,9 @@ class PasswordHasher:
         self._dummy_hash = self._hasher.hash(secrets.token_urlsafe(24))
 
     async def hash(self, password: str) -> str:
-        return await asyncio.to_thread(self._hasher.hash, normalize_password(password))
+        normalized = normalize_password(password)
+        async with self._gate:
+            return await asyncio.to_thread(self._hasher.hash, normalized)
 
     def _verify_sync(self, password_hash: str, password: str) -> bool:
         try:
@@ -96,10 +111,12 @@ class PasswordHasher:
             return False
 
     async def verify(self, password_hash: str, password: str) -> bool:
-        return await asyncio.to_thread(self._verify_sync, password_hash, password)
+        async with self._gate:
+            return await asyncio.to_thread(self._verify_sync, password_hash, password)
 
     async def dummy_verify(self, password: str) -> None:
-        await asyncio.to_thread(self._verify_sync, self._dummy_hash, password)
+        async with self._gate:
+            await asyncio.to_thread(self._verify_sync, self._dummy_hash, password)
 
     def needs_rehash(self, password_hash: str) -> bool:
         try:

@@ -20,22 +20,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  secrets:
-    name: Secret scan (gitleaks)
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    steps:
-      - name: Check out (full history)
-        uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-
-      - name: Scan for committed secrets
-        uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
+  # Secret scanning lives in security.yml: it must run for every change, not only backend ones.
   checks:
     name: Lint, types, migrations, tests, audit
     runs-on: ubuntu-24.04

@@ -21,12 +21,20 @@ Future<void> openLegalPage(
   BuildContext context,
   WidgetRef ref,
   LegalPage page,
+) => openPublicPage(context, ref, page.path);
+
+/// Opens the public page at [path] (`/a/login`, `/legal/privacy`, ...) of the configured
+/// public base URL in the browser; says so calmly when that is not possible.
+Future<void> openPublicPage(
+  BuildContext context,
+  WidgetRef ref,
+  String path,
 ) async {
   final l10n = AppLocalizations.of(context);
   final messenger = ScaffoldMessenger.maybeOf(context);
   final opened = await ref
       .read(urlOpenerProvider)
-      .open(ref.read(appConfigProvider).publicUri(page.path));
+      .open(ref.read(appConfigProvider).publicUri(path));
   if (!opened) {
     messenger?.showSnackBar(SnackBar(content: Text(l10n.legalOpenFailed)));
   }

@@ -16,13 +16,25 @@ from app.notifications.email import ProviderResult
 _log = get_logger("afterme.push")
 
 
+# The Android notification channels the app creates (ARCHITECTURE §5.7). A message names its
+# channel so the person can silence reminders without silencing alerts.
+CHANNEL_REMINDERS = "reminders"
+CHANNEL_INCIDENTS = "incidents"
+CHANNEL_ACCOUNT = "account"
+PAYLOAD_VERSION = "1"
+
+
 @dataclass(frozen=True)
 class PushMessage:
-    token: str
+    token: str = field(repr=False)
     type: str  # the template key
     title: str
     body: str
     incident_id: str | None = None
+    channel: str = CHANNEL_INCIDENTS
+    # How long the push is still worth showing if the phone is off: a reminder an hour late is
+    # noise, a "your contacts were notified" is still true tomorrow.
+    ttl_seconds: int = 86_400
 
 
 class PushProvider(Protocol):
@@ -33,12 +45,21 @@ class PushProvider(Protocol):
 
 class LogOnlyPushProvider:
     """Development: nothing leaves the process; only the template type is logged (never the
-    token). The FCM provider arrives with Phase 8."""
+    token). Real pushes need ``PUSH_PROVIDER=fcm`` (``providers/fcm.py``)."""
 
     name = "log"
 
     async def send(self, msg: PushMessage, *, idempotency_key: str) -> ProviderResult:
         _log.info("push.logged", type=msg.type)
+        return ProviderResult(provider=self.name, message_id=idempotency_key)
+
+
+class NoopPushProvider:
+    """Tests that do not care about push: accepts every message and keeps nothing."""
+
+    name = "noop"
+
+    async def send(self, msg: PushMessage, *, idempotency_key: str) -> ProviderResult:
         return ProviderResult(provider=self.name, message_id=idempotency_key)
 
 

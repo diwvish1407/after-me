@@ -1,6 +1,7 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
 
 import '../../../checkin/data/models/checkin_models.dart';
+import '../../../incidents/data/models/incident_models.dart';
 
 part 'home_models.freezed.dart';
 part 'home_models.g.dart';
@@ -132,11 +133,19 @@ abstract class RecentActivity with _$RecentActivity {
 
 /// `GET /v1/home` (API_SPEC.md §5): everything the Home screen needs in one call.
 ///
-/// [incident] is an opaque map: null while no incident is open, the incident object
-/// (API_SPEC.md §9) while one is. Home only needs to know that it is there; the incident
-/// screens (Phase 7) parse it.
+/// [incident] is the raw object: null while no incident is open, the incident object
+/// (API_SPEC.md §9) while one is. It is kept as it came so that an object this app
+/// version cannot read still counts as "an incident is open" (Home then shows the
+/// neutral placeholder and keeps I'M OK within reach); [incidentDetails] is the typed
+/// reading of it.
 @freezed
 abstract class HomeSnapshot with _$HomeSnapshot {
+  const HomeSnapshot._();
+
+  /// Redacted: the incident names contacts and instructions, the user their own name.
+  @override
+  String toString() => 'HomeSnapshot(<redacted>)';
+
   const factory HomeSnapshot({
     required DateTime serverTime,
     required HomeUser user,
@@ -149,4 +158,11 @@ abstract class HomeSnapshot with _$HomeSnapshot {
 
   factory HomeSnapshot.fromJson(Map<String, dynamic> json) =>
       _$HomeSnapshotFromJson(json);
+
+  /// The open incident as the typed model, or null when there is none **or** this app
+  /// version cannot read it (check [incident] to tell which).
+  Incident? get incidentDetails => Incident.tryFromJson(incident);
+
+  /// The server reports an incident, readable or not.
+  bool get hasIncident => incident != null;
 }

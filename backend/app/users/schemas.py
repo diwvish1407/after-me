@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Callable
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from pydantic import BeforeValidator, model_validator
 from pydantic_core import PydanticCustomError
@@ -89,3 +89,15 @@ class EntitlementsResponse(ResponseModel):
     tier: str
     limits: EntitlementLimits
     usage: EntitlementUsage
+
+
+class DeleteAccountRequest(RequestModel):
+    """``DELETE /v1/me``: the word is typed, so a stray tap or a replayed request is not
+    enough."""
+
+    confirm: Literal["DELETE"]
+
+
+class DeletionResponse(ResponseModel):
+    status: Literal["pending_deletion"]
+    purge_after: UtcDateTime

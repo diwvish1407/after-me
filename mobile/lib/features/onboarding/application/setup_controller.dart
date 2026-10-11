@@ -5,6 +5,7 @@ import '../../../app/repository_providers.dart';
 import '../../../core/api/failures/app_failure.dart';
 import '../../../core/api/failures/failure_mapper.dart';
 import '../../../core/auth/auth_controller.dart';
+import '../../../core/auth/session_epoch.dart';
 import '../../checkin/application/schedule_controller.dart';
 import '../../checkin/data/schedule_repository.dart';
 import '../../contacts/application/contacts_controller.dart';
@@ -88,8 +89,15 @@ class ActivationOutcome {
 /// Reads and changes the setup data through the repository interfaces. Every method
 /// throws an `AppFailure` on error.
 class SetupController extends AsyncNotifier<SetupState> {
+  /// An answer for the account that signed out must never land in the one that signed
+  /// in after it.
+  final SessionEpoch _session = SessionEpoch();
+
+  bool _alive(int session) => ref.mounted && _session.isCurrent(session);
+
   @override
   Future<SetupState> build() {
+    _session.next();
     // Rebuilt (and so emptied) whenever the sign-in status changes (and with it every
     // repository, which each watch it too).
     ref
@@ -154,35 +162,45 @@ class SetupController extends AsyncNotifier<SetupState> {
   }
 
   Future<void> refresh() async {
+    final session = _session.current;
     await ref.read(contactsControllerProvider.notifier).reload();
     await ref.read(scheduleControllerProvider.notifier).reload();
     await ref.read(planControllerProvider.notifier).reload();
     await ref.read(instructionsControllerProvider.notifier).reload();
-    state = await AsyncValue.guard(_load);
+    final result = await AsyncValue.guard(_load);
+    if (_alive(session)) {
+      state = result;
+    }
   }
 
   SetupState get _current => state.value ?? const SetupState();
 
   /// Adds a contact through the contacts API (the invitation is queued by the server).
   Future<TrustedContact> addContact(ContactDraft draft) async {
+    final session = _session.current;
     final contact = await ref
         .read(contactsControllerProvider.notifier)
         .addContact(draft);
-    state = AsyncData(
-      _current.copyWith(
-        contacts: ref.read(contactsControllerProvider).value ?? [contact],
-      ),
-    );
+    if (_alive(session)) {
+      state = AsyncData(
+        _current.copyWith(
+          contacts: ref.read(contactsControllerProvider).value ?? [contact],
+        ),
+      );
+    }
     return contact;
   }
 
   /// Saves the schedule through the check-in API. The server computes the deadlines;
   /// only the interval, the time of day and the reminder are sent.
   Future<void> saveSchedule(CheckInSchedule schedule) async {
+    final session = _session.current;
     final saved = await ref
         .read(scheduleControllerProvider.notifier)
         .save(schedule);
-    state = AsyncData(_current.copyWith(snapshot: saved));
+    if (_alive(session)) {
+      state = AsyncData(_current.copyWith(snapshot: saved));
+    }
   }
 
   /// Saves the plan through the plan API (`PUT /v1/plan`, `If-Match`). The server
@@ -191,8 +209,11 @@ class SetupController extends AsyncNotifier<SetupState> {
   /// `reauth_required` (check-ins are on and the plan changes): wrap the call in
   /// `withReauth`, the screen's own copy of [draft] is what is sent again.
   Future<void> savePlan(PlanDraft draft) async {
+    final session = _session.current;
     final saved = await ref.read(planControllerProvider.notifier).save(draft);
-    state = AsyncData(_current.copyWith(plan: saved));
+    if (_alive(session)) {
+      state = AsyncData(_current.copyWith(plan: saved));
+    }
   }
 
   /// Saves an instruction through the instructions API (onboarding step 7). A time the
@@ -207,6 +228,7 @@ class SetupController extends AsyncNotifier<SetupState> {
     required String body,
     required List<RecipientChoice> recipients,
   }) async {
+    final session = _session.current;
     await ref
         .read(instructionsControllerProvider.notifier)
         .addInstructionWithTimes(
@@ -215,22 +237,27 @@ class SetupController extends AsyncNotifier<SetupState> {
           body: body,
           recipients: recipients,
         );
-    state = AsyncData(
-      _current.copyWith(
-        instructions: ref.read(instructionsControllerProvider).value,
-        plan: ref.read(planControllerProvider).value,
-      ),
-    );
+    if (_alive(session)) {
+      state = AsyncData(
+        _current.copyWith(
+          instructions: ref.read(instructionsControllerProvider).value,
+          plan: ref.read(planControllerProvider).value,
+        ),
+      );
+    }
   }
 
   /// Asks the server to turn check-ins on. The server decides whether everything it
   /// needs is in place and says what is missing when it is not; the app does not guess.
   Future<ActivationOutcome> activate() async {
+    final session = _session.current;
     try {
       final saved = await ref
           .read(scheduleControllerProvider.notifier)
           .activate();
-      state = AsyncData(_current.copyWith(snapshot: saved));
+      if (_alive(session)) {
+        state = AsyncData(_current.copyWith(snapshot: saved));
+      }
       return const ActivationOutcome.activated();
     } on ActivationRequirementsFailure catch (failure) {
       // Never an empty list: "unmet" always says something is missing.

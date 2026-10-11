@@ -1,0 +1,35 @@
+{% extends "base.html.j2" %}
+{% block title %}Check in · AfterMe{% endblock %}
+{% block content %}
+<h1>Hello, {{ name }}</h1>
+{% if message %}<p class="notice" role="alert">{{ message }}</p>{% endif %}
+{% if mode == "safe" %}
+<p class="notice" role="status">{% if notified %}{{ notified | join(", ") }} {% if notified | length == 1 %}has{% else %}have{% endif %} been told that you haven't checked in.{% else %}Your contacts have been told that you haven't checked in.{% endif %}</p>
+<p>To tell them you are safe and stop everything that was going to happen next, confirm with your password.</p>
+<form method="post" action="/a/safe" autocomplete="off">
+<input type="hidden" name="csrf" value="{{ csrf }}">
+<input type="hidden" name="key" value="{{ key }}">
+<input type="hidden" name="incident_id" value="{{ incident_id }}">
+<label for="password">Password</label>
+<input type="password" name="password" id="password" autocomplete="current-password" maxlength="128" required>
+<button type="submit">I'M SAFE</button>
+</form>
+{% else %}
+{% if mode == "missed" %}
+<p class="notice" role="status">You missed your check-in. Nobody has been contacted yet.</p>
+{% elif next_due %}
+<p>Your next check-in is due <strong>{{ next_due }}</strong>.{% if last_checkin %} You last checked in on {{ last_checkin }}.{% endif %}</p>
+{% elif not schedule_on %}
+<p>Your check-ins are not switched on. Checking in here is still recorded.</p>
+{% endif %}
+<form method="post" action="/a/checkin" autocomplete="off">
+<input type="hidden" name="csrf" value="{{ csrf }}">
+<input type="hidden" name="key" value="{{ key }}">
+<button type="submit">I'M OK</button>
+</form>
+{% endif %}
+<form method="post" action="/a/logout">
+<input type="hidden" name="csrf" value="{{ csrf }}">
+<button type="submit" class="secondary">Sign out</button>
+</form>
+{% endblock %}

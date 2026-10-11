@@ -99,3 +99,31 @@ async def test_correct_login_verifies_once(h: Harness, argon2: Argon2Spy) -> Non
     argon2.reset()
     assert (await h.login("once@example.com")).status_code == 200
     assert argon2.counts == (0, 1)
+
+
+@pytest.mark.no_rate_limit
+async def test_a_locked_account_does_the_same_work_and_gets_the_same_answer_as_an_unknown_one(
+    h: Harness, argon2: Argon2Spy
+) -> None:
+    """Phase 9 (F13): a lock that answered ``429`` without an Argon2 told a stranger, for the
+    cost of ten requests, that an address has an account. A locked account now does the same
+    work and returns the same ``401`` as an address nobody registered."""
+    from tests.support import problem
+
+    await h.signup("locked-parity@example.com")
+    for _ in range(10):
+        await h.login("locked-parity@example.com", "wrong password here")
+    argon2.reset()
+
+    locked = await h.login("locked-parity@example.com")  # the right password, a device unknown
+    locked_counts = argon2.counts
+    argon2.reset()
+    unknown = await h.login("nobody-registered@example.com")
+    unknown_counts = argon2.counts
+
+    assert locked.status_code == unknown.status_code == 401
+    assert locked_counts == unknown_counts == (0, 1)
+    assert {k: v for k, v in problem(locked).items() if k != "request_id"} == {
+        k: v for k, v in problem(unknown).items() if k != "request_id"
+    }
+    assert "retry-after" not in locked.headers

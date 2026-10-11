@@ -21,11 +21,20 @@ _log = get_logger("afterme.email")
 
 @dataclass(frozen=True)
 class EmailMessage:
-    to: str
+    # ``to``, ``text`` and ``html`` are kept out of ``repr``: an address and a message body
+    # (which can hold a code or a link) must not reach a log line through a stray ``{msg!r}``.
+    to: str = field(repr=False)
     subject: str
-    text: str
+    text: str = field(repr=False)
     template: str
     sender: str
+    # The same copy as ``text``, for mail clients that show HTML (generated from it; never
+    # different words). ``None`` for providers and tests that only want text.
+    html: str | None = field(default=None, repr=False)
+    # Who this message is about, so that a bounce or complaint reported later by the provider
+    # can be tied to the contact (see ``app.notifications.receipts``). Never sent to a provider.
+    contact_id: uuid.UUID | None = field(default=None, repr=False)
+    owner_id: uuid.UUID | None = field(default=None, repr=False)
 
 
 @dataclass(frozen=True)

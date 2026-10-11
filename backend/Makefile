@@ -4,7 +4,7 @@ SHELL := /bin/bash
 
 UV ?= uv
 
-.PHONY: help setup db migrate migrate-check run test lint fmt fmt-check typecheck audit check latest-mail contracts worker engine-gate admin
+.PHONY: help setup db migrate migrate-check run test lint fmt fmt-check typecheck audit check latest-mail contracts worker engine-gate admin maintenance
 
 help: ## List the targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-10s %s\n", $$1, $$2}'
@@ -56,6 +56,9 @@ contracts: ## Regenerate docs/contracts/phase2 and phase3 (*.json) after an inte
 
 worker: ## Run the escalation worker (engine tick + outbox dispatcher)
 	$(UV) run python -m workers.engine
+
+maintenance: ## Finish account deletions once (scrub contacts, purge accounts past retention)
+	$(UV) run python -m workers.maintenance
 
 admin: ## Operator commands, e.g. `make admin ARGS="status"` or `ARGS="hold enter --reason x"`
 	$(UV) run python -m cli.admin $(ARGS)

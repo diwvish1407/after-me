@@ -1,0 +1,24 @@
+{
+  "items": [
+    {
+      "id": 4,
+      "action": "contact.invitation_sent",
+      "occurred_at": "2026-10-08T09:00:00Z",
+      "params": {
+        "send_count": 1,
+        "contact_id": "00000000-0000-4000-8000-000000000001",
+        "contact_display_name": "Mom"
+      }
+    },
+    {
+      "id": 3,
+      "action": "contact.created",
+      "occurred_at": "2026-10-08T09:00:00Z",
+      "params": {
+        "contact_id": "00000000-0000-4000-8000-000000000001",
+        "contact_display_name": "Mom"
+      }
+    }
+  ],
+  "next_cursor": null
+}

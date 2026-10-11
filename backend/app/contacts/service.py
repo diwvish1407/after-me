@@ -14,6 +14,7 @@ the email, the invitation row and the ``contact.invitation_sent`` audit record a
 from __future__ import annotations
 
 import uuid
+from dataclasses import replace
 from datetime import datetime
 from typing import Final
 
@@ -24,6 +25,7 @@ from app.api.container import AppServices
 from app.api.deps import CurrentUser, RequestContext, has_fresh_reauth
 from app.audit import writer as audit
 from app.auth.base import AuthServiceBase
+from app.auth.guards import ensure_owner_active
 from app.checkins.repository import CheckinConfigRepository
 from app.contacts.models import PRIORITY_MAX, TrustedContact
 from app.contacts.repository import ContactRepository, SuppressionRepository
@@ -163,8 +165,8 @@ class ContactService(AuthServiceBase):
         # Serialise this user's creates: the count below and the insert must not interleave with
         # another create, or two requests could both pass a limit of one.
         user = await self.users.get(current.user_id, for_update=True)
-        if user is None:  # pragma: no cover - the session check already loaded this user
-            raise SessionRevoked
+        if user is None or user.status != "active":
+            raise SessionRevoked  # closed while this request waited for the lock
         email = body.email_normalized
         await self._check_address(user.email_normalized, current.user_id, email)
         limit = limits_for(user.tier).contacts
@@ -224,6 +226,7 @@ class ContactService(AuthServiceBase):
         )
         if contact is None:
             raise NotFound
+        await ensure_owner_active(self.session, current.user_id)
         changes = self._effective_changes(contact, body.changes())
         changed = sorted(name for name, value in changes.items() if getattr(contact, name) != value)
         if not changed:
@@ -303,6 +306,7 @@ class ContactService(AuthServiceBase):
         """THE per-user lock (ESCALATION_ENGINE §6.2), taken before a change that decides who is
         told or who receives what, so the engine sees it wholly before or wholly after."""
         await CheckinConfigRepository(self.session).get(owner_id=current.user_id, for_update=True)
+        await ensure_owner_active(self.session, current.user_id)
 
     async def _require_step_up(
         self, current: CurrentUser, contact: TrustedContact, now: datetime
@@ -409,6 +413,7 @@ class ContactService(AuthServiceBase):
             raise NotFound
         if contact.verification_status not in RESENDABLE_STATUSES:
             raise InvalidState("This contact has already answered and cannot be invited again.")
+        await ensure_owner_active(self.session, current.user_id)
         user = await self.users.get(current.user_id)
         if user is None:  # pragma: no cover - the session check already loaded this user
             raise SessionRevoked
@@ -473,6 +478,7 @@ class ContactService(AuthServiceBase):
             expires_days=int(INVITATION_TTL.days),
             support_url=f"{self.settings.public_base_url}/support",
         )
+        message = replace(message, contact_id=contact.id, owner_id=current.user_id)
         await self.contacts.add_invitation(
             owner_id=current.user_id,
             contact_id=contact.id,

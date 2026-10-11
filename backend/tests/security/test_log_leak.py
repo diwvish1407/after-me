@@ -167,7 +167,7 @@ async def test_password_email_and_profile_flows_leak_nothing_to_logs(
         headers=bearer(login),
     )
     assert patch.status_code == 200
-    assert patch.json()["email"] == new_email
+    assert patch.json()["email"] == "Brand.New.Address@example.com"  # canonical spelling
 
     output = captured_logs.getvalue()
     assert "http.request" in output

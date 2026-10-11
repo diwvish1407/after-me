@@ -416,7 +416,10 @@ void main() {
       await _chooseDay(tester);
       await tapText(tester, 'Save instruction');
       await tester.pumpAndSettle();
-      expect(find.textContaining("You're offline"), findsOneWidget);
+      expect(
+        find.textContaining("We couldn't confirm that this was saved"),
+        findsOneWidget,
+      );
       expect(posts, 1);
       // The form is still there, with what was chosen.
       expect(find.widgetWithText(TextField, 'Pets'), findsOneWidget);

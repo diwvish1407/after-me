@@ -1,0 +1,98 @@
+{
+  "incident": {
+    "id": "00000000-0000-4000-8000-000000000007",
+    "status": "escalated",
+    "requires": "safe",
+    "missed_due_at": "2026-10-09T14:30:00Z",
+    "anchor_at": "2026-10-09T14:30:00Z",
+    "grace_ends_at": "2026-10-09T17:30:00Z",
+    "contacts_messaged": true,
+    "closed_at": null,
+    "closed_by": null,
+    "timeline": [
+      {
+        "kind": "user_reminder",
+        "variant": "missed",
+        "stage_position": null,
+        "scheduled_for": "2026-10-09T14:30:00Z",
+        "status": "executed",
+        "contacts": null,
+        "release_count": null
+      },
+      {
+        "kind": "user_reminder",
+        "variant": "midpoint",
+        "stage_position": null,
+        "scheduled_for": "2026-10-09T16:00:00Z",
+        "status": "executed",
+        "contacts": null,
+        "release_count": null
+      },
+      {
+        "kind": "user_reminder",
+        "variant": "last_chance",
+        "stage_position": null,
+        "scheduled_for": "2026-10-09T17:15:00Z",
+        "status": "executed",
+        "contacts": null,
+        "release_count": null
+      },
+      {
+        "kind": "execute_stage",
+        "variant": null,
+        "stage_position": 1,
+        "scheduled_for": "2026-10-09T17:30:00Z",
+        "status": "executed",
+        "contacts": [
+          {
+            "id": "00000000-0000-4000-8000-000000000008",
+            "display_name": "Mom",
+            "result": "messaged"
+          }
+        ],
+        "release_count": 0
+      },
+      {
+        "kind": "user_final_warning",
+        "variant": null,
+        "stage_position": 2,
+        "scheduled_for": "2026-10-10T13:30:00Z",
+        "status": "executed",
+        "contacts": null,
+        "release_count": 1
+      },
+      {
+        "kind": "execute_stage",
+        "variant": null,
+        "stage_position": 2,
+        "scheduled_for": "2026-10-10T14:30:00Z",
+        "status": "executed",
+        "contacts": [
+          {
+            "id": "00000000-0000-4000-8000-000000000009",
+            "display_name": "Brother",
+            "result": "messaged"
+          }
+        ],
+        "release_count": 1
+      }
+    ],
+    "releases": [
+      {
+        "contact_id": "00000000-0000-4000-8000-000000000009",
+        "contact_display_name": "Brother",
+        "instruction_id": "00000000-0000-4000-8000-000000000010",
+        "instruction_title": "House emergency",
+        "stage_position": 2,
+        "released_at": "2026-10-10T14:30:00Z",
+        "visible_after": "2026-10-10T14:35:00Z",
+        "first_viewed_at": "2026-10-10T14:36:00Z",
+        "last_viewed_at": "2026-10-10T14:36:00Z",
+        "view_count": 1,
+        "revoked_at": null,
+        "revoke_reason": null
+      }
+    ],
+    "server_time": "2026-10-10T14:36:00Z"
+  }
+}

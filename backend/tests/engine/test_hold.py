@@ -82,10 +82,27 @@ async def test_the_probe_is_rate_limited(world: World) -> None:
     client = world.h.client
     codes = [
         (await client.post("/internal/probe", headers={"X-Probe-Token": TOKEN})).status_code
-        for _ in range(11)
+        for _ in range(61)
     ]
-    assert codes[:10] == [204] * 10
-    assert codes[10] == 429
+    assert codes[:60] == [204] * 60
+    assert codes[60] == 429
+
+
+@MONITORED
+async def test_a_stranger_cannot_use_up_the_monitors_budget(world: World) -> None:
+    """Phase 9 (F3): the token is compared first and only a wrong one is counted, so whoever
+    shares the monitor's address cannot starve the real probe into a Hold, which would stop
+    every escalation for everyone."""
+    client = world.h.client
+    wrong = [
+        (await client.post("/internal/probe", headers={"X-Probe-Token": "q" * 48})).status_code
+        for _ in range(12)
+    ]
+    assert wrong[:10] == [401] * 10
+    assert wrong[10:] == [429, 429]
+    ok = await client.post("/internal/probe", headers={"X-Probe-Token": TOKEN})
+    assert ok.status_code == 204
+    assert world.db.execute("SELECT count(*) AS n FROM ingestion_probes").fetchone()["n"] == 1
 
 
 # --- starting a Hold --------------------------------------------------------------------------
@@ -365,7 +382,12 @@ async def test_an_operator_can_void_an_incident_after_a_confirmed_fault(world: W
     await world.tick()
     row = world.incidents(person)[0]
     assert (row["status"], row["closed_by"]) == ("voided", "operator_void")
-    assert len(world.mail.to(alert_address(person), "contact_all_clear")) == 1
+    # nobody checked in: the contact is told the alert is withdrawn, never that the person is safe
+    assert world.mail.to(alert_address(person), "contact_all_clear") == []
+    [withdrawn] = world.mail.to(alert_address(person), "contact_alert_withdrawn")
+    assert "not working properly" in withdrawn.text
+    assert "confirmed they're safe" not in withdrawn.text
+    assert "checked in" not in withdrawn.subject
     assert (
         await admin.void_incident(world.engine.services, operator="alex", incident_id=incident_id)
         is False
@@ -394,3 +416,27 @@ async def test_status_reports_what_would_page(world: World) -> None:
 
 
 _ = bearer  # imported for symmetry with the other engine tests
+
+
+async def test_void_acts_only_on_the_incident_it_names(world: World) -> None:
+    """Phase 9 (BD-7): the command named an incident but closed the person's *open* one, so the
+    id of an incident that was already closed could void a newer incident nobody had looked at."""
+    person = await world.ready()
+    await world.advance_to(STAGE_1 + timedelta(minutes=6))
+    first = world.open_incident(person)["id"]  # type: ignore[index]
+    assert await admin.void_incident(world.engine.services, operator="alex", incident_id=first)
+    await world.tick()
+
+    # the person misses everything again: a second, different incident opens
+    await world.advance_to(world.clock.current + timedelta(days=3))
+    second = world.open_incident(person)
+    assert second is not None
+    assert second["id"] != first
+
+    assert (
+        await admin.void_incident(world.engine.services, operator="alex", incident_id=first)
+        is False
+    )
+    still_open = world.open_incident(person)
+    assert still_open is not None
+    assert still_open["id"] == second["id"]

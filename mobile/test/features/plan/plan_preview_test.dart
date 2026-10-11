@@ -146,6 +146,70 @@ void main() {
     },
   );
 
+  testWidgets('what a stage shares is said next to who is told, using only the '
+      'server\'s offsets and the schedule\'s due time', (tester) async {
+    final lines = await _inContext(
+      tester,
+      (c) => buildPlanPreview(
+        c,
+        dueMinutes: 20 * 60,
+        plan: const PlanDraft(
+          graceMinutes: 180,
+          stages: [
+            PlanStageDraft(id: 's1', offsetMinutes: 180, contactIds: ['m']),
+            PlanStageDraft(id: 's2', offsetMinutes: 1440, contactIds: ['b']),
+            PlanStageDraft(
+              id: 's3',
+              offsetMinutes: 2880,
+              contactIds: ['b', 's'],
+            ),
+            PlanStageDraft(offsetMinutes: 4320, contactIds: ['m']),
+          ],
+        ),
+        contacts: [_mom, _bro, _sam],
+        releaseCounts: const {'s1': 0, 's2': 1, 's3': 3, 'other': 9},
+      ).map((l) => l.text).toList(),
+    );
+    expect(lines, [
+      'If you miss 8:00 PM, we remind you first.',
+      'At 11:00 PM, Mom is notified.',
+      'At 8:00 PM the next day, Brother is notified. 1 instruction is also shared.',
+      'At 8:00 PM, 2 days later, Brother and Sam are notified. 3 instructions are also shared.',
+      'At 8:00 PM, 3 days later, Mom is notified.',
+      'Checking in before then stops it.',
+    ]);
+  });
+
+  testWidgets(
+    'a stage that tells nobody still says what it shares; one that does '
+    'neither is left out',
+    (tester) async {
+      final lines = await _inContext(
+        tester,
+        (c) => buildPlanPreview(
+          c,
+          dueMinutes: 20 * 60,
+          plan: const PlanDraft(
+            graceMinutes: 180,
+            stages: [
+              PlanStageDraft(id: 's1', offsetMinutes: 180, contactIds: []),
+              PlanStageDraft(id: 's2', offsetMinutes: 1440, contactIds: []),
+              PlanStageDraft(id: 's3', offsetMinutes: 2880, contactIds: []),
+            ],
+          ),
+          contacts: [_mom],
+          releaseCounts: const {'s2': 1, 's3': 2},
+        ).map((l) => l.text).toList(),
+      );
+      expect(lines, [
+        'If you miss 8:00 PM, we remind you first.',
+        'At 8:00 PM the next day, 1 instruction is shared.',
+        'At 8:00 PM, 2 days later, 2 instructions are shared.',
+        'Checking in before then stops it.',
+      ]);
+    },
+  );
+
   testWidgets('PlanPreview renders every line with an icon', (tester) async {
     await tester.pumpWidget(
       wrapForTest(

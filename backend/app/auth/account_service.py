@@ -29,6 +29,7 @@ from app.auth.codes import (
     hash_code,
 )
 from app.auth.links import (
+    DELETE_PURPOSE,
     RESET_LINK_TTL,
     RESET_PURPOSE,
     hash_link_token,
@@ -52,6 +53,7 @@ from app.security.passwords import PasswordPolicyError, check_password_policy, n
 from app.security.rate_limit import (
     EMAIL_CHANGE_PER_USER,
     FORGOT_PER_EMAIL,
+    FORGOT_PER_EMAIL_NETWORK,
     REAUTH_PER_SESSION,
 )
 
@@ -74,7 +76,7 @@ class AccountService(AuthServiceBase):
         """Always succeeds for the caller. Only a verified, active account gets a link."""
         now = await self._now()
         email_norm = body.email_normalized
-        await self._limit(FORGOT_PER_EMAIL, email_norm, now)
+        await self._limit_email(FORGOT_PER_EMAIL_NETWORK, FORGOT_PER_EMAIL, email_norm, now)
 
         user = await self.users.get_by_email(email_norm, for_update=True)
         eligible = (
@@ -165,6 +167,7 @@ class AccountService(AuthServiceBase):
         await self.devices.clear_all_push_tokens(owner_id=user.id, now=now)
         await self.codes.invalidate_unused(owner_id=user.id, purpose=RESET_PURPOSE, now=now)
         await self.codes.invalidate_unused(owner_id=user.id, purpose=EMAIL_CHANGE_PURPOSE, now=now)
+        await self.codes.invalidate_unused(owner_id=user.id, purpose=DELETE_PURPOSE, now=now)
         await self.services.audit.record(
             self.session,
             self._event(
@@ -246,6 +249,9 @@ class AccountService(AuthServiceBase):
             now=now,
         )
         await self.codes.invalidate_unused(owner_id=current.user_id, purpose=RESET_PURPOSE, now=now)
+        await self.codes.invalidate_unused(
+            owner_id=current.user_id, purpose=DELETE_PURPOSE, now=now
+        )
         await self.services.audit.record(
             self.session,
             self._event(
@@ -389,6 +395,7 @@ class AccountService(AuthServiceBase):
             raise InvalidCode from None
         # Links emailed to the old address must not outlive the change.
         await self.codes.invalidate_unused(owner_id=user.id, purpose=RESET_PURPOSE, now=now)
+        await self.codes.invalidate_unused(owner_id=user.id, purpose=DELETE_PURPOSE, now=now)
         await self.services.audit.record(
             self.session,
             self._event(

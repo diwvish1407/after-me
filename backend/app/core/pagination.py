@@ -39,3 +39,24 @@ def decode_cursor(value: str) -> tuple[datetime, uuid.UUID]:
         return _EPOCH + timedelta(microseconds=int(micros)), uuid.UUID(row_id)
     except (ValueError, UnicodeDecodeError, binascii.Error, OverflowError) as exc:
         raise InvalidCursorError from exc
+
+
+def encode_seq_cursor(at: datetime, seq: int) -> str:
+    """Like :func:`encode_cursor` for tables ordered by a numeric identity (the audit log)."""
+    micros = (at.astimezone(UTC) - _EPOCH) // timedelta(microseconds=1)
+    raw = f"s1:{micros}:{seq}".encode()
+    return base64.urlsafe_b64encode(raw).rstrip(b"=").decode()
+
+
+def decode_seq_cursor(value: str) -> tuple[datetime, int]:
+    try:
+        padded = value + "=" * (-len(value) % 4)
+        version, micros, seq = base64.urlsafe_b64decode(padded).decode().split(":")
+        if version != "s1":
+            raise InvalidCursorError
+        number = int(seq)
+        if number < 0:
+            raise InvalidCursorError
+        return _EPOCH + timedelta(microseconds=int(micros)), number
+    except (ValueError, UnicodeDecodeError, binascii.Error, OverflowError) as exc:
+        raise InvalidCursorError from exc

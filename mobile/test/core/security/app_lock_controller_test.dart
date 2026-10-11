@@ -166,6 +166,30 @@ void main() {
       expect(s.state.locked, isTrue);
     });
 
+    test('runWithoutLocking is not a way to stay unlocked for ever: a dialog '
+        'left open for minutes counts as time away', () async {
+      final s = _Setup(enabled: true, timeout: 1);
+      await s.load();
+      await s.controller.unlock('reason');
+
+      // A save dialog the person takes their time with (still within the cap).
+      await s.controller.runWithoutLocking(() async {
+        s.background();
+        s.fakes.clock.advance(const Duration(seconds: 90));
+        s.resume();
+      });
+      expect(s.state.locked, isFalse);
+
+      // One that was left open: the lock is back when it closes.
+      await s.controller.runWithoutLocking(() async {
+        s.background();
+        s.fakes.clock.advance(AppLockController.suspensionCap);
+        s.fakes.clock.advance(const Duration(seconds: 1));
+        s.resume();
+      });
+      expect(s.state.locked, isTrue);
+    });
+
     test('runWithoutLocking re-arms even when the action throws', () async {
       final s = _Setup(enabled: true, timeout: 0);
       await s.load();

@@ -18,12 +18,13 @@ from app.api.container import AppServices
 from app.audit import writer as audit
 from app.audit.models import AuditLog
 from app.audit.writer import AuditEvent
+from app.core.config import DEV_ONLY_EMAIL_PROVIDERS
 from app.core.logging import get_logger
 from app.engine.runtime import HOLD_SERVICE_NAME, SERVICE_NAME
 from app.engine.store import EngineStore
 from app.incidents.closing import void_open_incident
-from app.incidents.models import EscalationIncident, IncidentAction
-from app.notifications.models import Notification
+from app.incidents.models import OPEN_STATUSES, EscalationIncident, IncidentAction
+from app.notifications.models import Notification, NotificationLog
 from app.ops.models import ServiceHeartbeat, SystemHold
 
 _log = get_logger("afterme.admin")
@@ -46,7 +47,15 @@ class EngineStatus:
     consistency_violations_24h: int
     incidents_open: int
     incidents_opened_last_hour: int
+    # Delivery health over the last 15 minutes / 24 hours (Phase 8). None of these pages on its
+    # own: a provider with trouble is what the fallback is for; ``warnings`` says what to look at.
+    provider_attempts_15m: int
+    provider_errors_15m: int
+    fallback_sends_15m: int
+    bounces_24h: int
+    complaints_24h: int
     pages: list[str]
+    warnings: list[str]
 
     def as_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -154,6 +163,61 @@ async def engine_status(services: AppServices) -> EngineStatus:
     def age(then: datetime | None) -> float | None:
         return None if then is None else max((now - then).total_seconds(), 0.0)
 
+    async with services.db.sessionmaker() as session, session.begin():
+        recent = NotificationLog.attempted_at > now - timedelta(minutes=15)
+        attempts = int(
+            (
+                await session.execute(
+                    select(func.count()).where(
+                        recent, NotificationLog.outcome.in_(("accepted", "error", "rejected"))
+                    )
+                )
+            ).scalar_one()
+        )
+        errors = int(
+            (
+                await session.execute(
+                    select(func.count()).where(
+                        recent,
+                        NotificationLog.outcome == "error",
+                        # our own attempts only: a webhook's soft bounce is the recipient's
+                        # mailbox, not the provider failing
+                        NotificationLog.provider_event_id.is_(None),
+                    )
+                )
+            ).scalar_one()
+        )
+        fallback = 0
+        if settings.email_fallback_provider is not None:
+            fallback = int(
+                (
+                    await session.execute(
+                        select(func.count()).where(
+                            recent,
+                            NotificationLog.outcome == "accepted",
+                            NotificationLog.provider == settings.email_fallback_provider,
+                        )
+                    )
+                ).scalar_one()
+            )
+        day = NotificationLog.attempted_at > now - timedelta(days=1)
+        bounces = int(
+            (
+                await session.execute(
+                    select(func.count()).where(
+                        day, NotificationLog.outcome.in_(("bounced", "rejected"))
+                    )
+                )
+            ).scalar_one()
+        )
+        complaints = int(
+            (
+                await session.execute(
+                    select(func.count()).where(day, NotificationLog.outcome == "complained")
+                )
+            ).scalar_one()
+        )
+
     heartbeat_age = age(last_beat)
     hold_age = age(hold_beat)
     action_age, message_age = age(oldest_action), age(oldest_message)
@@ -177,7 +241,18 @@ async def engine_status(services: AppServices) -> EngineStatus:
         pages.append("due action not executed for 5 minutes")
     if message_age is not None and message_age > 300:  # noqa: PLR2004
         pages.append("queued message past send_after for 5 minutes")
-    _ = settings
+    warnings: list[str] = []
+    if attempts >= 5 and errors / attempts > 0.05:  # noqa: PLR2004
+        warnings.append("provider error rate above 5% in the last 15 minutes")
+    if fallback:
+        warnings.append("the fallback email provider is carrying messages")
+    if complaints:
+        warnings.append("spam complaints in the last 24 hours")
+    if (
+        settings.email_provider not in DEV_ONLY_EMAIL_PROVIDERS
+        and settings.email_fallback_provider is None
+    ):
+        warnings.append("no fallback email provider is configured")
     return EngineStatus(
         now=now.isoformat(),
         hold_active=any(h.ended_at is None for h in holds),
@@ -192,7 +267,13 @@ async def engine_status(services: AppServices) -> EngineStatus:
         consistency_violations_24h=violations,
         incidents_open=open_incidents,
         incidents_opened_last_hour=last_hour,
+        provider_attempts_15m=attempts,
+        provider_errors_15m=errors,
+        fallback_sends_15m=fallback,
+        bounces_24h=bounces,
+        complaints_24h=complaints,
         pages=pages,
+        warnings=warnings,
     )
 
 
@@ -296,6 +377,16 @@ async def void_incident(services: AppServices, *, operator: str, incident_id: uu
         if await EngineStore.lock_user(session, owner) is None:
             msg = "the user is busy; try again"
             raise RuntimeError(msg)
+        # The command names an incident, and ``void_open_incident`` closes the person's open
+        # one: they must be the same. An id of a closed incident must never void a newer
+        # incident that nobody looked at.
+        status = (
+            await session.execute(
+                select(EscalationIncident.status).where(EscalationIncident.id == incident_id)
+            )
+        ).scalar_one_or_none()
+        if status not in OPEN_STATUSES:
+            return False
         outcome = await void_open_incident(
             session,
             audit_writer=services.audit,

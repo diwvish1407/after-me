@@ -70,6 +70,7 @@ Validation errors add `"errors": [{ "field": "stages[1].offset_minutes", "code":
 | 409 | `contact_duplicate` | Email already used by another of your contacts |
 | 409 | `activation_requirements_unmet` | `requirements: [...]` in body (Phase 4: `no_contacts`; `no_stages` joins it in Phase 5) |
 | 409 | `invalid_state` | Generic state conflict |
+| 409 | `idempotency_key_reused` | The `Idempotency-Key` was first used for another operation (an I'M OK under an I'M SAFE's key, or an I'M SAFE for another incident). Nothing was done; send a fresh key (Phase 9) |
 | 412 | `precondition_failed` | `If-Match` stale |
 | 413 | `payload_too_large` | |
 | 422 | `validation_failed` | Field errors |
@@ -138,14 +139,14 @@ Security emails (Phase 1): a login from a new device, a refresh-token reuse that
 |---|---|---|
 | `POST /auth/password/forgot` (public) | `{ email }` | `202 { "status": "email_sent" }` |
 | `POST /auth/password/change` | `{ current_password, new_password }` | `204` · `401 invalid_credentials` · `422 validation_failed` · `429` |
-| `POST /auth/email/change/start` | `{ new_email }` | **Re-auth.** `202 { "status": "code_sent" }` · `403 reauth_required` · `429` |
+| `POST /auth/email/change/start` | `{ new_email }` | **Fresh re-auth** (the password within the last 60 seconds). `202 { "status": "code_sent" }` · `403 reauth_required` · `429` |
 | `POST /auth/email/change/verify` | `{ code }` | `200` same body as `GET /me` · `400 invalid_code` |
 
 **Forgot password.** The response is always `202` with an identical body, whether or not the account exists, and the server does the same work in every case (a token is generated and hashed, the email is rendered, the same statements run; delivery happens after the response is sent). Only a *verified, active* account is sent anything. The email contains `{PUBLIC_BASE_URL}/a/reset#<token>`, where `token` is `pr_` plus 256 bits of CSPRNG output (URL-safe base64, 46 characters in all). Only its SHA-256 is stored (`auth_tokens`, purpose `password_reset`, kind `link`). The link is valid for 30 minutes and works once; issuing a new link invalidates every older unused one. Limits: 3/h per email (compared case-insensitively), 10/h per IP; exceeding either is `429 rate_limited`. The token is redeemed on the web page ([§13.2](#132-user-account-a)), never through the JSON API; the mobile app only asks for the email and tells the person to open the link.
 
 **Change password.** The new password follows the signup policy (10–128 characters after NFKC normalisation, not the email address or its local part, not on the common-password blocklist) and must differ from the current one. Policy violations are `422 validation_failed` with `errors[0].field = "new_password"` and a code (`too_short`, `too_long`, `password_too_common`, `password_matches_email`, `password_unchanged`) and do not count against the guessing budget. A wrong `current_password` is `401 invalid_credentials` (the session stays valid; clients must not treat this as session loss), is audited as `auth.reauth_failed` with reason `change_password`, and **shares the 5-per-15-minutes-per-session budget with `/auth/reauth`**. On success the password hash and `password_changed_at` are replaced, **every other session of the user is revoked** (reason `password_changed`, push tokens of those devices cleared) while the current session and its refresh token keep working, unused reset links are invalidated, the `password_changed` email is sent and `auth.password_changed` is audited (user-visible).
 
-**Change email.** `start` requires a re-authentication within the last 5 minutes (`403 reauth_required` otherwise) and is limited to 5/h per user. It always answers `202 { "status": "code_sent" }` so it reveals nothing about `new_email`:
+**Change email.** `start` requires the password to have been entered within the last 60 seconds (`403 reauth_required` otherwise; Phase 9: changing the address is what takes an account over, so a confirmation given minutes ago for something else does not count) and is limited to 5/h per user. It always answers `202 { "status": "code_sent" }` so it reveals nothing about `new_email`:
 * a free address (or one held only by a never-verified signup) gets a 6-digit code (same rules as signup codes: HMAC-stored, 15 minutes, 5 attempts, a new code invalidates the previous one; payload holds the normalised new address), and the **old** address gets an `email_change_requested` notice (new address masked as `a***@example.com`);
 * an address that belongs to another verified account gets the `account_exists` notice instead of a code;
 * the current address (any casing) does nothing.
@@ -174,12 +175,18 @@ Security emails (Phase 1): a login from a new device, a refresh-token reuse that
 | `POST /me/export` | **Re-auth.** `200`, `Content-Disposition: attachment; filename="afterme-export.json"`. Contents: profile, contacts, schedule, plan, instructions (**decrypted**), check-in history, incidents, activity. Audited. |
 | `DELETE /me` | **Re-auth.** Body `{ "confirm": "DELETE" }` → `202 { status: "pending_deletion", purge_after }`. Behaviour: [DATABASE §4](DATABASE.md#4-deletion-behaviour). |
 
+**Phase 7, implemented.**
+* `POST /me/export` and `DELETE /me` need the password to have been entered **within the last 60 seconds** (`403 reauth_required` otherwise: the five minutes of the other step-up routes do not apply); an export spends the confirmation. `POST /me/export` is rate-limited to 3 per hour per user and answers `Cache-Control: no-store`. The document is `{ format_version: 1, exported_at, account, contacts, schedule, plan, instructions, checkins, incidents, activity, truncated }`. `instructions` carry `title` and `body` in the clear (that is the point of the file), or `"error": "content_unavailable"` and no text when a stored text cannot be opened: an export never looks complete when it is not. `incidents` are the objects of §9 (timeline and releases, with the owner's view of titles). `truncated` says, per list, whether the cap of 10,000 rows was hit. Credentials, key material, ciphertext and other people's accounts are never in it. Audited as `account.exported` (user-visible).
+* `DELETE /me`: `422` unless the body is exactly `{ "confirm": "DELETE" }`. In one transaction under the per-user lock: the open incident is voided (`closed_by: account_deleted`; contacts that were told get a message that the alert is **withdrawn**, which does not say the person is safe: ARCHITECTURE/ESCALATION_ENGINE §13.1 note 14a), the schedule goes `inactive`, releases and portal access are revoked, every unanswered invitation stops working, every instruction loses its content and recipients, the wrapped key is deleted, contacts are scrubbed, sessions end and push tokens are cleared, the account becomes `pending_deletion` with its address and password overwritten, and a confirmation goes to the address that was on file. A contact whose all-clear is still queued is scrubbed by the retention job once it has left. `purge_after` is `now + ACCOUNT_DELETION_DAYS` (30); the retention job (`python -m workers.maintenance`) removes the rest and audits `account.purged`. A second request is `401` (the sessions are gone). **Every session of the user is revoked by this call: the app must return to sign-in.**
+
 ## 4. Devices
 
 | Method & path | Body | Notes |
 |---|---|---|
 | `PUT /v1/devices/current` | `{ platform, push_token?, app_version, os_version, locale }` | Upsert for the session's device. A push token registered to another user's device is detached from it. |
 | `DELETE /v1/devices/current/push-token` | — | `204` (user turned notifications off) |
+
+**Phase 8, implemented.** `PUT` answers `200 { device_id, push_registered }` (the token is never echoed). `push_token` omitted keeps the registered token, `null` removes it, a string (printable ASCII, 20 to 4096 characters) sets it and **takes it from any other device that held it** (a phone that changed hands). `platform` is `android`; unknown fields are `422`. A web session has no device: `409 invalid_state`. Logout clears the device's token (§2). The server also clears a token FCM reports as unregistered. Goldens: `docs/contracts/phase8`.
 
 ## 5. Home (dashboard aggregate)
 
@@ -394,6 +401,7 @@ Incident object:
 
 **Phase 5, implemented.**
 * **The API can only read and stop incidents.** Incidents, their timeline and releases are created by the worker alone (INV-1); the database refuses the API role the `INSERT`, and the only column updates it may make are the ones that stop or observe.
+* `releases[].revoke_reason` is one of `user_checkin`, `user_safe`, `operator`, `contact_removed`, `contact_opted_out`, `instruction_removed`, `recipient_removed`, `account_deleted`, `hold_rollback` (a client words each and shows an unknown one neutrally). `instruction_title` is `null` when the text can no longer be opened (the instruction was deleted, or its key is gone).
 * The object is exactly the one above plus `closed_at` and `closed_by` (`user_checkin`, `user_safe`, `account_deleted`, `operator_void`); `requires` is `null` once closed. Timeline `contacts[].display_name` is the person's own contact name (kept after a soft delete); `result` is `messaged`, `skipped` or `null` while pending; `release_count` is `0` until Phase 6. A reminder that became untrue (grace ended, or a stage ran) is shown as `cancelled`.
 * `GET /incidents` is newest first with an opaque `cursor`; a stranger's id is `404`.
 * `POST …/safe` also answers with `incident_id` and `server_time`; a replay of the same key returns the stored JSON and `Idempotent-Replayed: true`. It cancels what is pending and queued, restarts the schedule exactly as an I'M OK does, and queues `contact_all_clear` to the contacts that were actually messaged and `all_clear_confirmation` to the user. I'M SAFE is allowed on any open incident; with nobody messaged the all-clear list is empty.
@@ -404,9 +412,9 @@ Incident object:
 | Method & path | Notes |
 |---|---|
 | `GET /instruction-categories` | `[{ id: "home", sort_order: 3 }, …]` (labels localised client-side) |
-| `GET /instructions?category=` | List: `{ id, category, title, status, recipients: [{ contact_id, display_name, stage_position }], updated_at }`. **No body in list.** |
+| `GET /instructions?category=` | List: `{ id, category, title, status, recipients: [{ contact_id, display_name, stage_position }], updated_at }`. **No body in list.** **Re-auth** (`403 reauth_required`, the password within the last 5 minutes): the titles are content, decrypted for the response (Phase 9). |
 | `POST /instructions` | See below → `201` |
-| `GET /instructions/{id}` | Full object, including `body` |
+| `GET /instructions/{id}` | Full object, including `body`. **Re-auth** (`403 reauth_required`, the password within the last 5 minutes; Phase 9): the text is decrypted for the response. Every read is audited as `instruction.viewed` (a count, never text; not shown in Activity). |
 | `PATCH /instructions/{id}` | Any of `category`, `title`, `body`, `status`, `recipients` (replaces the list) |
 | `DELETE /instructions/{id}` | `204`. Content wiped; open-incident releases revoked. |
 
@@ -431,6 +439,7 @@ Validation: title 1–120 chars; body 1–20,000 chars (Unicode, normalised to N
 * `PATCH` replaces `recipients` as a whole and takes the per-user lock like the engine does. Switching an instruction off, deleting it, removing a recipient or moving one to another stage takes back what had been released in an open incident (reason `instruction_removed` / `recipient_removed`); editing the text does not (the portal reads the current text).
 * `DELETE` wipes the ciphertext and the recipients, soft-deletes the row and takes its releases back. A stage that holds any (even inactive) instruction cannot be removed: `PUT /plan` answers `409 stage_in_use` with `instruction_ids`. `GET /plan` reports `stages[].release_count` (active instructions released at that stage).
 * **Re-auth** (`403 reauth_required`, after ownership and validation) while the check-in schedule is not `inactive`: `POST` with recipients; `PATCH` that changes the recipients or switches an instruction that has recipients **off**; `DELETE` of an instruction that has recipients. Editing text or category, and switching **on**, never ask; neither does anything during onboarding.
+* `PUT /plan` with no stage is `422 too_short`: a plan never goes back to zero stages. `409 stage_in_use` and `release_stage_too_early` count **inactive** instructions too, while `stages[].release_count` counts only active ones; a client that explains a refusal should name both.
 * The app may precede a save with `PUT /plan` that **appends** stages (every existing stage keeps its id, time and contacts): choosing a time the plan has no stage for adds one, notifying the people chosen for it. The server sees two ordinary requests.
 * Instruction routes accept a body of up to 96 KiB (20,000 four-byte characters); everything else keeps 64 KiB.
 * The content is sealed with the owner's data key (SECURITY §6.2) and is never returned by any other endpoint, in a notification, a log line or an audit record. `GET /me/entitlements` and `GET /home` (`plan_summary.instructions_active`) count them.
@@ -448,6 +457,27 @@ Validation: title 1–120 chars; body 1–20,000 chars (Unicode, normalised to N
 ```
 
 Display strings are composed client-side from `action` + `params`. Instruction titles are decrypted for the owner only.
+
+**Phase 7, implemented.** `GET /activity?limit=&cursor=` (`limit` 1 to 100, default 20; `422` for a cursor that is not ours). Newest first by `(occurred_at, id)`; `next_cursor` is `null` on the last page. Only audit rows that are `user_visible` and about this account. `id` is the audit row's number (stable, increasing; it is the platform's audit sequence, so differences between ids reveal overall activity: accepted for the beta, an opaque per-user id is a Phase 9 item). An action the app does not know is shown generically; none is ever hidden. Names and titles are composed from the owner's own rows **at read time**: the audit log itself holds only identifiers, reason codes and counts. `params` per action (a missing name or title is `null`; keys not listed are never sent):
+
+| `action` | `params` |
+|---|---|
+| `checkin.recorded` | `kind` (`ok`, `safe`), `source` (`app`, `web`) |
+| `contact.created`, `contact.deleted`, `contact.invitation_sent`, `contact.accepted`, `contact.declined`, `contact.opted_out` | `contact_id`, `contact_display_name` (+ `send_count` for an invitation) |
+| `schedule.updated`, `schedule.activated`, `schedule.deactivated` | none |
+| `plan.updated` | `stages`, `removed` |
+| `incident.opened` | `incident_id`, `stages` |
+| `incident.resolved`, `incident.cancelled`, `incident.voided` | `incident_id`, `closed_by`, `all_clear` (people sent an all-clear) |
+| `escalation.final_warning_sent` | `incident_id`, `stage` |
+| `escalation.stage_executed` | `incident_id`, `stage`, `notified`, `skipped` |
+| `release.created` | `incident_id`, `stage`, `releases` |
+| `release.revoked` | `incident_id`, `releases`, `reason` |
+| `release.viewed` | `incident_id`, `contact_id`, `contact_display_name`, `release_count`, `instruction_titles` (up to 5; what the contact could see at that moment) |
+| `instruction.recipients_changed` | `instruction_id`, `instruction_title`, `added`, `removed` |
+| `auth.logout_all` | `sessions_revoked` |
+| `auth.password_changed`, `auth.password_reset_completed`, `auth.email_changed`, `profile.timezone_changed`, `auth.refresh_reuse_detected`, `auth.login_succeeded` (new device), `auth.web_login_succeeded`, `account.exported` | none |
+
+`GET /incidents/{id}` and `GET /incidents/current` (and `incident` in §5) carry `releases: [{ contact_id, contact_display_name, instruction_id, instruction_title \| null, stage_position, released_at, visible_after, first_viewed_at, last_viewed_at, view_count, revoked_at, revoke_reason }]`, oldest first: what was shared with whom, and whether and when it was viewed (the title is opened for the owner only; the text is never in an incident).
 
 ## 12. Billing (Phase 13 / per [PRD D5](PRD.md#15-decisions-needed-from-the-product-owner))
 
@@ -503,6 +533,11 @@ A malformed, unknown, tampered, expired, already answered or invalidated token (
 | `GET/POST /a/delete` → `GET /a/delete/confirm` · `POST /a/delete/confirm` | Public account-deletion request (Play Store requirement): email link + password confirmation |
 | `POST /a/logout` | |
 
+**Phase 7, implemented.**
+* `GET /a/delete` (form, no state change) → `POST /a/delete` (`email`, `csrf`; 10/h per IP · 3/h per email): the answer is the same page for every address ("if that address belongs to an account, we sent a link"); only a verified, active account gets a `30`-minute single-use link `/a/delete/confirm#ad_…` (the token travels in the fragment and reaches the server in a POST body). `GET /a/delete/confirm` shows the password form; `POST /a/delete/confirm` (`token`, `password`, `csrf`; 10/h per IP, 5 failed passwords/15 min per account) performs the same deletion as `DELETE /v1/me` (audited with `source: web`). Outcomes: `200` closed page; `400` the generic "this link doesn't work" page (malformed, unknown, used or expired; the body never reveals whether an account exists); `401` wrong password (the link stays valid); `403` CSRF; `429`.
+* `GET /a/login` → `POST /a/login` (`email`, `password`, `csrf`; 10/15 min per IP and the API's per-account failure budget and lockout): a `web` session of **one hour**, cookie `__Host-afterme_web` (`HttpOnly`, `Secure`, `SameSite=Strict`, `Path=/`, the value is an opaque secret of which only the SHA-256 is stored). The owner is told by email (`web_login_notice`) and the sign-in is shown in Activity. Every failure is the same `401` page.
+* `GET /a/checkin` (shows the sign-in form in its place without a session) shows the state: the next check-in, "you missed your check-in" while nobody has been told, or, once contacts have been told, who was told and an I'M SAFE form. `POST /a/checkin` (`key`, `csrf`) is I'M OK with `source: web`; the form's `key` makes a repeated submit one check-in, and `safe_required` sends the person back to the page, which then asks for I'M SAFE. `POST /a/safe` (`incident_id`, `key`, `password`, `csrf`) confirms the password (5 attempts/15 min per session, the budget of `/auth/reauth`) and then does exactly what `POST /v1/incidents/{id}/safe` does. `POST /a/logout` ends the session.
+
 **Password reset page.**
 * `GET /a/reset` renders the form and **never changes state** (it does not even touch the database). The link's `#<token>` fragment is not sent to the server; one small first-party script (nonce-protected, no third-party code) copies it into the hidden `token` field and clears the fragment with `history.replaceState`. The response sets the CSRF cookie `__Host-afterme_csrf` (`Secure`, `HttpOnly`, `SameSite=Strict`, `Path=/`) and puts the same random value in the hidden `csrf` field (double submit).
 * `POST /a/reset` (`application/x-www-form-urlencoded`: `token`, `new_password`, `csrf`; the token is read from the body only, never from the URL). Limit: 10/h per IP. Outcomes, all HTML:
@@ -529,6 +564,8 @@ Every `/a` page carries `Content-Security-Policy: default-src 'none'; script-src
 |---|---|---|
 | `POST /internal/probe` | `X-Probe-Token` (secret) | External uptime monitor; records an `ingestion_probes` row → feeds Hold ([ESCALATION_ENGINE §7](ESCALATION_ENGINE.md#7-system-hold-the-circuit-breaker)). **Phase 5, implemented:** `204`; `401` for a missing or wrong token (constant-time compare); `404` where no `PROBE_TOKEN` is configured; 10 per minute per IP; optional `X-Probe-Source`. |
 | `POST /webhooks/email/{provider}` | Provider signature verification | Delivery, bounce, complaint events |
+
+**Phase 8, implemented.** `provider` is `resend` or `postmark`; one that is not configured (no webhook secret) is a bare `404`. Verification: **Resend**: Svix (`svix-id`, `svix-timestamp` within 5 minutes, `svix-signature` = `v1,` + base64 HMAC-SHA256 of `{id}.{timestamp}.{body}` with the base64 key of `whsec_…`); **Postmark**: HTTP Basic auth, the password of the webhook URL is the secret. A failed check is a bare `401` and changes nothing; a verified but unreadable body is `400`; otherwise `204`, whatever the event (events about messages we did not send through the outbox are acknowledged and ignored). Mapped events: delivered → log `delivered`; hard bounce (Resend `Permanent`; Postmark `HardBounce`/`BadEmailAddress`) → log `bounced`, address suppressed, every live contact with that address `bounced`, queued messages cancelled, each owner told; soft bounce, `email.failed`, `email.suppressed` → log `error` and the person is told the message could not be delivered (the contact's status is left alone); complaint → log `complained`, suppressed and `opted_out` everywhere, releases taken back, every owner told. The event's recipient must still be the contact's address, or it changes nothing. Events find their message by our `notification_id` tag/metadata first, then by the provider's message id, then (for mail sent straight to a contact) by the receipt written when it was sent. The route is rate-limited per IP (600/min), accepts bodies up to 512 KiB, and a signature with non-ASCII bytes is a `401`. A provider event id is applied once. A bounce of the person's own email is logged and changes nothing. The webhook can only add knowledge: it creates no incident, no stage and no release.
 | `GET /health/live` | none | Process alive |
 | `GET /health/ready` | none | DB reachable, migrations at head → `200`/`503` |
 
@@ -542,27 +579,45 @@ There is **no** endpoint to:
 - read another user's anything, or look up users or contacts by email;
 - view a release as the owner *through the portal* (the owner sees releases in `/incidents/{id}`).
 
-Staging has an extra **test-only** router (`/v1/_test/clock`, `/v1/_test/tick`). It is compiled out of production builds, and startup fails if it is enabled with `APP_ENV=prod`.
+There is a **test-support** router (`/test/*`, §17) for development and CI. Startup fails if it is enabled with `APP_ENV=prod` or `staging`, or with a real email provider; staging cannot enable it at all (Phase 9, F-19).
 
 ## 16. Rate limits
 
 | Scope | Limit |
 |---|---|
-| `register/start`, `register/resend` | 5/h per IP · 3/h per email |
+| `register/start`, `register/resend` | 5/h per IP · 3/h per (email, network) · 12/h per email across networks |
 | `register/verify` | 5 attempts per code · 20/h per IP |
-| `login` | 10/15 min per IP · 5 failed attempts/15 min per account (successful logins do not count; further attempts get `429` with `Retry-After` until the window ends); account locked 15 min after 10 consecutive failures (security email) |
+| `login` | 10/15 min per IP · 5 failed attempts/15 min per **(account, network)** (successful logins do not count; further attempts from that network get `429` with `Retry-After` until the window ends: a stranger who knows an address spends only their own network's budget). The account is locked 15 min after 10 consecutive failures (security email); while locked, a sign-in from a device the account does not know is answered exactly like a wrong password (`401 invalid_credentials`, no `Retry-After`), and one from a device the account already knows is not bound by the lock |
 | `refresh` | 60/h per session |
-| `password/forgot` | 3/h per email · 10/h per IP |
+| `password/forgot` | 3/h per (email, network) · 12/h per email across networks · 10/h per IP |
 | `reauth`, `password/change` | 5/15 min per session, one shared budget (`password/change` counts only attempts that test the current password) |
 | `email/change/start` | 5/h per user |
 | `POST /a/reset` | 10/h per IP |
 | `checkins` | 30/h per user |
+| `POST /incidents/{id}/safe` | 30/h per user, a budget of its own (Phase 9: thirty refused I'M OK attempts must not use up the hour of the action that takes an alarm back). A replay of a recorded tap is never counted |
 | `contacts` create | 20/day per user · invitations 10/day per user (creations, resends and address changes together) · resend 3/7 days per contact |
 | `POST /c/session`, `/c/invite/*`, `/c/optout*` | 20/h per IP, one shared budget |
 | `/c/release/*` (all POSTs) | 60/h per IP · codes 3/h per access · verify 5 attempts per code · new link 3/day per access |
-| `/a/login` | as `login` |
-| `/internal/probe` | 10/min |
+| `/a/login` | 10/15 min per IP · the per-(account, network) failure budget and lockout of `login` (a browser has no known device: while the account is locked it is answered like a wrong password) |
+| `POST /me/export` | 3/h per user |
+| `POST /a/delete` | 10/h per IP · 3/h per (email, network) · 12/h per email across networks |
+| `POST /a/delete/confirm` | 10/h per IP · 5 failed passwords/15 min per account |
+| `/internal/probe` | 60/min per IP for a request with the right token · 10/min per IP for requests with a wrong one (the token is compared first, so a stranger cannot spend the monitor's budget) |
 | Default authenticated | 300/min per user |
 | Default unauthenticated | 60/min per IP |
 
 Client IPs are taken from `X-Forwarded-For` **only** through the configured number of trusted proxy hops.
+
+## 17. Test support (never in production)
+
+Mounted only when `AFTERME_TEST_SUPPORT_ENABLED=true`; configuration refuses it in production and, outside the test environment, requires `AFTERME_TEST_SUPPORT_TOKEN` (at least 32 bytes), sent as `X-Test-Token`. With it on, the API **and** the worker run on a database clock plus an offset kept in `system_flags`, so a test moves time for both. Used by the `integration_test` suite (MOB-61…65) and by the backend's own tests. **Not available in staging**: it requires a development email provider, which staging refuses, because moving the clock alerts the contacts of every account in the database.
+
+| Method & path | Notes |
+|---|---|
+| `GET /test/clock` | `{ server_time, offset_seconds }` |
+| `POST /test/clock/advance` | `{ seconds }` (1 to 400 days) → the same body. Time only moves forward by this call. |
+| `POST /test/clock/reset` | offset back to 0 (time moves *backwards*: use fresh accounts afterwards) |
+| `GET /test/mail?to=&template=&limit=` | the newest messages the **console** email provider wrote (`501` for any other provider): `{ messages: [{ template, to, subject, text, written_at }] }` |
+
+Notes from running the integration suite against it (Phase 7): moving the clock by days expires the 15-minute access tokens (the app refreshes and retries, as it would in life); one large jump makes the worker **defer** a contact-facing stage that is more than the late tolerance (300 s) overdue (`engine.stage_deferred`, the person is told with `incident_delayed`), which is the production rule working, so a test that wants a stage to run on time advances in steps of a few minutes and lets the worker tick between them.
+

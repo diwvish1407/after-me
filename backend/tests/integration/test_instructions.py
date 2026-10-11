@@ -47,6 +47,12 @@ async def _create(
     return response.json()  # type: ignore[no-any-return]
 
 
+async def _sign_in_confirmed(world: World, person: Person) -> None:
+    """A fresh session that has entered the password: reading an instruction asks for it."""
+    await world.login(person)
+    assert (await world.h.reauth(person.tokens)).status_code == 204
+
+
 def _row(world: World, instruction_id: str) -> dict[str, Any]:
     found = world.db.execute(
         "SELECT * FROM instructions WHERE id = %s", (instruction_id,)
@@ -96,7 +102,7 @@ async def test_create_returns_the_instruction_and_reads_it_back(world: World) ->
             "stage_position": 2,
         }
     ]
-    await world.login(person)
+    await _sign_in_confirmed(world, person)
     again = await world.h.client.get(f"/v1/instructions/{made['id']}", headers=person.headers)
     assert again.status_code == 200
     assert again.json() == made
@@ -169,7 +175,7 @@ async def test_a_ciphertext_moved_to_another_user_does_not_open(world: World) ->
         "instructions WHERE id = %s) WHERE id = %s",
         (mine["id"], theirs["id"]),
     )
-    await world.login(bob)
+    await _sign_in_confirmed(world, bob)
     response = await world.h.client.get(f"/v1/instructions/{theirs['id']}", headers=bob.headers)
     assert response.status_code == 500
     assert "Alice" not in response.text
@@ -454,7 +460,7 @@ async def test_another_users_instruction_is_a_404_everywhere(world: World) -> No
     alice = await _ready(world, "alice@example.com")
     bob = await _ready(world, "bob@example.com")
     mine = await _create(world, alice)
-    await world.login(bob)
+    await _sign_in_confirmed(world, bob)
     for method, body in (("GET", None), ("PATCH", {"title": "x"}), ("DELETE", None)):
         response = await world.h.client.request(
             method, f"/v1/instructions/{mine['id']}", json=body, headers=bob.headers
@@ -470,3 +476,49 @@ async def test_instructions_need_a_session(world: World) -> None:
     response = await world.h.client.get("/v1/instructions")
     assert response.status_code == 401
     assert (await world.h.client.get("/v1/instructions", headers=bearer("junk"))).status_code == 401
+
+
+# --- reading is a step-up (Phase 9 review BD-2 / F2) --------------------------------------------
+
+
+async def test_reading_asks_for_the_password_and_leaves_a_trail_without_the_text(
+    world: World,
+) -> None:
+    """A stolen access token used to read every decrypted instruction, silently, and made the
+    export's fresh-password rule moot. The text is decrypted for the response, so reading
+    needs the same five-minute password as the other things that expose or change it."""
+    person = await _ready(world)
+    made = await _create(world, person)
+
+    await world.login(person)  # a new session: nobody has typed the password on it
+    for path in ("/v1/instructions", f"/v1/instructions/{made['id']}"):
+        refused = await world.h.client.get(path, headers=person.headers)
+        assert refused.status_code == 403, path
+        assert problem(refused)["code"] == "reauth_required"
+        assert TITLE not in refused.text
+        assert BODY not in refused.text
+    none_yet = world.db.execute(
+        "SELECT count(*) AS n FROM audit_logs WHERE action = 'instruction.viewed'"
+    ).fetchone()
+    assert none_yet == {"n": 0}  # a refusal reads nothing
+
+    assert (await world.h.reauth(person.tokens)).status_code == 204
+    detail = await world.h.client.get(f"/v1/instructions/{made['id']}", headers=person.headers)
+    listed = await world.h.client.get("/v1/instructions", headers=person.headers)
+    assert detail.status_code == listed.status_code == 200
+    assert detail.json()["body"] == BODY
+
+    viewed = world.db.execute(
+        "SELECT metadata, resource_id, user_visible FROM audit_logs "
+        "WHERE action = 'instruction.viewed' ORDER BY id"
+    ).fetchall()
+    assert len(viewed) == 2
+    assert [v["metadata"]["count"] for v in viewed] == [1, 1]  # one instruction each time
+    assert all(v["user_visible"] is False for v in viewed)
+    assert TITLE not in str(viewed)
+    assert BODY not in str(viewed)
+
+    # five minutes later the window has closed and the next read asks again
+    world.clock.advance(minutes=5, seconds=1)
+    later = await world.h.client.get(f"/v1/instructions/{made['id']}", headers=person.headers)
+    assert later.status_code == 403

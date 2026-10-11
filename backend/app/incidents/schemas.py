@@ -27,6 +27,24 @@ class TimelineItem(ResponseModel):
     release_count: int | None
 
 
+class ReleaseOut(ResponseModel):
+    """What was (or is to be) shared in this incident, for its owner: with whom, which
+    instruction (the title is decrypted for the owner only), and what happened to it."""
+
+    contact_id: uuid.UUID
+    contact_display_name: str
+    instruction_id: uuid.UUID
+    instruction_title: str | None
+    stage_position: int | None
+    released_at: UtcDateTime
+    visible_after: UtcDateTime
+    first_viewed_at: UtcDateTime | None
+    last_viewed_at: UtcDateTime | None
+    view_count: int
+    revoked_at: UtcDateTime | None
+    revoke_reason: str | None
+
+
 class IncidentOut(ResponseModel):
     id: uuid.UUID
     status: IncidentStatus
@@ -38,6 +56,7 @@ class IncidentOut(ResponseModel):
     closed_at: UtcDateTime | None
     closed_by: str | None
     timeline: list[TimelineItem]
+    releases: list[ReleaseOut]
     server_time: UtcDateTime
 
 

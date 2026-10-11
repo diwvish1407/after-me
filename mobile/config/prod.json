@@ -2,5 +2,10 @@
   "APP_ENV": "prod",
   "API_BASE_URL": "https://api.afterme.invalid",
   "PUBLIC_BASE_URL": "https://afterme.invalid",
-  "SENTRY_DSN": ""
+  "SENTRY_DSN": "",
+  "PLAY_STORE_URL": "https://play.google.com/store/apps/details?id=app.afterme",
+  "FIREBASE_API_KEY": "",
+  "FIREBASE_APP_ID": "",
+  "FIREBASE_MESSAGING_SENDER_ID": "",
+  "FIREBASE_PROJECT_ID": ""
 }

@@ -35,6 +35,43 @@ class AppConfigException implements Exception {
   String toString() => 'AppConfigException: $message';
 }
 
+/// The four public identifiers of a Firebase app (Phase 8: push).
+///
+/// They name the project and the app; they are **not secrets** (the same values are in
+/// every installed APK, and an API key without the app's signature and package name
+/// cannot act for it). They are read from `--dart-define-from-file` and handed to
+/// `Firebase.initializeApp` at run time, so the build needs neither a `google-services.json`
+/// nor the google-services Gradle plugin.
+@immutable
+class FirebaseSettings {
+  const FirebaseSettings({
+    required this.apiKey,
+    required this.appId,
+    required this.messagingSenderId,
+    required this.projectId,
+  });
+
+  final String apiKey;
+  final String appId;
+  final String messagingSenderId;
+  final String projectId;
+
+  @override
+  bool operator ==(Object other) =>
+      other is FirebaseSettings &&
+      other.apiKey == apiKey &&
+      other.appId == appId &&
+      other.messagingSenderId == messagingSenderId &&
+      other.projectId == projectId;
+
+  @override
+  int get hashCode => Object.hash(apiKey, appId, messagingSenderId, projectId);
+
+  /// Never prints the values: they are identifiers of the deployment, not for logs.
+  @override
+  String toString() => 'FirebaseSettings(<configured>)';
+}
+
 /// Validated, non-secret build configuration.
 ///
 /// Values come from `--dart-define-from-file=config/<env>.json`. There are no secrets in
@@ -47,6 +84,8 @@ class AppConfig {
     required this.apiBaseUrl,
     required this.publicBaseUrl,
     required this.sentryDsn,
+    required this.playStoreUrl,
+    required this.firebase,
   });
 
   /// Builds a configuration from raw strings, validating every value.
@@ -55,17 +94,34 @@ class AppConfig {
   /// * `APP_ENV` must be `dev`, `staging` or `prod`.
   /// * `API_BASE_URL` must be an absolute http(s) URL with a host and no query,
   ///   fragment or credentials. Staging and prod must use https and must not point
-  ///   at a loopback or emulator address.
+  ///   at a development-looking host ([isDevLookingHost]: loopback, the emulator alias,
+  ///   a private network address, `.local`, a bare name). The reverse holds as well: a
+  ///   dev build talks to a development-looking host only, and in dev plain `http` is for
+  ///   [devCleartextHosts] only (the hosts the dev flavor's network security config
+  ///   names), so a mixed-up configuration file is refused instead of used.
   /// * `PUBLIC_BASE_URL` is the origin of the public web pages (terms, privacy, password
   ///   reset). It follows the same rules as `API_BASE_URL`; https is required outside
   ///   dev. In dev it may be omitted and then defaults to the API origin.
   /// * `SENTRY_DSN` is optional; when present it must be an absolute URL, https
   ///   outside dev.
+  /// * `PLAY_STORE_URL` is optional: where the "Update AfterMe" screen sends the person
+  ///   when the server no longer supports this version (426). It must be an absolute
+  ///   https URL; empty means the app's own Play Store page ([defaultPlayStoreUrl]).
+  /// * `FIREBASE_API_KEY`, `FIREBASE_APP_ID`, `FIREBASE_MESSAGING_SENDER_ID` and
+  ///   `FIREBASE_PROJECT_ID` are all empty (push is not configured: the app runs normally
+  ///   and reports it calmly) or all set. Some of them without the others is a mistake
+  ///   in the build's configuration and is refused like any other, with the missing
+  ///   names.
   factory AppConfig.parse({
     required String appEnv,
     required String apiBaseUrl,
     String publicBaseUrl = '',
     String sentryDsn = '',
+    String playStoreUrl = '',
+    String firebaseApiKey = '',
+    String firebaseAppId = '',
+    String firebaseMessagingSenderId = '',
+    String firebaseProjectId = '',
   }) {
     final env = AppEnv.parse(appEnv);
     final baseUrl = _parseBaseUrl(apiBaseUrl, env, name: 'API_BASE_URL');
@@ -73,11 +129,20 @@ class AppConfig {
         ? baseUrl
         : _parseBaseUrl(publicBaseUrl, env, name: 'PUBLIC_BASE_URL');
     final dsn = _parseSentryDsn(sentryDsn, env);
+    final store = _parsePlayStoreUrl(playStoreUrl);
+    final firebase = _parseFirebase(
+      apiKey: firebaseApiKey,
+      appId: firebaseAppId,
+      messagingSenderId: firebaseMessagingSenderId,
+      projectId: firebaseProjectId,
+    );
     return AppConfig._(
       env: env,
       apiBaseUrl: baseUrl,
       publicBaseUrl: publicUrl,
       sentryDsn: dsn,
+      playStoreUrl: store,
+      firebase: firebase,
     );
   }
 
@@ -87,6 +152,18 @@ class AppConfig {
     apiBaseUrl: const String.fromEnvironment('API_BASE_URL'),
     publicBaseUrl: const String.fromEnvironment('PUBLIC_BASE_URL'),
     sentryDsn: const String.fromEnvironment('SENTRY_DSN'),
+    playStoreUrl: const String.fromEnvironment('PLAY_STORE_URL'),
+    firebaseApiKey: const String.fromEnvironment('FIREBASE_API_KEY'),
+    firebaseAppId: const String.fromEnvironment('FIREBASE_APP_ID'),
+    firebaseMessagingSenderId: const String.fromEnvironment(
+      'FIREBASE_MESSAGING_SENDER_ID',
+    ),
+    firebaseProjectId: const String.fromEnvironment('FIREBASE_PROJECT_ID'),
+  );
+
+  /// The app's own page in Google Play (the production application id).
+  static final Uri defaultPlayStoreUrl = Uri.parse(
+    'https://play.google.com/store/apps/details?id=app.afterme',
   );
 
   final AppEnv env;
@@ -101,18 +178,124 @@ class AppConfig {
   /// Error-monitoring DSN, or null when monitoring is not configured.
   final Uri? sentryDsn;
 
+  /// Where the person updates the app (opened in Google Play).
+  final Uri playStoreUrl;
+
+  /// The Firebase app push runs on, or null when the build was made without one (push
+  /// is then "not configured": nothing is registered and nothing arrives, and the app
+  /// says so calmly).
+  final FirebaseSettings? firebase;
+
   bool get isDev => env == AppEnv.dev;
 
   /// A page on the public web origin, for example `publicUri('/legal/terms')`.
   Uri publicUri(String path) =>
       publicBaseUrl.replace(path: '${publicBaseUrl.path}$path');
 
-  static const Set<String> _localHosts = {
+  /// The only hosts a dev build may reach over plain `http`: the emulator's alias for the
+  /// host machine and loopback (`adb reverse`). They are the ones the dev flavor's
+  /// `network_security_config.xml` names. Android's network security config does **not**
+  /// bind `dart:io`, which the API client uses, so this list is enforced here (and by the
+  /// `#flutter.io.allow_http` zone in `main()`), not by the platform.
+  static const Set<String> devCleartextHosts = {
     'localhost',
     '127.0.0.1',
     '10.0.2.2',
     '::1',
   };
+
+  /// Whether [host] belongs to a development setup rather than a deployed server: a
+  /// loopback or private-network address, `localhost`, a `.local`/`.localhost`/
+  /// `.internal`/`.lan` name, or a bare name with no dot. Such a host never appears in a
+  /// staging or prod configuration, and a dev configuration never names anything else.
+  static bool isDevLookingHost(String host) {
+    final value = host.trim().toLowerCase();
+    if (value.isEmpty) {
+      return false;
+    }
+    if (devCleartextHosts.contains(value)) {
+      return true;
+    }
+    const suffixes = [
+      '.localhost',
+      '.local',
+      '.internal',
+      '.lan',
+      '.home.arpa',
+    ];
+    if (suffixes.any(value.endsWith)) {
+      return true;
+    }
+    if (value.contains(':')) {
+      // An IPv6 literal: loopback, unspecified, unique-local (fc00::/7) or link-local
+      // (fe80::/10).
+      return value == '::' ||
+          value.startsWith('fc') ||
+          value.startsWith('fd') ||
+          RegExp(r'^fe[89ab]').hasMatch(value);
+    }
+    final octets = RegExp(r'^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$')
+        .firstMatch(value);
+    if (octets != null) {
+      final a = int.parse(octets.group(1)!);
+      final b = int.parse(octets.group(2)!);
+      return a == 0 ||
+          a == 10 ||
+          a == 127 ||
+          (a == 169 && b == 254) ||
+          (a == 172 && b >= 16 && b <= 31) ||
+          (a == 192 && b == 168);
+    }
+    // A bare name ("backend") is a machine on somebody's network, not a public host.
+    return !value.contains('.');
+  }
+
+  /// The environment an application id belongs to, by the flavor's suffix: `.dev`,
+  /// `.staging`, or none for the production id. The suffix (not the whole id) is what
+  /// the flavors define in `build.gradle.kts`, so this keeps holding when the base
+  /// application id is decided (D1).
+  static AppEnv envOfPackage(String packageName) {
+    final id = packageName.trim().toLowerCase();
+    if (id.endsWith('.dev')) {
+      return AppEnv.dev;
+    }
+    if (id.endsWith('.staging')) {
+      return AppEnv.staging;
+    }
+    return AppEnv.prod;
+  }
+
+  /// Requires that the installed application id is the flavor of this configuration's
+  /// `APP_ENV`. A `config/dev.json` built into the production flavor (or the reverse) is
+  /// a mistake the build cannot catch by itself; the app refuses to run on it
+  /// ([AppConfigException]) before it makes a single request.
+  void requirePackage(String packageName) {
+    final id = packageName.trim();
+    if (id.isEmpty) {
+      throw const AppConfigException(
+        'The application id of this build is unknown, so its flavor cannot be '
+        'matched to APP_ENV.',
+      );
+    }
+    final flavor = envOfPackage(id);
+    if (flavor != env) {
+      throw AppConfigException(
+        'APP_ENV is ${env.name} but this is the ${flavor.name} flavor ("$id"). '
+        'Build with --flavor ${env.name} together with '
+        '--dart-define-from-file=config/${env.name}.json.',
+      );
+    }
+  }
+
+  /// The zone key `dart:ui` reads in its `dart:io` connection hook
+  /// (`sky_engine/lib/ui/hooks.dart`, `_getHttpConnectionHookClosure`). With the value
+  /// `false`, `HttpClient` refuses `http` to any non-loopback host with an
+  /// `UnsupportedError`, whatever the platform's network security config says.
+  static const Symbol allowHttpZoneKey = #flutter.io.allow_http;
+
+  /// The values of the zone the whole app runs in (`main()`): plain `http` is allowed
+  /// in dev only. A second line behind [parse], not a replacement for it.
+  Map<Object?, Object?> get ioZoneValues => {allowHttpZoneKey: isDev};
 
   static Uri _parseBaseUrl(String raw, AppEnv env, {required String name}) {
     final value = raw.trim();
@@ -139,9 +322,23 @@ class AppConfig {
           '$name must use https in ${env.name} (got "$value").',
         );
       }
-      if (_localHosts.contains(uri.host)) {
+      if (isDevLookingHost(uri.host)) {
         throw AppConfigException(
-          '$name must not point at a local address in ${env.name}.',
+          '$name must not point at a local or private-network address in '
+          '${env.name} (a development configuration in a ${env.name} build?).',
+        );
+      }
+    } else {
+      if (!isDevLookingHost(uri.host)) {
+        throw AppConfigException(
+          '$name must point at this machine or network in dev, not at "${uri.host}". '
+          'A deployed server is for the staging or prod flavor.',
+        );
+      }
+      if (uri.scheme == 'http' && !devCleartextHosts.contains(uri.host)) {
+        throw AppConfigException(
+          '$name uses plain http in dev, which is only for '
+          '${devCleartextHosts.join(', ')} (use `adb reverse` for a device).',
         );
       }
     }
@@ -149,6 +346,63 @@ class AppConfig {
         ? uri.path.substring(0, uri.path.length - 1)
         : uri.path;
     return uri.replace(path: path);
+  }
+
+  static Uri _parsePlayStoreUrl(String raw) {
+    final value = raw.trim();
+    if (value.isEmpty) {
+      return defaultPlayStoreUrl;
+    }
+    final uri = Uri.tryParse(value);
+    if (uri == null ||
+        !uri.isAbsolute ||
+        uri.host.isEmpty ||
+        uri.scheme != 'https' ||
+        uri.userInfo.isNotEmpty) {
+      throw AppConfigException(
+        'PLAY_STORE_URL "$value" must be an absolute https URL.',
+      );
+    }
+    return uri;
+  }
+
+  static FirebaseSettings? _parseFirebase({
+    required String apiKey,
+    required String appId,
+    required String messagingSenderId,
+    required String projectId,
+  }) {
+    final values = <String, String>{
+      'FIREBASE_API_KEY': apiKey.trim(),
+      'FIREBASE_APP_ID': appId.trim(),
+      'FIREBASE_MESSAGING_SENDER_ID': messagingSenderId.trim(),
+      'FIREBASE_PROJECT_ID': projectId.trim(),
+    };
+    final missing = [
+      for (final entry in values.entries)
+        if (entry.value.isEmpty) entry.key,
+    ];
+    if (missing.length == values.length) {
+      return null;
+    }
+    if (missing.isNotEmpty) {
+      throw AppConfigException(
+        'The Firebase values go together: ${missing.join(', ')} '
+        '${missing.length == 1 ? 'is' : 'are'} not set. Set all four, or leave all '
+        'four empty to build without push.',
+      );
+    }
+    if (values.values.any((value) => RegExp(r'\s').hasMatch(value))) {
+      throw const AppConfigException(
+        'The FIREBASE_* values must not contain spaces.',
+      );
+    }
+    return FirebaseSettings(
+      apiKey: values['FIREBASE_API_KEY']!,
+      appId: values['FIREBASE_APP_ID']!,
+      messagingSenderId: values['FIREBASE_MESSAGING_SENDER_ID']!,
+      projectId: values['FIREBASE_PROJECT_ID']!,
+    );
   }
 
   static Uri? _parseSentryDsn(String raw, AppEnv env) {
@@ -173,10 +427,19 @@ class AppConfig {
       other.env == env &&
       other.apiBaseUrl == apiBaseUrl &&
       other.publicBaseUrl == publicBaseUrl &&
-      other.sentryDsn == sentryDsn;
+      other.sentryDsn == sentryDsn &&
+      other.playStoreUrl == playStoreUrl &&
+      other.firebase == firebase;
 
   @override
-  int get hashCode => Object.hash(env, apiBaseUrl, publicBaseUrl, sentryDsn);
+  int get hashCode => Object.hash(
+    env,
+    apiBaseUrl,
+    publicBaseUrl,
+    sentryDsn,
+    playStoreUrl,
+    firebase,
+  );
 
   @override
   String toString() => 'AppConfig(env: ${env.name}, apiBaseUrl: $apiBaseUrl)';

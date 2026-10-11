@@ -113,6 +113,13 @@ async def close_incident(
         )
 
     recipients: list[tuple[uuid.UUID, str]] = []
+    # Only a check-in or I'M SAFE says the person is safe. A closed account or an operator void
+    # withdraws the alert without saying that.
+    undoing = (
+        outbox.CONTACT_ALL_CLEAR
+        if closed_by in ("user_checkin", "user_safe")
+        else outbox.CONTACT_ALERT_WITHDRAWN
+    )
     if all_clear and messaged:
         contacts = {c.id: c for c in await ContactRepository(session).list(owner_id=owner)}
         drafts: list[Draft] = []
@@ -127,16 +134,18 @@ async def close_incident(
                     audience="contact",
                     category=outbox.CATEGORY_CONTACT_OTHER,
                     channel="email",
-                    template_key=outbox.CONTACT_ALL_CLEAR,
+                    template_key=undoing,
                     send_after=now,
                     dedupe_key=f"allclear:{incident.id}:{contact_id}",
                     contact_id=contact_id,
                     incident_id=incident.id,
-                    params={"checked_in_at": now.isoformat()},
+                    params={"checked_in_at": now.isoformat(), "reason": closed_by},
                 )
             )
         if recipients:
-            drafts.extend(_user_confirmation(owner, incident.id, recipients, now, user_summary))
+            drafts.extend(
+                _user_confirmation(owner, incident.id, recipients, now, user_summary, closed_by)
+            )
         await outbox.enqueue(session, drafts, now=now)
 
     action = {
@@ -173,25 +182,32 @@ def _user_confirmation(
     recipients: list[tuple[uuid.UUID, str]],
     now: datetime,
     summary: dict[str, Any] | None,
+    closed_by: str,
 ) -> list[Draft]:
     params: dict[str, Any] = {
         "incident_id": str(incident_id),
         "contact_ids": [str(c) for c, _ in recipients],
         **(summary or {}),
     }
+    # "All clear sent: they know you're safe" is only true after a check-in or I'M SAFE.
+    template = (
+        outbox.USER_ALL_CLEAR
+        if closed_by in ("user_checkin", "user_safe")
+        else outbox.USER_ALERT_WITHDRAWN
+    )
     return [
         Draft(
             user_id=owner,
             audience="user",
             category=outbox.CATEGORY_USER,
             channel=channel,
-            template_key=outbox.USER_ALL_CLEAR,
+            template_key=template,
             send_after=now,
             dedupe_key=f"allclear-user:{incident_id}:{channel}",
             incident_id=incident_id,
             params=params,
         )
-        for channel in outbox.USER_CHANNELS[outbox.USER_ALL_CLEAR]
+        for channel in outbox.USER_CHANNELS[template]
         if channel == "email"  # push needs a device row; the email always reaches the owner
     ]
 
@@ -203,11 +219,13 @@ async def void_open_incident(
     owner_id: uuid.UUID,
     closed_by: str,
     now: datetime,
+    resume_schedule: bool = True,
 ) -> ClosingOutcome | None:
     """Close the user's open incident as ``voided`` (account deletion, or an operator after a
     confirmed fault, ESCALATION_ENGINE §10): all-clear to the contacts already messaged, and
     nothing contact-facing remains pending. The caller holds the per-user lock. Returns ``None``
-    when there is no open incident."""
+    when there is no open incident. ``resume_schedule=False`` is for the caller that is about to
+    switch the schedule off itself (account deletion)."""
     incident = await IncidentRepository(session).get_open(owner_id=owner_id, for_update=True)
     if incident is None:
         return None
@@ -220,7 +238,8 @@ async def void_open_incident(
         now=now,
         all_clear=True,
     )
-    await _resume_schedule(session, owner_id=owner_id, incident=incident, now=now)
+    if resume_schedule:
+        await _resume_schedule(session, owner_id=owner_id, incident=incident, now=now)
     return outcome
 
 

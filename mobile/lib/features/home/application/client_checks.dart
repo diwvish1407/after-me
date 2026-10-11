@@ -25,7 +25,22 @@ class ClientChecks {
 
 class ClientChecksController extends Notifier<ClientChecks> {
   @override
-  ClientChecks build() => const ClientChecks();
+  ClientChecks build() {
+    // An answer given in the system dialog, or a status read on the Notifications screen,
+    // reaches the banner at once instead of at the next pull or return to the app.
+    ref.listen<NotificationPermission>(
+      notificationPermissionControllerProvider.select((state) => state.status),
+      (previous, next) {
+        if (next != NotificationPermission.unknown) {
+          state = ClientChecks(
+            notifications: next,
+            deviceTimezone: state.deviceTimezone,
+          );
+        }
+      },
+    );
+    return const ClientChecks();
+  }
 
   /// Reads the notification permission and the phone's timezone again.
   Future<void> refresh() async {

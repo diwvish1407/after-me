@@ -18,6 +18,13 @@
         android:maxSdkVersion="27"
         tools:node="replace" />
 
+    <!-- The push stack (Phase 8) also declares VIBRATE (flutter_local_notifications). A
+         notification channel vibrates on the app's behalf and needs no permission, so the
+         declaration is removed here rather than allowlisted. The permissions that stay
+         (WAKE_LOCK, ACCESS_NETWORK_STATE, the FCM receive permissions) are listed, each with
+         its reason, in tool/check_manifest_permissions.dart. -->
+    <uses-permission android:name="android.permission.VIBRATE" tools:node="remove" />
+
     <!-- Backups are disabled (ARCHITECTURE.md §5.4): secure storage is device-bound and
          must never be restored to another device. dataExtractionRules also excludes
          everything from device-to-device transfer, which allowBackup="false" alone does
@@ -47,11 +54,34 @@
               android:name="io.flutter.embedding.android.NormalTheme"
               android:resource="@style/NormalTheme"
               />
+            <!-- The app has no deep links: an intent's data is never pushed to the router
+                 (the engine's default is on). MainActivity.kt also refuses every other
+                 route/engine extra an app could send to this exported activity; the merged
+                 manifest is checked by tool/check_manifest_permissions.dart. -->
+            <meta-data
+                android:name="flutter_deeplinking_enabled"
+                android:value="false" />
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+        <!-- Push (Phase 8). Firebase is started from Dart with options compiled in through
+             the build's dart-define file (no google-services.json, no google-services plugin).
+             FCM stays idle until the person is signed in and has allowed notifications: the
+             app turns auto-init on then (FirebaseMessaging.setAutoInitEnabled) and off again,
+             with the token deleted, when the person signs out. -->
+        <meta-data
+            android:name="firebase_messaging_auto_init_enabled"
+            android:value="false" />
+        <!-- A push that names no channel lands in the calm one, never in an "unknown" one;
+             the server's own pushes always name their channel. -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="account" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_stat_afterme" />
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

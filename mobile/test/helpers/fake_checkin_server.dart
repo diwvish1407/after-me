@@ -13,6 +13,11 @@ import 'fake_plan_server.dart';
 
 bool _tzReady = false;
 
+String _rfc3339(DateTime instant) {
+  final iso = instant.toUtc().toIso8601String();
+  return '${iso.substring(0, iso.indexOf('.'))}Z';
+}
+
 /// What the real server computes (ESCALATION_ENGINE.md §3.2): the next local
 /// `dueMinutes` at least [intervalDays] days after [baseline] and at least 12 hours
 /// away. Test-only; the app never does this.
@@ -105,6 +110,9 @@ class FakeCheckInServer
   /// Extra readiness issues (for example Phase 5 codes).
   List<ReadinessIssue> extraIssues = [];
 
+  /// `recent_activity` of the aggregate (action and time only), newest first.
+  List<RecentActivity> recentActivity = [];
+
   /// Extra activation requirements (for example `no_stages`).
   List<String> extraRequirements = [];
 
@@ -195,6 +203,32 @@ class FakeCheckInServer
   void openIncident({Map<String, dynamic>? details}) {
     status = CheckInStatus.incidentOpen;
     incident = details;
+  }
+
+  /// Called when an incident is closed through the API, with the `closed_by` value
+  /// (`user_checkin`, `user_safe`). The incidents "server" keeps the history.
+  void Function(String closedBy)? onIncidentClosed;
+
+  /// What the server does when I'M SAFE is confirmed: the incident closes, a check-in of
+  /// kind `safe` is recorded and the schedule restarts from now, exactly as for an I'M OK
+  /// (API_SPEC.md §9). Returns the next deadline, or null while the schedule is off.
+  DateTime? closeIncidentSafe() {
+    final received = now;
+    status = CheckInStatus.active;
+    incident = null;
+    contactsMessaged = false;
+    lastCheckinAt = received;
+    nextDueAt = _nextDue();
+    _history.insert(
+      0,
+      CheckInHistoryItem(
+        id: 'checkin-${++_ids}',
+        kind: CheckInKind.safe,
+        source: CheckInSource.app,
+        receivedAt: received,
+      ),
+    );
+    return nextDueAt;
   }
 
   // --- ScheduleRepository ---------------------------------------------------------------
@@ -315,13 +349,23 @@ class FakeCheckInServer
       throw RateLimitedFailure(retryAfter: retryAfter);
     }
     if (contactsMessaged && status == CheckInStatus.incidentOpen) {
-      throw const ConflictFailure(code: 'safe_required');
+      // Like the real server: the problem names the incident (API_SPEC.md §4).
+      final id = incident?['id'];
+      throw ConflictFailure(
+        code: 'safe_required',
+        problem: ApiProblem(
+          status: 409,
+          code: 'safe_required',
+          incidentId: id is String ? id : null,
+        ),
+      );
     }
     final received = now;
     _recent.add(received);
     final resolved = status == CheckInStatus.incidentOpen;
     if (resolved) {
       status = CheckInStatus.active;
+      onIncidentClosed?.call('user_checkin');
       incident = null;
     }
     lastCheckinAt = received;
@@ -434,7 +478,10 @@ class FakeCheckInServer
           reminderLeadMinutes: reminderLead,
         ),
       ),
-      incident: incident,
+      // Built at the time of the request, like the real aggregate's.
+      incident: incident == null || !incident!.containsKey('server_time')
+          ? incident
+          : {...incident!, 'server_time': _rfc3339(now)},
       planSummary: PlanSummary(
         stages: stages.length,
         contactsTotal: people.length,
@@ -444,6 +491,7 @@ class FakeCheckInServer
         instructionsActive: instructionCount?.call() ?? instructionsActive,
       ),
       readiness: Readiness(ready: issues.isEmpty, issues: issues),
+      recentActivity: recentActivity,
     );
   }
 }

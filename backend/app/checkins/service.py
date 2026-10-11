@@ -23,6 +23,7 @@ from app.api.container import AppServices
 from app.api.deps import CurrentUser, RequestContext, has_fresh_reauth
 from app.audit import writer as audit
 from app.auth.base import AuthServiceBase
+from app.auth.guards import ensure_owner_active
 from app.checkins.models import CheckinConfiguration
 from app.checkins.repository import CheckinConfigRepository, CheckinEventRepository
 from app.checkins.schedule import compute_next_due, format_hhmm, parse_hhmm
@@ -38,6 +39,7 @@ from app.checkins.schemas import (
 from app.contacts.repository import ContactRepository
 from app.core.errors import (
     ActivationRequirementsUnmet,
+    IdempotencyKeyReused,
     IncidentOpen,
     NotFound,
     PreconditionFailed,
@@ -102,6 +104,8 @@ class CheckinService(AuthServiceBase):
         cfg = await self.configs.get(owner_id=user_id, for_update=lock)
         if cfg is None:  # pragma: no cover - created at signup verification
             raise NotFound
+        if lock:
+            await ensure_owner_active(self.session, user_id)
         return cfg
 
     async def _timezone(self, user_id: uuid.UUID) -> str:
@@ -252,7 +256,12 @@ class CheckinService(AuthServiceBase):
     # ------------------------------------------------------------------ I'M OK
 
     async def record(
-        self, current: CurrentUser, key: str, body: CheckinRequest | None
+        self,
+        current: CurrentUser,
+        key: str,
+        body: CheckinRequest | None,
+        *,
+        source: str = CHECKIN_SOURCE_APP,
     ) -> tuple[dict[str, Any], bool]:
         """Record an I'M OK. Returns the JSON body and whether it is a replay of an earlier
         answer (the router marks replays: their ``server_time`` is old).
@@ -265,6 +274,8 @@ class CheckinService(AuthServiceBase):
         replay = await self.events.find_by_key(owner_id=current.user_id, key=key)
         if replay is not None:
             await self.session.commit()
+            if replay.kind != "ok":
+                raise IdempotencyKeyReused  # not this operation's result: never present it as one
             return replay.response_snapshot, True
 
         now = await self._now()
@@ -275,6 +286,8 @@ class CheckinService(AuthServiceBase):
         replay = await self.events.find_by_key(owner_id=current.user_id, key=key)
         if replay is not None:
             await self.session.commit()
+            if replay.kind != "ok":
+                raise IdempotencyKeyReused
             return replay.response_snapshot, True
 
         # ESCALATION_ENGINE §9.1: the open incident, if any, is locked right after the user row
@@ -312,7 +325,7 @@ class CheckinService(AuthServiceBase):
             event_id=event_id,
             owner_id=current.user_id,
             kind="ok",
-            source=CHECKIN_SOURCE_APP,
+            source=source,
             received_at=now,
             client_reported_at=body.client_reported_at if body is not None else None,
             idempotency_key=key,

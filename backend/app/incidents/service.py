@@ -15,11 +15,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.container import AppServices
 from app.api.deps import CurrentUser, RequestContext
 from app.auth.base import AuthServiceBase
+from app.auth.guards import ensure_owner_active
 from app.checkins.models import CheckinConfiguration
 from app.checkins.repository import CheckinConfigRepository, CheckinEventRepository
 from app.checkins.schedule import compute_next_due
 from app.contacts.repository import ContactRepository
-from app.core.errors import InvalidState, NotFound, ValidationFailed
+from app.core.errors import IdempotencyKeyReused, InvalidState, NotFound, ValidationFailed
 from app.core.pagination import InvalidCursorError, decode_cursor, encode_cursor
 from app.incidents.closing import close_incident
 from app.incidents.models import OPEN_STATUSES, EscalationIncident
@@ -30,11 +31,14 @@ from app.incidents.schemas import (
     IncidentOut,
     IncidentPage,
     IncidentSummary,
+    ReleaseOut,
     SafeResponse,
 )
 from app.incidents.snapshot import SnapshotError, parse_snapshot
 from app.incidents.view import build_incident
-from app.security.rate_limit import CHECKIN_PER_USER
+from app.instructions.reader import open_texts
+from app.releases.repository import ReleaseRepository
+from app.security.rate_limit import SAFE_PER_USER
 
 
 class IncidentService(AuthServiceBase):
@@ -61,7 +65,46 @@ class IncidentService(AuthServiceBase):
         names = await ContactRepository(self.session).display_names(
             owner_id=owner_id, contact_ids=ids
         )
-        return build_incident(incident, actions, names, now=now)
+        releases = await self._releases(owner_id, incident)
+        return build_incident(incident, actions, names, now=now, releases=releases)
+
+    async def _releases(
+        self, owner_id: uuid.UUID, incident: EscalationIncident
+    ) -> list[ReleaseOut]:
+        """What was shared with whom in this incident. Titles are opened for the owner only; a
+        title that cannot be opened is ``None`` (the rest of the incident still shows)."""
+        rows = await ReleaseRepository(self.session).for_owner_view(
+            owner_id=owner_id, incident_id=incident.id
+        )
+        if not rows:
+            return []
+        texts = await open_texts(
+            self.session,
+            self.services.vault,
+            owner_id=owner_id,
+            instruction_ids={event.instruction_id for event, _, _ in rows},
+        )
+        out: list[ReleaseOut] = []
+        for event, contact_name, position in rows:
+            opened = texts.get(event.instruction_id)
+            title = opened[0] if opened is not None else None
+            out.append(
+                ReleaseOut(
+                    contact_id=event.contact_id,
+                    contact_display_name=contact_name,
+                    instruction_id=event.instruction_id,
+                    instruction_title=title,
+                    stage_position=position,
+                    released_at=event.released_at,
+                    visible_after=event.visible_after,
+                    first_viewed_at=event.first_viewed_at,
+                    last_viewed_at=event.last_viewed_at,
+                    view_count=event.view_count,
+                    revoked_at=event.revoked_at,
+                    revoke_reason=event.revoke_reason,
+                )
+            )
+        return out
 
     async def current(self, current: CurrentUser) -> IncidentCurrent:
         now = await self._now()
@@ -111,23 +154,28 @@ class IncidentService(AuthServiceBase):
     # ------------------------------------------------------------------ I'M SAFE
 
     async def safe(
-        self, current: CurrentUser, incident_id: uuid.UUID, key: str
+        self, current: CurrentUser, incident_id: uuid.UUID, key: str, *, source: str = "app"
     ) -> tuple[dict[str, object], bool]:
         """§9.2. Re-authentication was enforced by the route. Returns the JSON body and whether
         it is a replay of an earlier answer."""
         replay = await self.events.find_by_key(owner_id=current.user_id, key=key)
         if replay is not None:
             await self.session.commit()
+            if replay.kind != "safe" or replay.incident_id != incident_id:
+                raise IdempotencyKeyReused  # another operation's result is not this one's
             return replay.response_snapshot, True
 
         now = await self._now()
-        await self._limit(CHECKIN_PER_USER, str(current.user_id), now)
+        await self._limit(SAFE_PER_USER, str(current.user_id), now)
         config = await self.configs.get(owner_id=current.user_id, for_update=True)
         if config is None:  # pragma: no cover - created at signup verification
             raise NotFound
+        await ensure_owner_active(self.session, current.user_id)
         replay = await self.events.find_by_key(owner_id=current.user_id, key=key)
         if replay is not None:
             await self.session.commit()
+            if replay.kind != "safe" or replay.incident_id != incident_id:
+                raise IdempotencyKeyReused
             return replay.response_snapshot, True
 
         incident = await self.incidents.get(
@@ -169,7 +217,7 @@ class IncidentService(AuthServiceBase):
             event_id=uuid.uuid4(),
             owner_id=current.user_id,
             kind="safe",
-            source="app",
+            source=source,
             received_at=now,
             client_reported_at=None,
             idempotency_key=key,

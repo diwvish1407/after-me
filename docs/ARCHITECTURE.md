@@ -201,8 +201,10 @@ Implementations:
 
 | Interface | Environments |
 |---|---|
-| Email | `console` (dev only; never enabled in prod), a primary provider, an optional fallback |
-| Push | `fcm` (HTTP v1 API via a service account), `noop` (tests) |
+| Email | `console` (dev only; never enabled in prod), `resend` and `postmark` (HTTPS APIs), `smtp` (any relay: STARTTLS or implicit TLS), a primary provider and an optional different fallback (`FallbackEmailProvider`) |
+| Push | `fcm` (HTTP v1 API; a service-account key, or the metadata server under Workload Identity), `log` (dev), `noop` (tests) |
+
+**Phase 8, implemented** (`app/notifications/providers/`). Every adapter turns the provider's answer into one of four failure kinds (`errors.py`), so the dispatcher never knows which provider it talks to. Each message is written once as text; the HTML part is *derived* from it (`html.py`), so the two cannot differ. Delivery is at-least-once; Resend carries the notification id as its `Idempotency-Key`, Postmark and SMTP rely on the outbox claim. Direct-send emails (signup codes, reset links, security notices, invitations) use the same provider chain but not the outbox: they carry secrets that must not sit in a table, and the person can ask again.
 | KMS | `local` (dev/test: key from env; refused in prod), `gcp_kms` (or the equivalent for the chosen cloud) |
 
 ### 4.8 Configuration
@@ -263,7 +265,7 @@ features/<name>/
 | Data | Where | Why |
 |---|---|---|
 | Refresh token, session ID, device ID | `flutter_secure_storage` | Keystore-backed |
-| Pending check-in (opaque account id, idempotency key, tap time) | `flutter_secure_storage` (`checkin.pending`) | Survives process death; retried with the same key. Bound to the account that tapped; a record of another account is never sent. No names, addresses or schedule. |
+| Pending check-in (opaque account id, idempotency key, tap time) | `flutter_secure_storage` (`checkin.pending`) | Survives process death; retried with the same key. Bound to the account that tapped, by the account id of the signed-in session (`session.user_id` in secure storage, written at sign-in and removed with the session; a record without an owner is refused); a record of another account is never sent. No names, addresses or schedule. |
 | App-lock settings, onboarding progress, last-known home summary (times and counts only) | `shared_preferences` | Non-sensitive |
 | Instruction content | **Never persisted** | Fetched on demand, held in memory |
 
@@ -272,18 +274,20 @@ Android `allowBackup="false"`. Secure storage is device-bound and must not be re
 ### 5.5 App lock
 
 - Enabled during onboarding (recommended). Locks on cold start and after a configurable background timeout (immediately / 1 / 5 min; default 5).
-- Uses `BiometricPrompt` (BIOMETRIC_STRONG) with **device credential** (PIN/pattern/password) as the fallback. If the device has no screen lock, the app recommends setting one; an AfterMe-specific PIN is a Phase 9 decision.
+- Uses `BiometricPrompt` with weak or strong biometrics (`local_auth` offers no class-3-only option, and narrowing it could lock a person out of their own check-in) and the **device credential** (PIN/pattern/password) as the fallback. If the device has no screen lock, the app recommends setting one. **No AfterMe-specific PIN in 1.0** (Phase 9 recommendation): reading instructions needs the password from the server on every phone, and writes, I'M SAFE, export and delete are server-gated, so a local PIN would protect little that is not already protected.
 - App lock is a **client-side** protection. Server-sensitive operations additionally require server re-authentication (FR-AUTH-08).
 - *Implemented in Phase 2:* the lock is an overlay above the `Navigator` (`MaterialApp.builder`), not a route, so it also covers open sheets and dialogs; the app below is kept alive but hidden (offstage, excluded from semantics). While the lock is enabled, `MainActivity` sets `FLAG_SECURE` in `onPause` so the recents thumbnail is blank. System dialogs (unlock prompt, permission dialog, contact picker) do not count as leaving the app. A device that lost its screen lock gets an explanation and the person's explicit choice to turn the lock off.
 
 ### 5.6 Screen protection
 
-`FLAG_SECURE` is set through a small platform channel in `MainActivity` while instruction view/edit screens and the export screen are visible. This blocks screenshots, screen recording and the app-switcher preview. Store screenshots are taken in a build flavor with this disabled.
+`FLAG_SECURE` is set through a small platform channel in `MainActivity` while instruction view/edit screens, the export and delete-account screens and every password-entry screen or sheet are visible. This blocks screenshots, screen recording and the app-switcher preview. A build flavor or flag that disables it for Play listing screenshots does not exist yet (Phase 11).
 
 ### 5.7 Push and reminders
 
-- The FCM token is registered on login and on token refresh (`POST /v1/devices`).
-- Payloads carry only `{type, incident_id?}` and generic text; the app fetches details over the API.
+- The FCM token is registered after sign-in, on start and on resume while the permission is granted, and on every token refresh (`PUT /v1/devices/current`); notifications switched off (or the permission revoked) sends `push_token: null`; sign-out deletes the token locally after the server call. The server removes a token FCM reports as unregistered.
+- **Payload (Phase 8, `docs/contracts/phase8/push_payloads.json`):** an FCM `notification` with a fixed generic title and body, `data: {type, v: "1", incident_id?}`, `android.priority: HIGH`, a time to live per type (reminders 1 h, the rest 24 h), `android.notification.channel_id` in `reminders` / `incidents` / `account`, `tag` = type (a repeat replaces itself) and `visibility: PRIVATE`. Nothing names a person, a time or an instruction (FR-NOT-04, SECURITY T21). The app fetches details over the API and acts on nothing in the payload except the route: `home` or `people`; an unknown type opens Home.
+- **Channels** are created by the app at start with `lockscreenVisibility` private, so the person can silence reminders without silencing alerts.
+- **No Firebase files in the repository:** the app initialises Firebase manually from `FIREBASE_*` compile-time defines (`mobile/config/*.json`; all four or none, a mix is refused at start); with them empty, the app runs and reports push as not configured. FCM stays idle (auto-init off) until the person is signed in and has allowed notifications, and the token is deleted on sign-out. The endpoint is `PUT /v1/devices/current` (three bodies: keep / set / `null`), with the optional `DELETE /v1/devices/current/push-token`.
 - The app does **not** schedule exact alarms or run background jobs to decide anything. Reminders come from the server (push + email).
 
 ### 5.8 Offline behaviour

@@ -6,7 +6,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime
 
-from sqlalchemy import ColumnElement, delete, func, select
+from sqlalchemy import ColumnElement, delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.contacts.models import TrustedContact
@@ -201,3 +201,18 @@ class InstructionRepository:
                 InstructionRecipient.instruction_id == instruction_id,
             )
         )
+
+    async def wipe_all(self, *, owner_id: uuid.UUID, now: datetime) -> int:
+        """Account deletion: no instruction of this owner keeps its content or its recipients.
+        The rows stay (releases and the incident history refer to them) until the account is
+        purged. Returns the number of instructions wiped."""
+        await self._session.execute(
+            delete(InstructionRecipient).where(InstructionRecipient.user_id == owner_id)
+        )
+        result = await self._session.execute(
+            update(Instruction)
+            .where(Instruction.user_id == owner_id, Instruction.deleted_at.is_(None))
+            .values(content_ciphertext=None, status="inactive", deleted_at=now, updated_at=now)
+            .returning(Instruction.id)
+        )
+        return len(result.all())

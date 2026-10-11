@@ -8,6 +8,13 @@ abstract final class SessionKeys {
   static const refreshToken = 'session.refresh_token';
   static const sessionId = 'session.session_id';
   static const deviceId = 'session.device_id';
+
+  /// The account the session belongs to (an opaque id), written together with the
+  /// tokens at sign-in and removed with them. Anything that is bound to "the account
+  /// signed in right now" (the pending check-in) reads it from here, not from a
+  /// preference: a preference write can fail silently, and a stale one would name the
+  /// previous account.
+  static const userId = 'session.user_id';
 }
 
 /// Holds the current session.
@@ -15,7 +22,8 @@ abstract final class SessionKeys {
 /// * The **access token** lives in memory only and is lost when the process ends
 ///   (ARCHITECTURE.md §5.3). After a cold start the API client obtains a new one
 ///   with the refresh token.
-/// * The **refresh token, session id and device id** live in [SecureStore].
+/// * The **refresh token, session id, device id and the account's id** live in
+///   [SecureStore].
 ///
 /// Every [clear] bumps [generation]. Work that started before a sign-out (for
 /// example a token refresh that was already in flight) compares generations and
@@ -43,6 +51,9 @@ class SessionStore {
 
   Future<String?> readDeviceId() => _secure.read(SessionKeys.deviceId);
 
+  /// The id of the account this session belongs to, or null when none is stored.
+  Future<String?> readUserId() => _secure.read(SessionKeys.userId);
+
   /// Whether a persisted session exists (used to restore the auth status).
   Future<bool> hasPersistedSession() async {
     final refreshToken = await readRefreshToken();
@@ -59,6 +70,7 @@ class SessionStore {
     await _secure.write(SessionKeys.refreshToken, tokens.refreshToken);
     await _secure.write(SessionKeys.sessionId, tokens.sessionId);
     await _secure.write(SessionKeys.deviceId, tokens.deviceId);
+    await _secure.write(SessionKeys.userId, tokens.user.id);
     if (generation != _generation) {
       // Cleared while we were writing: do not keep a half-written session.
       await _deleteSessionKeys();
@@ -113,6 +125,7 @@ class SessionStore {
       SessionKeys.refreshToken,
       SessionKeys.sessionId,
       SessionKeys.deviceId,
+      SessionKeys.userId,
     ]) {
       await _secure.delete(key);
     }

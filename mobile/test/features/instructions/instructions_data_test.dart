@@ -371,9 +371,19 @@ void main() {
         instructionFailureMessage(l10n, const NotFoundFailure()),
         l10n.instructionNotFound,
       );
+      // No answer: nothing was confirmed, and the person's text is still on screen.
       expect(
         instructionFailureMessage(l10n, const NetworkFailure()),
-        l10n.errorNetwork,
+        l10n.errorUnconfirmedSave,
+      );
+      expect(
+        instructionFailureMessage(l10n, const ServerFailure(statusCode: 500)),
+        l10n.errorUnconfirmedSave,
+      );
+      // A real answer keeps its own wording.
+      expect(
+        instructionFailureMessage(l10n, const RateLimitedFailure()),
+        l10n.errorRateLimited,
       );
     });
   });

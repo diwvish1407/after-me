@@ -1,0 +1,7 @@
+Hi {{ user_name }},
+
+We couldn't reach {{ contact_name }} at the address you gave us.{% if reason == "bounced" or reason == "refused" %} The message came back as undeliverable.{% elif reason == "complaint" %} They marked a message from AfterMe as unwanted, so we won't write to that address again.{% else %} A message to them could not be delivered.{% endif %}
+
+{% if reason == "undeliverable" %}We keep the address as it is and will try again the next time. If this matters now, open AfterMe, go to People and check the address, or add someone else.{% else %}If you miss a check-in, {{ contact_name }} would not be told. Open AfterMe, go to People and check the address, or add someone else.{% endif %}
+
+AfterMe is not an emergency service.

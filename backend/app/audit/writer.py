@@ -69,6 +69,9 @@ STAGE_DEFERRED: Final = "escalation.stage_deferred"
 INSTRUCTION_CREATED: Final = "instruction.created"
 INSTRUCTION_UPDATED: Final = "instruction.updated"
 INSTRUCTION_DELETED: Final = "instruction.deleted"
+# The owner opened the list or one instruction (the text is decrypted for the response). Not
+# shown in Activity: it is the trail an investigation needs after a stolen session (Phase 9).
+INSTRUCTION_VIEWED: Final = "instruction.viewed"
 INSTRUCTION_RECIPIENTS_CHANGED: Final = "instruction.recipients_changed"
 RELEASE_CREATED: Final = "release.created"
 RELEASE_REVOKED: Final = "release.revoked"
@@ -89,6 +92,13 @@ OPERATOR_HOLD_ENTER: Final = "operator.hold_enter"
 OPERATOR_HOLD_EXIT: Final = "operator.hold_exit"
 OPERATOR_VOID_INCIDENT: Final = "operator.void_incident"
 OPERATOR_RETRY_ACTION: Final = "operator.retry_action"
+
+# --- Phase 7 actions ------------------------------------------------------------------------
+ACCOUNT_EXPORTED: Final = "account.exported"
+ACCOUNT_DELETION_REQUESTED: Final = "account.deletion_requested"
+ACCOUNT_PURGED: Final = "account.purged"
+WEB_LOGIN_SUCCEEDED: Final = "auth.web_login_succeeded"
+CONTACT_BOUNCED: Final = "contact.bounced"
 
 PHASE1_ACTIONS: Final = frozenset(
     {
@@ -136,6 +146,7 @@ PHASE6_ACTIONS: Final = frozenset(
         INSTRUCTION_CREATED,
         INSTRUCTION_UPDATED,
         INSTRUCTION_DELETED,
+        INSTRUCTION_VIEWED,
         RELEASE_CREATED,
         RELEASE_REVOKED,
         RELEASE_VIEWED,
@@ -171,6 +182,15 @@ PHASE5_ACTIONS: Final = frozenset(
         OPERATOR_RETRY_ACTION,
     }
 )
+PHASE7_ACTIONS: Final = frozenset(
+    {
+        ACCOUNT_EXPORTED,
+        ACCOUNT_DELETION_REQUESTED,
+        ACCOUNT_PURGED,
+        WEB_LOGIN_SUCCEEDED,
+        CONTACT_BOUNCED,
+    }
+)
 KNOWN_ACTIONS: Final = (
     PHASE1_ACTIONS
     | PHASE2_ACTIONS
@@ -178,6 +198,7 @@ KNOWN_ACTIONS: Final = (
     | PHASE4_ACTIONS
     | PHASE5_ACTIONS
     | PHASE6_ACTIONS
+    | PHASE7_ACTIONS
 )
 
 # Shown in the Activity feed (SECURITY §9, marked ✓). auth.login_succeeded is visible only for a
@@ -211,6 +232,9 @@ USER_VISIBLE_ACTIONS: Final = frozenset(
         RELEASE_CREATED,
         RELEASE_REVOKED,
         RELEASE_VIEWED,
+        ACCOUNT_EXPORTED,
+        WEB_LOGIN_SUCCEEDED,
+        CONTACT_BOUNCED,
     }
 )
 

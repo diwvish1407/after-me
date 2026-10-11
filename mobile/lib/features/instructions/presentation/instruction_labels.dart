@@ -195,5 +195,6 @@ String instructionFailureMessage(
   ValidationFailure(:final fieldErrors)
       when planFieldErrorText(l10n, fieldErrors) != null =>
     l10n.instructionTimeRefused,
-  _ => failureMessage(l10n, failure),
+  // No answer: nothing was confirmed and what the person wrote is still on screen.
+  _ => actionFailureMessage(l10n, failure, UnconfirmedAction.save),
 };

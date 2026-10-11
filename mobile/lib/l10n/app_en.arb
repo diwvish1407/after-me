@@ -1204,6 +1204,54 @@
   "@notificationsEmailAlways": {
     "description": "Explains that incident emails cannot be turned off."
   },
+  "notificationsNotConfigured": "Phone notifications aren't set up in this version of AfterMe. Reminders and alerts still reach you by email.",
+  "@notificationsNotConfigured": {
+    "description": "Settings > Notifications, shown when this build has no push service configured (a development or test build). Calm, not an error."
+  },
+  "notificationsWhatTitle": "What can arrive",
+  "@notificationsWhatTitle": {
+    "description": "Settings > Notifications: heading of the card that names the three kinds of notification."
+  },
+  "notificationsWhatBody": "AfterMe sends three kinds of notification. You can silence one without the others in your phone's notification settings for AfterMe.",
+  "@notificationsWhatBody": {
+    "description": "Settings > Notifications: explains that the channels can be silenced separately."
+  },
+  "notificationsLostTitle": "If notifications are off",
+  "@notificationsLostTitle": {
+    "description": "Settings > Notifications: heading of what is lost when notifications are off."
+  },
+  "notificationsLostBody": "You won't get reminders on this phone. Reminders and alerts also arrive by email, so your plan still reaches you.",
+  "@notificationsLostBody": {
+    "description": "Settings > Notifications: what is lost with notifications off, and that email still reaches the person."
+  },
+  "notificationsPrivateBody": "A notification never names a person or shows what you wrote, and AfterMe asks your phone to hide its text on the lock screen.",
+  "@notificationsPrivateBody": {
+    "description": "Settings > Notifications: what a notification does not contain."
+  },
+  "notificationChannelRemindersName": "Check-in reminders",
+  "@notificationChannelRemindersName": {
+    "description": "Android notification channel name: reminders before a check-in is due and after one is missed."
+  },
+  "notificationChannelRemindersDescription": "A reminder before a check-in is due, and a nudge if one has been missed.",
+  "@notificationChannelRemindersDescription": {
+    "description": "Android notification channel description for the reminders channel."
+  },
+  "notificationChannelIncidentsName": "Alerts about your plan",
+  "@notificationChannelIncidentsName": {
+    "description": "Android notification channel name: your contacts were told, something is about to be shared, an all clear."
+  },
+  "notificationChannelIncidentsDescription": "Tells you when your trusted contacts have been notified, before anything is shared, and when an all clear was sent.",
+  "@notificationChannelIncidentsDescription": {
+    "description": "Android notification channel description for the alerts channel."
+  },
+  "notificationChannelAccountName": "Account notices",
+  "@notificationChannelAccountName": {
+    "description": "Android notification channel name: things about the account, such as a contact who could not be reached."
+  },
+  "notificationChannelAccountDescription": "Things about your account, such as a trusted contact who could not be reached.",
+  "@notificationChannelAccountDescription": {
+    "description": "Android notification channel description for the account channel."
+  },
   "onboardingTitle": "Set up your plan",
   "@onboardingTitle": {
     "description": "App bar title of onboarding steps."
@@ -2447,9 +2495,9 @@
   "@homeSafeRequiredTitle": {
     "description": "Home header when a check-in is answered with safe_required."
   },
-  "homeSafeRequiredBody": "Your contacts have been notified, so confirming that you're safe is what stops your plan. That isn't available in this version of AfterMe yet.",
+  "homeSafeRequiredBody": "Your contacts have been notified, so confirming that you're safe is what stops your plan.",
   "@homeSafeRequiredBody": {
-    "description": "Home body when a check-in is answered with safe_required (the I'M SAFE flow arrives in a later phase)."
+    "description": "Home body when a check-in is answered with safe_required: the I'M SAFE button is below it."
   },
   "homeCheckedIn": "Checked in. Next check-in {when}.",
   "@homeCheckedIn": {
@@ -3586,5 +3634,2179 @@
   "starterDigitalSocialBody": "My social media accounts are…\nSubscriptions to cancel are…\nMy photos and files are stored in…",
   "@starterDigitalSocialBody": {
     "description": "Example instruction: text to fill in. Examples only."
+  },
+  "incidentWhenToday": "at {time}",
+  "@incidentWhenToday": {
+    "description": "A time later today, inside a sentence (\"Mom will be notified at 11:00 PM\").",
+    "placeholders": {
+      "time": {
+        "type": "String",
+        "example": "11:00 PM"
+      }
+    }
+  },
+  "incidentGraceTitle": "You missed your {time} check-in",
+  "@incidentGraceTitle": {
+    "description": "Home header in the grace period: nobody has been told yet. {time} is the missed deadline in the profile timezone.",
+    "placeholders": {
+      "time": {
+        "type": "String",
+        "example": "8:00 PM"
+      }
+    }
+  },
+  "incidentGraceBodyNamesAt": "{names} will be notified {when} unless you check in.",
+  "@incidentGraceBodyNamesAt": {
+    "description": "Grace period: who is told and when, from the server's time of the next stage.",
+    "placeholders": {
+      "names": {
+        "type": "String",
+        "example": "Mom and Brother"
+      },
+      "when": {
+        "type": "String",
+        "example": "at 11:00 PM"
+      }
+    }
+  },
+  "incidentGraceBodyNamesDue": "{names} will be notified unless you check in.",
+  "@incidentGraceBodyNamesDue": {
+    "description": "Grace period: the next stage's time has arrived but the server has not run it yet.",
+    "placeholders": {
+      "names": {
+        "type": "String",
+        "example": "Mom and Brother"
+      }
+    }
+  },
+  "incidentGraceBodyGenericAt": "Your trusted contacts will be notified {when} unless you check in.",
+  "@incidentGraceBodyGenericAt": {
+    "description": "Grace period when the stage's contacts are not listed.",
+    "placeholders": {
+      "when": {
+        "type": "String",
+        "example": "at 11:00 PM"
+      }
+    }
+  },
+  "incidentGraceBodyGenericDue": "Your trusted contacts will be notified unless you check in.",
+  "@incidentGraceBodyGenericDue": {
+    "description": "Grace period when the stage's contacts are not listed and its time has arrived."
+  },
+  "incidentGraceOnHold": "The next step is on hold while we look into something. Tap I'M OK if you're all right.",
+  "@incidentGraceOnHold": {
+    "description": "Grace period when the next stage is held by the server."
+  },
+  "incidentNotifiedTitle": "Your contacts have been notified",
+  "@incidentNotifiedTitle": {
+    "description": "Home header once contacts have been messaged (USER_FLOWS 4)."
+  },
+  "incidentNotifiedWhen": "{count, plural, =1{{names} was notified {when}.} other{{names} were notified {when}.}}",
+  "@incidentNotifiedWhen": {
+    "description": "Who was notified and when (the stage's server time).",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "2"
+      },
+      "names": {
+        "type": "String",
+        "example": "Mom and Brother"
+      },
+      "when": {
+        "type": "String",
+        "example": "at 11:00 PM"
+      }
+    }
+  },
+  "incidentNextNotify": "Next, {names} will be notified {when}.",
+  "@incidentNextNotify": {
+    "description": "What happens next: who is notified and when.",
+    "placeholders": {
+      "names": {
+        "type": "String",
+        "example": "Mom and Brother"
+      },
+      "when": {
+        "type": "String",
+        "example": "tomorrow at 8:00 PM"
+      }
+    }
+  },
+  "incidentNextNotifyShare": "Next, {names} will be notified {when}, and {count, plural, =1{1 instruction} other{{count} instructions}} will be shared with them.",
+  "@incidentNextNotifyShare": {
+    "description": "What happens next when a stage shares instructions. Never names the instruction.",
+    "placeholders": {
+      "names": {
+        "type": "String",
+        "example": "Mom and Brother"
+      },
+      "when": {
+        "type": "String",
+        "example": "tomorrow at 8:00 PM"
+      },
+      "count": {
+        "type": "int",
+        "example": "1"
+      }
+    }
+  },
+  "incidentNextNotifyDue": "Next, {names} will be notified.",
+  "@incidentNextNotifyDue": {
+    "description": "What happens next: the stage's time has arrived but the server has not run it yet.",
+    "placeholders": {
+      "names": {
+        "type": "String",
+        "example": "Mom and Brother"
+      }
+    }
+  },
+  "incidentNextNotifyShareDue": "Next, {names} will be notified, and {count, plural, =1{1 instruction} other{{count} instructions}} will be shared with them.",
+  "@incidentNextNotifyShareDue": {
+    "description": "What happens next when a stage shares instructions and its time has arrived. Never names the instruction.",
+    "placeholders": {
+      "names": {
+        "type": "String",
+        "example": "Mom and Brother"
+      },
+      "count": {
+        "type": "int",
+        "example": "1"
+      }
+    }
+  },
+  "incidentNextUnnamedDue": "The next step is due.",
+  "@incidentNextUnnamedDue": {
+    "description": "What happens next when the stage's contacts are not listed and its time has arrived."
+  },
+  "incidentNextUnnamed": "The next step is {when}.",
+  "@incidentNextUnnamed": {
+    "description": "What happens next when the stage's contacts are not listed.",
+    "placeholders": {
+      "when": {
+        "type": "String",
+        "example": "tomorrow at 8:00 PM"
+      }
+    }
+  },
+  "incidentNextOnHold": "The next step is on hold while we look into something.",
+  "@incidentNextOnHold": {
+    "description": "The next stage is held by the server."
+  },
+  "incidentNextNone": "Nothing else is scheduled.",
+  "@incidentNextNone": {
+    "description": "No stage is left to run."
+  },
+  "incidentSafePrompt": "If you're safe, tap I'M SAFE to let them know.",
+  "@incidentSafePrompt": {
+    "description": "Prompt under the notified header."
+  },
+  "incidentSafeButton": "I'M SAFE",
+  "@incidentSafeButton": {
+    "description": "The main action once contacts have been notified."
+  },
+  "incidentSafeHint": "Tells the people who were notified that you're safe and stops the rest of the plan.",
+  "@incidentSafeHint": {
+    "description": "Accessibility hint of the I'M SAFE button."
+  },
+  "incidentSeeTimeline": "See the full timeline",
+  "@incidentSeeTimeline": {
+    "description": "Link from Home to the incident timeline screen."
+  },
+  "incidentTimelineHeadingNext": "What happens next",
+  "@incidentTimelineHeadingNext": {
+    "description": "Heading of the timeline on Home in the grace period."
+  },
+  "incidentTimelineHeadingAll": "What has happened and what comes next",
+  "@incidentTimelineHeadingAll": {
+    "description": "Heading of the timeline once contacts have been notified."
+  },
+  "incidentEventReminderMissed": "Reminder to you: you missed a check-in",
+  "@incidentEventReminderMissed": {
+    "description": "Timeline entry: the first reminder."
+  },
+  "incidentEventReminderMidpoint": "Reminder to you: we're still waiting for your check-in",
+  "@incidentEventReminderMidpoint": {
+    "description": "Timeline entry: the midpoint reminder."
+  },
+  "incidentEventReminderLastChance": "Last reminder before your contacts are notified",
+  "@incidentEventReminderLastChance": {
+    "description": "Timeline entry: the last reminder before a stage."
+  },
+  "incidentEventReminderOther": "Reminder to you",
+  "@incidentEventReminderOther": {
+    "description": "Timeline entry: a reminder this app version has no wording for."
+  },
+  "incidentEventOther": "Another step in your plan",
+  "@incidentEventOther": {
+    "description": "Timeline entry of a kind this app version has no wording for."
+  },
+  "incidentEventFinalWarning": "Warning to you before something is shared",
+  "@incidentEventFinalWarning": {
+    "description": "Timeline entry: the warning before a stage that shares instructions."
+  },
+  "incidentEventFinalWarningFor": "{count, plural, =1{Warning to you: 1 instruction will be shared with {names}} other{Warning to you: {count} instructions will be shared with {names}}}",
+  "@incidentEventFinalWarningFor": {
+    "description": "Timeline entry: the warning, with what it is about. Never names the instruction.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "1"
+      },
+      "names": {
+        "type": "String",
+        "example": "Mom and Brother"
+      }
+    }
+  },
+  "incidentEventStageWill": "{names} will be notified",
+  "@incidentEventStageWill": {
+    "description": "Timeline entry: a stage that has not run.",
+    "placeholders": {
+      "names": {
+        "type": "String",
+        "example": "Mom and Brother"
+      }
+    }
+  },
+  "incidentEventStageGeneric": "Your trusted contacts will be notified",
+  "@incidentEventStageGeneric": {
+    "description": "Timeline entry: a stage that has not run, contacts not listed."
+  },
+  "incidentEventStageDone": "{count, plural, =1{{names} was notified} other{{names} were notified}}",
+  "@incidentEventStageDone": {
+    "description": "Timeline entry: a stage that ran; only contacts the server says were messaged.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "2"
+      },
+      "names": {
+        "type": "String",
+        "example": "Mom and Brother"
+      }
+    }
+  },
+  "incidentEventStageNobody": "The stage ran, but no one was notified",
+  "@incidentEventStageNobody": {
+    "description": "Timeline entry: a stage that ran and messaged nobody."
+  },
+  "incidentEventStageStopped": "{names} was due to be notified",
+  "@incidentEventStageStopped": {
+    "description": "Timeline entry: a stage that was stopped before it ran.",
+    "placeholders": {
+      "names": {
+        "type": "String",
+        "example": "Mom and Brother"
+      }
+    }
+  },
+  "incidentEventStageStoppedGeneric": "Your trusted contacts were due to be notified",
+  "@incidentEventStageStoppedGeneric": {
+    "description": "Timeline entry: a stage that was stopped, contacts not listed."
+  },
+  "incidentEventSkipped": "Nothing was sent to {names}.",
+  "@incidentEventSkipped": {
+    "description": "Detail of a stage: contacts the server skipped.",
+    "placeholders": {
+      "names": {
+        "type": "String",
+        "example": "Mom and Brother"
+      }
+    }
+  },
+  "incidentEventReleasesPending": "{count, plural, =1{1 instruction to be shared} other{{count} instructions to be shared}}",
+  "@incidentEventReleasesPending": {
+    "description": "Detail of a stage that has not run: how many instructions it shares. Never names them.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "1"
+      }
+    }
+  },
+  "incidentEventReleasesDone": "{count, plural, =1{1 instruction shared} other{{count} instructions shared}}",
+  "@incidentEventReleasesDone": {
+    "description": "Detail of a stage that ran: how many instructions it shares.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "1"
+      }
+    }
+  },
+  "incidentEventViewed": "{name} viewed “{title}”",
+  "@incidentEventViewed": {
+    "description": "Timeline entry: a contact opened an instruction (owner's own view).",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Brother"
+      },
+      "title": {
+        "type": "String",
+        "example": "House emergency"
+      }
+    }
+  },
+  "incidentEventViewedUntitled": "{name} viewed an instruction you shared",
+  "@incidentEventViewedUntitled": {
+    "description": "Timeline entry: a contact opened an instruction whose title is not available.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Brother"
+      }
+    }
+  },
+  "incidentEventViewedMore": "Opened {count} times, most recently {when}",
+  "@incidentEventViewedMore": {
+    "description": "Detail of a view entry that happened more than once.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "3"
+      },
+      "when": {
+        "type": "String",
+        "example": "Today · 9:10 PM"
+      }
+    }
+  },
+  "incidentEventRevoked": "“{title}” is no longer available to {name}",
+  "@incidentEventRevoked": {
+    "description": "Timeline entry: a release was taken back.",
+    "placeholders": {
+      "title": {
+        "type": "String",
+        "example": "House emergency"
+      },
+      "name": {
+        "type": "String",
+        "example": "Brother"
+      }
+    }
+  },
+  "incidentEventRevokedUntitled": "An instruction is no longer available to {name}",
+  "@incidentEventRevokedUntitled": {
+    "description": "Timeline entry: a release was taken back, title not available.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Brother"
+      }
+    }
+  },
+  "incidentStatusScheduled": "Scheduled",
+  "@incidentStatusScheduled": {
+    "description": "Timeline status of an entry that has not happened."
+  },
+  "incidentStatusSent": "Sent to you",
+  "@incidentStatusSent": {
+    "description": "Timeline status of a reminder that was sent."
+  },
+  "incidentStatusDone": "Done",
+  "@incidentStatusDone": {
+    "description": "Timeline status of a stage that ran."
+  },
+  "incidentStatusHeld": "On hold",
+  "@incidentStatusHeld": {
+    "description": "Timeline status of an entry the server holds back."
+  },
+  "incidentStatusStoppedStage": "Stopped before it ran",
+  "@incidentStatusStoppedStage": {
+    "description": "Timeline status of a stage that was cancelled."
+  },
+  "incidentStatusNotSent": "Not sent",
+  "@incidentStatusNotSent": {
+    "description": "Timeline status of a reminder that was cancelled."
+  },
+  "incidentStatusUnknown": "Status not available",
+  "@incidentStatusUnknown": {
+    "description": "Timeline status this app version cannot word."
+  },
+  "incidentRevokeUserCheckin": "You checked in.",
+  "@incidentRevokeUserCheckin": {
+    "description": "Why a release was taken back."
+  },
+  "incidentRevokeUserSafe": "You confirmed you were safe.",
+  "@incidentRevokeUserSafe": {
+    "description": "Why a release was taken back."
+  },
+  "incidentRevokeOperator": "It was taken back by AfterMe.",
+  "@incidentRevokeOperator": {
+    "description": "Why a release was taken back."
+  },
+  "incidentRevokeContactRemoved": "They were removed from your plan.",
+  "@incidentRevokeContactRemoved": {
+    "description": "Why a release was taken back."
+  },
+  "incidentRevokeContactOptedOut": "They asked not to be contacted.",
+  "@incidentRevokeContactOptedOut": {
+    "description": "Why a release was taken back."
+  },
+  "incidentRevokeInstructionRemoved": "You switched the instruction off or deleted it.",
+  "@incidentRevokeInstructionRemoved": {
+    "description": "Why a release was taken back."
+  },
+  "incidentRevokeRecipientRemoved": "You stopped sharing it with them.",
+  "@incidentRevokeRecipientRemoved": {
+    "description": "Why a release was taken back."
+  },
+  "incidentRevokeHoldRollback": "It was withdrawn after an interruption on our side.",
+  "@incidentRevokeHoldRollback": {
+    "description": "Why a release was taken back."
+  },
+  "incidentRevokeUnknown": "It is no longer available.",
+  "@incidentRevokeUnknown": {
+    "description": "Why a release was taken back, reason unknown."
+  },
+  "incidentReleasesHeading": "What was shared",
+  "@incidentReleasesHeading": {
+    "description": "Heading of the list of shared instructions."
+  },
+  "incidentReleasesNone": "No instructions have been shared.",
+  "@incidentReleasesNone": {
+    "description": "Empty state of the shared list."
+  },
+  "incidentReleaseUntitled": "An instruction",
+  "@incidentReleaseUntitled": {
+    "description": "Name of a shared instruction whose title is not available."
+  },
+  "incidentReleaseWith": "Shared with {name}",
+  "@incidentReleaseWith": {
+    "description": "One shared instruction: who it went to.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Brother"
+      }
+    }
+  },
+  "incidentReleaseSharedAt": "Shared {when}",
+  "@incidentReleaseSharedAt": {
+    "description": "One shared instruction: when.",
+    "placeholders": {
+      "when": {
+        "type": "String",
+        "example": "Today · 8:00 PM"
+      }
+    }
+  },
+  "incidentReleaseNotViewed": "Not viewed yet",
+  "@incidentReleaseNotViewed": {
+    "description": "One shared instruction: nobody has opened it."
+  },
+  "incidentReleaseViewed": "Viewed {when}",
+  "@incidentReleaseViewed": {
+    "description": "One shared instruction: first opened.",
+    "placeholders": {
+      "when": {
+        "type": "String",
+        "example": "Today · 8:20 PM"
+      }
+    }
+  },
+  "incidentReleaseViewedMany": "Viewed {count} times, most recently {when}",
+  "@incidentReleaseViewedMany": {
+    "description": "One shared instruction: opened more than once.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "3"
+      },
+      "when": {
+        "type": "String",
+        "example": "Today · 9:10 PM"
+      }
+    }
+  },
+  "incidentReleaseRevoked": "No longer available since {when}",
+  "@incidentReleaseRevoked": {
+    "description": "One shared instruction: taken back.",
+    "placeholders": {
+      "when": {
+        "type": "String",
+        "example": "Today · 9:10 PM"
+      }
+    }
+  },
+  "reauthReasonIncidentSafe": "Confirming that you're safe stops your plan and tells the people who were notified, so it needs your password.",
+  "@reauthReasonIncidentSafe": {
+    "description": "Body of the re-authentication sheet before I'M SAFE."
+  },
+  "safeConfirmTitle": "Confirm you're safe",
+  "@safeConfirmTitle": {
+    "description": "Heading of the I'M SAFE confirmation sheet."
+  },
+  "safeConfirmTell": "We'll tell {names} you're safe.",
+  "@safeConfirmTell": {
+    "description": "I'M SAFE confirmation: who gets the all-clear.",
+    "placeholders": {
+      "names": {
+        "type": "String",
+        "example": "Mom and Brother"
+      }
+    }
+  },
+  "safeConfirmTellGeneric": "We'll tell the people who were notified that you're safe.",
+  "@safeConfirmTellGeneric": {
+    "description": "I'M SAFE confirmation when the incident's details could not be read."
+  },
+  "safeConfirmTellNobody": "No one has been notified yet, so there is no one to send an all-clear to.",
+  "@safeConfirmTellNobody": {
+    "description": "I'M SAFE confirmation when nobody was messaged."
+  },
+  "safeConfirmShared": "Information shared with {names} will no longer be available.",
+  "@safeConfirmShared": {
+    "description": "I'M SAFE confirmation: releases are taken back.",
+    "placeholders": {
+      "names": {
+        "type": "String",
+        "example": "Mom and Brother"
+      }
+    }
+  },
+  "safeConfirmViewed": "{name} viewed “{title}” at {when}. That can't be undone.",
+  "@safeConfirmViewed": {
+    "description": "I'M SAFE confirmation: something was already opened.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Brother"
+      },
+      "title": {
+        "type": "String",
+        "example": "House emergency"
+      },
+      "when": {
+        "type": "String",
+        "example": "8:20 PM"
+      }
+    }
+  },
+  "safeConfirmViewedUntitled": "{name} viewed an instruction at {when}. That can't be undone.",
+  "@safeConfirmViewedUntitled": {
+    "description": "I'M SAFE confirmation: something was already opened, title not available.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Brother"
+      },
+      "when": {
+        "type": "String",
+        "example": "8:20 PM"
+      }
+    }
+  },
+  "safeConfirmConsequences": "Escalation stops. Your check-in schedule restarts.",
+  "@safeConfirmConsequences": {
+    "description": "I'M SAFE confirmation: what happens."
+  },
+  "safeConfirmButton": "Confirm I'm safe",
+  "@safeConfirmButton": {
+    "description": "The button that sends I'M SAFE."
+  },
+  "safeConfirmCancel": "Not now",
+  "@safeConfirmCancel": {
+    "description": "Closes the I'M SAFE confirmation without sending anything."
+  },
+  "safeAlreadyClosedTitle": "This was already closed",
+  "@safeAlreadyClosedTitle": {
+    "description": "I'M SAFE: the server says the incident is not open."
+  },
+  "safeAlreadyClosedBody": "There is nothing more to do. Your home screen shows where things stand.",
+  "@safeAlreadyClosedBody": {
+    "description": "I'M SAFE: the server says the incident is not open."
+  },
+  "safeNotConfirmedTitle": "We couldn't confirm that",
+  "@safeNotConfirmedTitle": {
+    "description": "I'M SAFE: the answer did not arrive."
+  },
+  "safeNotConfirmedBody": "We don't know yet whether this went through, so it is not marked as done. Trying again is safe: nothing will be sent twice.",
+  "@safeNotConfirmedBody": {
+    "description": "I'M SAFE: the answer did not arrive."
+  },
+  "safeTryAgain": "Try again",
+  "@safeTryAgain": {
+    "description": "I'M SAFE: sends the same confirmation again."
+  },
+  "safeDoneTitle": "You're marked safe",
+  "@safeDoneTitle": {
+    "description": "I'M SAFE: the server confirmed it."
+  },
+  "safeDoneTold": "An all-clear is being sent to {names}.",
+  "@safeDoneTold": {
+    "description": "I'M SAFE: who the server is telling.",
+    "placeholders": {
+      "names": {
+        "type": "String",
+        "example": "Mom and Brother"
+      }
+    }
+  },
+  "safeDoneNobody": "No one had been notified, so no all-clear was needed.",
+  "@safeDoneNobody": {
+    "description": "I'M SAFE: nobody to tell."
+  },
+  "safeDoneNext": "Your next check-in is {when}.",
+  "@safeDoneNext": {
+    "description": "I'M SAFE: when the schedule restarts to.",
+    "placeholders": {
+      "when": {
+        "type": "String",
+        "example": "tomorrow at 8:00 PM"
+      }
+    }
+  },
+  "safeDoneNoNext": "No check-in is scheduled.",
+  "@safeDoneNoNext": {
+    "description": "I'M SAFE: the schedule is off."
+  },
+  "safeDoneButton": "Done",
+  "@safeDoneButton": {
+    "description": "Closes the I'M SAFE result."
+  },
+  "incidentTimelineTitle": "Timeline",
+  "@incidentTimelineTitle": {
+    "description": "Title of the incident timeline screen."
+  },
+  "incidentNoneTitle": "No missed check-in right now",
+  "@incidentNoneTitle": {
+    "description": "Timeline screen when no incident is open."
+  },
+  "incidentNoneBody": "Nothing is happening. If you miss a check-in, you'll see here what happens next.",
+  "@incidentNoneBody": {
+    "description": "Timeline screen when no incident is open."
+  },
+  "incidentOpenHistory": "Past incidents",
+  "@incidentOpenHistory": {
+    "description": "Button from the timeline screen to the history."
+  },
+  "settingsIncidents": "Past incidents",
+  "@settingsIncidents": {
+    "description": "Settings row and screen title."
+  },
+  "settingsIncidentsSubtitle": "Missed check-ins and how they ended",
+  "@settingsIncidentsSubtitle": {
+    "description": "Subtitle of the incidents row in Settings."
+  },
+  "incidentHistoryEmptyTitle": "No missed check-ins",
+  "@incidentHistoryEmptyTitle": {
+    "description": "Empty state of the incident history."
+  },
+  "incidentHistoryEmptyBody": "If you ever miss a check-in, what happened will be kept here.",
+  "@incidentHistoryEmptyBody": {
+    "description": "Empty state of the incident history."
+  },
+  "incidentRowTitle": "Missed check-in on {when}",
+  "@incidentRowTitle": {
+    "description": "Title of an incident row; {when} is the deadline in the profile timezone.",
+    "placeholders": {
+      "when": {
+        "type": "String",
+        "example": "Oct 9, 2026, 8:00 PM"
+      }
+    }
+  },
+  "incidentRowSemantics": "{title}. {outcome}",
+  "@incidentRowSemantics": {
+    "description": "Screen reader label of an incident row.",
+    "placeholders": {
+      "title": {
+        "type": "String",
+        "example": "Missed check-in on Oct 9, 2026, 8:00 PM"
+      },
+      "outcome": {
+        "type": "String",
+        "example": "You checked in."
+      }
+    }
+  },
+  "incidentOutcomeCheckin": "You checked in. No one was contacted.",
+  "@incidentOutcomeCheckin": {
+    "description": "How an incident ended: a check-in before anyone was told."
+  },
+  "incidentOutcomeCheckinTold": "You checked in.",
+  "@incidentOutcomeCheckinTold": {
+    "description": "How an incident ended: a check-in (contacts had been told)."
+  },
+  "incidentOutcomeSafe": "You confirmed you were safe. An all-clear message was queued for your contacts.",
+  "@incidentOutcomeSafe": {
+    "description": "How an incident ended: I'M SAFE after contacts were told. The server queues the all-clear; delivery is not known to the app, so it is not claimed."
+  },
+  "incidentOutcomeSafeNobody": "You confirmed you were safe. No one had been contacted.",
+  "@incidentOutcomeSafeNobody": {
+    "description": "How an incident ended: I'M SAFE before anyone was told."
+  },
+  "incidentOutcomeDeleted": "Closed when your account was deleted.",
+  "@incidentOutcomeDeleted": {
+    "description": "How an incident ended."
+  },
+  "incidentOutcomeVoided": "Closed by AfterMe after an interruption on our side.",
+  "@incidentOutcomeVoided": {
+    "description": "How an incident ended."
+  },
+  "incidentOutcomeClosed": "Closed.",
+  "@incidentOutcomeClosed": {
+    "description": "How an incident ended, reason not known to this app version."
+  },
+  "incidentOutcomeOpen": "Still open.",
+  "@incidentOutcomeOpen": {
+    "description": "An incident that has not ended."
+  },
+  "incidentDetailTitle": "Missed check-in",
+  "@incidentDetailTitle": {
+    "description": "Title of the incident detail screen."
+  },
+  "incidentDetailTimelineHeading": "What happened",
+  "@incidentDetailTimelineHeading": {
+    "description": "Heading of the timeline on the detail screen."
+  },
+  "incidentDetailClosedAt": "Closed {when}",
+  "@incidentDetailClosedAt": {
+    "description": "Detail screen: when the incident was closed, in the profile timezone.",
+    "placeholders": {
+      "when": {
+        "type": "String",
+        "example": "Oct 9, 2026, 5:37 PM"
+      }
+    }
+  },
+  "planEditAction": "Edit your plan",
+  "@planEditAction": {
+    "description": "Plan tab: opens the plan editor."
+  },
+  "planEditTitle": "Edit your plan",
+  "@planEditTitle": {
+    "description": "Title of the plan editor."
+  },
+  "planEditIntro": "Choose how long we wait and who is told at each stage. Nothing changes until you save.",
+  "@planEditIntro": {
+    "description": "Plan editor: one sentence of introduction."
+  },
+  "planEditLockedTitle": "Your plan can't change right now",
+  "@planEditLockedTitle": {
+    "description": "Plan editor: heading of the read-only notice during an incident."
+  },
+  "planEditLockedBody": "Your plan can't change while a check-in is overdue. Check in first, then come back to make changes.",
+  "@planEditLockedBody": {
+    "description": "Plan editor: why it is read-only while an incident is open."
+  },
+  "planEditFreeNote": "The free plan uses the suggested times and up to {stages, plural, =1{1 stage} other{{stages} stages}}. Choosing your own times and more stages is part of Premium.",
+  "@planEditFreeNote": {
+    "description": "Plan editor: what the free plan allows.",
+    "placeholders": {
+      "stages": {
+        "type": "int",
+        "example": "2"
+      }
+    }
+  },
+  "planEditGraceHelp": "We remind you for this long before anyone is told. The first stage runs when it ends.",
+  "@planEditGraceHelp": {
+    "description": "Plan editor: explains the grace period."
+  },
+  "planEditGraceOther": "Choose another length of time",
+  "@planEditGraceOther": {
+    "description": "Plan editor: opens the sheet to type a grace period (premium)."
+  },
+  "planEditStageFirst": "Runs when the grace period ends.",
+  "@planEditStageFirst": {
+    "description": "Plan editor: the first stage has no time of its own."
+  },
+  "planEditChangeTime": "Change time",
+  "@planEditChangeTime": {
+    "description": "Plan editor: button on a stage."
+  },
+  "planEditChangeTimeFor": "Change the time of stage {position}",
+  "@planEditChangeTimeFor": {
+    "description": "Plan editor: screen reader label of the change time button.",
+    "placeholders": {
+      "position": {
+        "type": "int",
+        "example": "2"
+      }
+    }
+  },
+  "planEditChooseWho": "Choose who is told",
+  "@planEditChooseWho": {
+    "description": "Plan editor: button on a stage."
+  },
+  "planEditChooseWhoFor": "Choose who is told at stage {position}",
+  "@planEditChooseWhoFor": {
+    "description": "Plan editor: screen reader label of the choose people button.",
+    "placeholders": {
+      "position": {
+        "type": "int",
+        "example": "2"
+      }
+    }
+  },
+  "planEditRemove": "Remove stage",
+  "@planEditRemove": {
+    "description": "Plan editor: button on a stage."
+  },
+  "planEditRemoveFor": "Remove stage {position}",
+  "@planEditRemoveFor": {
+    "description": "Plan editor: screen reader label of the remove button.",
+    "placeholders": {
+      "position": {
+        "type": "int",
+        "example": "2"
+      }
+    }
+  },
+  "planEditAdd": "Add a stage",
+  "@planEditAdd": {
+    "description": "Plan editor: adds a stage."
+  },
+  "planEditLimitFree": "The free plan has room for {max, plural, =1{1 stage} other{{max} stages}}. More are part of Premium.",
+  "@planEditLimitFree": {
+    "description": "Plan editor: why Add a stage is off on the free plan.",
+    "placeholders": {
+      "max": {
+        "type": "int",
+        "example": "2"
+      }
+    }
+  },
+  "planEditLimitMax": "You've reached the most stages one account can have ({max}).",
+  "@planEditLimitMax": {
+    "description": "Plan editor: why Add a stage is off at the top tier.",
+    "placeholders": {
+      "max": {
+        "type": "int",
+        "example": "10"
+      }
+    }
+  },
+  "planStageSummary": "Stage {position}, {delay} after the deadline, notifies {names}",
+  "@planStageSummary": {
+    "description": "Screen reader summary of a stage.",
+    "placeholders": {
+      "position": {
+        "type": "int",
+        "example": "2"
+      },
+      "delay": {
+        "type": "String",
+        "example": "1 day"
+      },
+      "names": {
+        "type": "String",
+        "example": "Brother"
+      }
+    }
+  },
+  "planStageSummaryNobody": "Stage {position}, {delay} after the deadline, notifies nobody yet",
+  "@planStageSummaryNobody": {
+    "description": "Screen reader summary of a stage nobody is chosen for.",
+    "placeholders": {
+      "position": {
+        "type": "int",
+        "example": "2"
+      },
+      "delay": {
+        "type": "String",
+        "example": "1 day"
+      }
+    }
+  },
+  "planEditStageReleases": "{count, plural, =1{1 instruction will be shared at this stage} other{{count} instructions will be shared at this stage}}",
+  "@planEditStageReleases": {
+    "description": "Plan editor: how many instructions a stage shares.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "1"
+      }
+    }
+  },
+  "planWarnNoStage": "Your plan has no stage. If you miss a check-in, nobody is told.",
+  "@planWarnNoStage": {
+    "description": "Plan editor: warning, the plan has no stage."
+  },
+  "planWarnNobodyTold": "No stage has anyone to tell. If you miss a check-in, nobody is told.",
+  "@planWarnNobodyTold": {
+    "description": "Plan editor: warning, no stage has anybody chosen."
+  },
+  "planWarnNobodyReachable": "Nobody you chose has accepted yet. If you miss a check-in, nobody can be told until someone does.",
+  "@planWarnNobodyReachable": {
+    "description": "Plan editor: warning, nobody chosen has accepted."
+  },
+  "planWarnStageEmpty": "Nobody is chosen for this stage, so it wouldn't tell anyone.",
+  "@planWarnStageEmpty": {
+    "description": "Plan editor: warning on a stage with nobody chosen."
+  },
+  "planWarnWaiting": "{name} hasn't accepted yet, so they won't be told until they do.",
+  "@planWarnWaiting": {
+    "description": "Plan editor: warning on a chosen contact who has not accepted.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Mom"
+      }
+    }
+  },
+  "planWarnUnreachable": "{name} won't be told. {reason}",
+  "@planWarnUnreachable": {
+    "description": "Plan editor: warning on a chosen contact who declined, opted out or could not be reached.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Dad"
+      },
+      "reason": {
+        "type": "String",
+        "example": "They said no, so we won't contact them."
+      }
+    }
+  },
+  "planWarnOff": "{name} is switched off, so they won't be told.",
+  "@planWarnOff": {
+    "description": "Plan editor: warning on a chosen contact who is switched off.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Mom"
+      }
+    }
+  },
+  "planIssueGraceRange": "The wait can be from {min} to {max}.",
+  "@planIssueGraceRange": {
+    "description": "Plan editor: the grace period is out of range.",
+    "placeholders": {
+      "min": {
+        "type": "String",
+        "example": "1 hour"
+      },
+      "max": {
+        "type": "String",
+        "example": "3 days"
+      }
+    }
+  },
+  "planIssueStageNotAllowed": "That time isn't available for your plan. Choose one of the times shown.",
+  "@planIssueStageNotAllowed": {
+    "description": "Plan editor: a custom time on a plan that has only suggested times."
+  },
+  "planIssueStageTooClose": "This stage needs to be at least {gap} after the one before it.",
+  "@planIssueStageTooClose": {
+    "description": "Plan editor: a stage is too close to another.",
+    "placeholders": {
+      "gap": {
+        "type": "String",
+        "example": "30 minutes"
+      }
+    }
+  },
+  "planIssueStageTooLarge": "This stage can be at most {max} after a missed check-in.",
+  "@planIssueStageTooLarge": {
+    "description": "Plan editor: a stage is too late.",
+    "placeholders": {
+      "max": {
+        "type": "String",
+        "example": "30 days"
+      }
+    }
+  },
+  "planIssueStageRelease": "This stage shares instructions, so it must be at least {min} after a missed check-in.",
+  "@planIssueStageRelease": {
+    "description": "Plan editor: a stage that shares instructions is too early.",
+    "placeholders": {
+      "min": {
+        "type": "String",
+        "example": "1 day"
+      }
+    }
+  },
+  "planIssueNoStage": "A plan needs at least one stage.",
+  "@planIssueNoStage": {
+    "description": "Plan editor: the plan has no stage."
+  },
+  "planIssueOther": "This stage needs another look.",
+  "@planIssueOther": {
+    "description": "Plan editor: a field error this version has no more detail for."
+  },
+  "planEditFixFirst": "Fix the times marked above before saving.",
+  "@planEditFixFirst": {
+    "description": "Plan editor: shown while Save is off because of a time."
+  },
+  "planTimeStageTitle": "When should this stage run?",
+  "@planTimeStageTitle": {
+    "description": "Sheet: choose the time of a stage."
+  },
+  "planTimeAddTitle": "When should the new stage run?",
+  "@planTimeAddTitle": {
+    "description": "Sheet: choose the time of a stage being added."
+  },
+  "planTimeHelp": "Choose how long after a missed check-in.",
+  "@planTimeHelp": {
+    "description": "Sheet: explains the choices."
+  },
+  "planTimeCustom": "Or choose your own time",
+  "@planTimeCustom": {
+    "description": "Sheet: heading of the custom time fields."
+  },
+  "planTimeDays": "Days",
+  "@planTimeDays": {
+    "description": "Sheet: label of the days field."
+  },
+  "planTimeHours": "Hours",
+  "@planTimeHours": {
+    "description": "Sheet: label of the hours field."
+  },
+  "planTimeMinutes": "Minutes",
+  "@planTimeMinutes": {
+    "description": "Sheet: label of the minutes field."
+  },
+  "planTimeTotal": "That is {delay} after a missed check-in.",
+  "@planTimeTotal": {
+    "description": "Sheet: the custom time in words.",
+    "placeholders": {
+      "delay": {
+        "type": "String",
+        "example": "1 day 3 hours"
+      }
+    }
+  },
+  "planTimeUse": "Use this time",
+  "@planTimeUse": {
+    "description": "Sheet: confirms the chosen time."
+  },
+  "planTimeUnavailable": "Some times can't be chosen: another stage is too close, or instructions are shared at this stage.",
+  "@planTimeUnavailable": {
+    "description": "Sheet: why some times are off."
+  },
+  "planWhoTitle": "Who is told at stage {position}?",
+  "@planWhoTitle": {
+    "description": "Sheet: choose the people of a stage.",
+    "placeholders": {
+      "position": {
+        "type": "int",
+        "example": "2"
+      }
+    }
+  },
+  "planWhoUse": "Use these people",
+  "@planWhoUse": {
+    "description": "Sheet: confirms the chosen people."
+  },
+  "planWhoNone": "You have no trusted contacts yet, so there is nobody to choose. Add a trusted contact first.",
+  "@planWhoNone": {
+    "description": "Sheet: no contacts to choose from."
+  },
+  "planRemoveTitle": "Remove stage {position}?",
+  "@planRemoveTitle": {
+    "description": "Dialog: remove a stage.",
+    "placeholders": {
+      "position": {
+        "type": "int",
+        "example": "2"
+      }
+    }
+  },
+  "planRemoveBody": "{names} will no longer be told at this time. Nothing changes until you save.",
+  "@planRemoveBody": {
+    "description": "Dialog: what removing a stage does.",
+    "placeholders": {
+      "names": {
+        "type": "String",
+        "example": "Brother"
+      }
+    }
+  },
+  "planRemoveBodyNobody": "This stage tells nobody yet. Nothing changes until you save.",
+  "@planRemoveBodyNobody": {
+    "description": "Dialog: removing a stage nobody is chosen for."
+  },
+  "planRemoveFirst": "The next stage becomes the first, so we would wait {delay} before telling anyone.",
+  "@planRemoveFirst": {
+    "description": "Dialog: removing the first stage changes the grace period.",
+    "placeholders": {
+      "delay": {
+        "type": "String",
+        "example": "1 day"
+      }
+    }
+  },
+  "planRemoveConfirm": "Remove stage",
+  "@planRemoveConfirm": {
+    "description": "Dialog: confirms removing a stage."
+  },
+  "planInUseTitle": "Stage {position} can't be removed yet",
+  "@planInUseTitle": {
+    "description": "Sheet: a stage that shares instructions cannot be removed.",
+    "placeholders": {
+      "position": {
+        "type": "int",
+        "example": "2"
+      }
+    }
+  },
+  "planInUseBody": "{count, plural, =1{1 instruction is set to be shared at this stage:} other{{count} instructions are set to be shared at this stage:}}",
+  "@planInUseBody": {
+    "description": "Sheet: how many instructions block the removal.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "1"
+      }
+    }
+  },
+  "planInUseHow": "Open each one and choose another time for it, then come back and remove this stage.",
+  "@planInUseHow": {
+    "description": "Sheet: what to do about it."
+  },
+  "planInUseNotice": "A stage you removed still shares instructions, so it was put back. Choose another time for these instructions first.",
+  "@planInUseNotice": {
+    "description": "Plan editor: the server refused to remove a stage; it was put back."
+  },
+  "planEditStale": "Your plan was changed somewhere else, so we've loaded the latest version. Your changes are still here. Look them over and save again if you still want them.",
+  "@planEditStale": {
+    "description": "Plan editor: after a 412; the edits are kept."
+  },
+  "planEditUseLatest": "Use the latest plan instead",
+  "@planEditUseLatest": {
+    "description": "Plan editor: drops the edits and shows the latest plan."
+  },
+  "planEditNotFound": "Something in your plan can't be found any more, so we've loaded the latest. Your changes are still here. Look them over and try again.",
+  "@planEditNotFound": {
+    "description": "Plan editor: after a 404; the edits are kept."
+  },
+  "planEditSave": "Save changes",
+  "@planEditSave": {
+    "description": "Plan editor: saves the plan."
+  },
+  "planEditDiscard": "Discard changes",
+  "@planEditDiscard": {
+    "description": "Plan editor: drops the edits."
+  },
+  "planEditSaved": "Your plan was saved.",
+  "@planEditSaved": {
+    "description": "Plan editor: confirmation, said only after the server answered."
+  },
+  "planEditLeaveTitle": "Leave without saving?",
+  "@planEditLeaveTitle": {
+    "description": "Dialog when leaving the editor with changes."
+  },
+  "planEditLeaveBody": "Your changes to the plan haven't been saved.",
+  "@planEditLeaveBody": {
+    "description": "Dialog when leaving the editor with changes."
+  },
+  "planEditLeaveKeep": "Keep editing",
+  "@planEditLeaveKeep": {
+    "description": "Dialog: stay in the editor."
+  },
+  "planEditLeaveConfirm": "Leave",
+  "@planEditLeaveConfirm": {
+    "description": "Dialog: leave and drop the changes."
+  },
+  "planEditNobodyTitle": "Nobody would be told",
+  "@planEditNobodyTitle": {
+    "description": "Dialog: saving would leave a plan that tells nobody."
+  },
+  "planEditNobodyBody": "After this change, nobody would be told if you miss a check-in. Do you want to save it anyway?",
+  "@planEditNobodyBody": {
+    "description": "Dialog: saving would leave a plan that tells nobody."
+  },
+  "planEditNobodyConfirm": "Save anyway",
+  "@planEditNobodyConfirm": {
+    "description": "Dialog: confirms saving a plan that tells nobody."
+  },
+  "planEditPreviewNote": "This shows your plan with the changes above. Nothing is saved yet.",
+  "@planEditPreviewNote": {
+    "description": "Plan editor: under the preview heading."
+  },
+  "planPreviewShares": "{count, plural, =1{1 instruction is also shared.} other{{count} instructions are also shared.}}",
+  "@planPreviewShares": {
+    "description": "Preview line: instructions shared at the time of a stage that also tells people.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "1"
+      }
+    }
+  },
+  "planPreviewSharesOnly": "{count, plural, =1{At {time}, 1 instruction is shared.} other{At {time}, {count} instructions are shared.}}",
+  "@planPreviewSharesOnly": {
+    "description": "Preview line: a stage that shares instructions and tells nobody.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "1"
+      },
+      "time": {
+        "type": "String",
+        "example": "8:00 PM the next day"
+      }
+    }
+  },
+  "settingsActivity": "Activity",
+  "@settingsActivity": {
+    "description": "Settings row and screen title: the account's activity feed."
+  },
+  "settingsActivitySubtitle": "What happened on your account",
+  "@settingsActivitySubtitle": {
+    "description": "Settings row subtitle for Activity."
+  },
+  "settingsYourPlan": "Your plan",
+  "@settingsYourPlan": {
+    "description": "Settings row and screen title: the tier, its limits and what is used."
+  },
+  "settingsYourPlanSubtitle": "What's included and what you've used",
+  "@settingsYourPlanSubtitle": {
+    "description": "Settings row subtitle for Your plan."
+  },
+  "settingsSectionPrivacy": "Privacy and data",
+  "@settingsSectionPrivacy": {
+    "description": "Settings section header: privacy, export and deletion."
+  },
+  "settingsPrivacyKeeps": "What AfterMe keeps",
+  "@settingsPrivacyKeeps": {
+    "description": "Settings row and screen title: what is stored."
+  },
+  "settingsPrivacyKeepsSubtitle": "What we store, and for how long",
+  "@settingsPrivacyKeepsSubtitle": {
+    "description": "Settings row subtitle."
+  },
+  "settingsExport": "Export my data",
+  "@settingsExport": {
+    "description": "Settings row and screen title: the data export."
+  },
+  "settingsExportSubtitle": "A copy of your information",
+  "@settingsExportSubtitle": {
+    "description": "Settings row subtitle for the export."
+  },
+  "settingsDelete": "Delete account",
+  "@settingsDelete": {
+    "description": "Settings row and screen title: closing the account."
+  },
+  "settingsDeleteSubtitle": "Close your account and remove your data",
+  "@settingsDeleteSubtitle": {
+    "description": "Settings row subtitle for deleting the account."
+  },
+  "settingsLostPhone": "If you lose your phone",
+  "@settingsLostPhone": {
+    "description": "Settings > Help row and screen title."
+  },
+  "settingsLostPhoneSubtitle": "Check in from any browser",
+  "@settingsLostPhoneSubtitle": {
+    "description": "Settings > Help row subtitle."
+  },
+  "activityEmptyTitle": "Nothing here yet",
+  "@activityEmptyTitle": {
+    "description": "Activity: title when the feed is empty."
+  },
+  "activityEmptyBody": "When something happens on your account, it shows up here: check-ins, who viewed what you shared, and changes to your plan or your security.",
+  "@activityEmptyBody": {
+    "description": "Activity: explanation when the feed is empty."
+  },
+  "activityDayToday": "Today",
+  "@activityDayToday": {
+    "description": "Activity: day heading for today."
+  },
+  "activityDayYesterday": "Yesterday",
+  "@activityDayYesterday": {
+    "description": "Activity: day heading for yesterday."
+  },
+  "homeActivityTitle": "Recent activity",
+  "@homeActivityTitle": {
+    "description": "Home: title of the short activity list."
+  },
+  "homeActivitySeeAll": "See all activity",
+  "@homeActivitySeeAll": {
+    "description": "Home: opens the whole Activity feed."
+  },
+  "activityUnknown": "Something changed on your account",
+  "@activityUnknown": {
+    "description": "Activity: an entry this version of the app does not know."
+  },
+  "activityCheckedIn": "You checked in",
+  "@activityCheckedIn": {
+    "description": "Activity: an I'M OK from the app."
+  },
+  "activityCheckedInWeb": "You checked in on the website",
+  "@activityCheckedInWeb": {
+    "description": "Activity: an I'M OK from the website."
+  },
+  "activitySafe": "You confirmed you're safe",
+  "@activitySafe": {
+    "description": "Activity: I'M SAFE from the app."
+  },
+  "activitySafeWeb": "You confirmed you're safe on the website",
+  "@activitySafeWeb": {
+    "description": "Activity: I'M SAFE from the website."
+  },
+  "activityContactCreated": "You added {name} as a trusted contact",
+  "@activityContactCreated": {
+    "description": "Activity: a contact was added.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Mom"
+      }
+    }
+  },
+  "activityContactCreatedNoName": "You added a trusted contact",
+  "@activityContactCreatedNoName": {
+    "description": "Activity: a contact was added; the name is not known."
+  },
+  "activityContactDeleted": "You removed {name} from your trusted contacts",
+  "@activityContactDeleted": {
+    "description": "Activity: a contact was removed.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Mom"
+      }
+    }
+  },
+  "activityContactDeletedNoName": "You removed a trusted contact",
+  "@activityContactDeletedNoName": {
+    "description": "Activity: a contact was removed; the name is not known."
+  },
+  "activityInvitationSent": "An invitation was sent to {name}",
+  "@activityInvitationSent": {
+    "description": "Activity: an invitation was sent.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Mom"
+      }
+    }
+  },
+  "activityInvitationSentNoName": "An invitation was sent to a trusted contact",
+  "@activityInvitationSentNoName": {
+    "description": "Activity: an invitation was sent; the name is not known."
+  },
+  "activityInvitationResent": "Your invitation was sent to {name} again",
+  "@activityInvitationResent": {
+    "description": "Activity: an invitation was sent again.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Mom"
+      }
+    }
+  },
+  "activityInvitationResentNoName": "An invitation was sent again to a trusted contact",
+  "@activityInvitationResentNoName": {
+    "description": "Activity: an invitation was sent again; the name is not known."
+  },
+  "activityContactAccepted": "{name} accepted your invitation",
+  "@activityContactAccepted": {
+    "description": "Activity: a contact accepted.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Mom"
+      }
+    }
+  },
+  "activityContactAcceptedNoName": "A trusted contact accepted your invitation",
+  "@activityContactAcceptedNoName": {
+    "description": "Activity: a contact accepted; the name is not known."
+  },
+  "activityContactDeclined": "{name} declined your invitation",
+  "@activityContactDeclined": {
+    "description": "Activity: a contact declined.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Mom"
+      }
+    }
+  },
+  "activityContactDeclinedNoName": "A trusted contact declined your invitation",
+  "@activityContactDeclinedNoName": {
+    "description": "Activity: a contact declined; the name is not known."
+  },
+  "activityContactOptedOut": "{name} asked not to be contacted by AfterMe",
+  "@activityContactOptedOut": {
+    "description": "Activity: a contact opted out.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Mom"
+      }
+    }
+  },
+  "activityContactOptedOutNoName": "A trusted contact asked not to be contacted by AfterMe",
+  "@activityContactOptedOutNoName": {
+    "description": "Activity: a contact opted out; the name is not known."
+  },
+  "activityContactBounced": "A message to {name} could not be delivered",
+  "@activityContactBounced": {
+    "description": "Activity: a message to a contact bounced.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Mom"
+      }
+    }
+  },
+  "activityContactBouncedNoName": "A message to a trusted contact could not be delivered",
+  "@activityContactBouncedNoName": {
+    "description": "Activity: a message bounced; the name is not known."
+  },
+  "activityScheduleUpdated": "Your check-in schedule was updated",
+  "@activityScheduleUpdated": {
+    "description": "Activity: schedule changed."
+  },
+  "activityScheduleActivated": "Check-ins were turned on",
+  "@activityScheduleActivated": {
+    "description": "Activity: check-ins turned on."
+  },
+  "activityScheduleDeactivated": "Check-ins were turned off",
+  "@activityScheduleDeactivated": {
+    "description": "Activity: check-ins turned off."
+  },
+  "activityPlanUpdated": "Your plan was updated",
+  "@activityPlanUpdated": {
+    "description": "Activity: the plan was saved."
+  },
+  "activityPlanStages": "{count, plural, =0{No stages in your plan} =1{1 stage in your plan} other{{count} stages in your plan}}",
+  "@activityPlanStages": {
+    "description": "Activity: detail under a plan update.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "2"
+      }
+    }
+  },
+  "activityPlanRemoved": "{count, plural, =1{1 stage was removed} other{{count} stages were removed}}",
+  "@activityPlanRemoved": {
+    "description": "Activity: detail under a plan update.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "1"
+      }
+    }
+  },
+  "activityIncidentOpened": "A missed check-in was recorded",
+  "@activityIncidentOpened": {
+    "description": "Activity: a check-in was missed."
+  },
+  "activityIncidentResolved": "Your missed check-in was resolved",
+  "@activityIncidentResolved": {
+    "description": "Activity: closed by a check-in."
+  },
+  "activityIncidentCancelled": "A missed check-in was closed when you confirmed you're safe",
+  "@activityIncidentCancelled": {
+    "description": "Activity: closed by I'M SAFE."
+  },
+  "activityIncidentVoided": "A missed check-in was closed by AfterMe",
+  "@activityIncidentVoided": {
+    "description": "Activity: closed by AfterMe."
+  },
+  "activityAllClear": "{count, plural, =1{1 trusted contact was sent an all-clear} other{{count} trusted contacts were sent an all-clear}}",
+  "@activityAllClear": {
+    "description": "Activity: detail under a closed incident.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "2"
+      }
+    }
+  },
+  "activityFinalWarning": "We sent you a final reminder before stage {stage}",
+  "@activityFinalWarning": {
+    "description": "Activity: the warning before a stage.",
+    "placeholders": {
+      "stage": {
+        "type": "int",
+        "example": "2"
+      }
+    }
+  },
+  "activityFinalWarningNoStage": "We sent you a final reminder",
+  "@activityFinalWarningNoStage": {
+    "description": "Activity: the warning before a stage; the stage is not known."
+  },
+  "activityStageRan": "Stage {stage} of your plan ran",
+  "@activityStageRan": {
+    "description": "Activity: a stage ran.",
+    "placeholders": {
+      "stage": {
+        "type": "int",
+        "example": "1"
+      }
+    }
+  },
+  "activityStageRanNoStage": "A stage of your plan ran",
+  "@activityStageRanNoStage": {
+    "description": "Activity: a stage ran; the stage is not known."
+  },
+  "activityStageNotified": "{count, plural, =0{Nobody could be told} =1{1 trusted contact was told} other{{count} trusted contacts were told}}",
+  "@activityStageNotified": {
+    "description": "Activity: detail under a stage.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "1"
+      }
+    }
+  },
+  "activityStageSkipped": "{count, plural, =1{1 could not be told} other{{count} could not be told}}",
+  "@activityStageSkipped": {
+    "description": "Activity: detail under a stage.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "1"
+      }
+    }
+  },
+  "activityReleaseCreated": "{count, plural, =1{1 instruction was made available to your trusted contacts} other{{count} instructions were made available to your trusted contacts}}",
+  "@activityReleaseCreated": {
+    "description": "Activity: instructions were released.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "2"
+      }
+    }
+  },
+  "activityReleaseCreatedNoCount": "Instructions were made available to your trusted contacts",
+  "@activityReleaseCreatedNoCount": {
+    "description": "Activity: instructions were released; the number is not known."
+  },
+  "activityAtStage": "At stage {stage}",
+  "@activityAtStage": {
+    "description": "Activity: detail under a release.",
+    "placeholders": {
+      "stage": {
+        "type": "int",
+        "example": "2"
+      }
+    }
+  },
+  "activityReleaseRevoked": "{count, plural, =1{1 shared instruction was taken back} other{{count} shared instructions were taken back}}",
+  "@activityReleaseRevoked": {
+    "description": "Activity: releases were revoked.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "1"
+      }
+    }
+  },
+  "activityReleaseRevokedNoCount": "Shared instructions were taken back",
+  "@activityReleaseRevokedNoCount": {
+    "description": "Activity: releases were revoked; the number is not known."
+  },
+  "activityReleaseViewedOne": "{name} viewed \"{title}\"",
+  "@activityReleaseViewedOne": {
+    "description": "Activity: a contact opened one instruction.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Brother"
+      },
+      "title": {
+        "type": "String",
+        "example": "House emergency"
+      }
+    }
+  },
+  "activityReleaseViewedOneNoName": "A trusted contact viewed \"{title}\"",
+  "@activityReleaseViewedOneNoName": {
+    "description": "Activity: a contact opened one instruction; the name is not known.",
+    "placeholders": {
+      "title": {
+        "type": "String",
+        "example": "House emergency"
+      }
+    }
+  },
+  "activityReleaseViewedCount": "{name} viewed {count, plural, =1{1 shared instruction} other{{count} shared instructions}}",
+  "@activityReleaseViewedCount": {
+    "description": "Activity: a contact opened several instructions.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Brother"
+      },
+      "count": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  },
+  "activityReleaseViewedCountNoName": "A trusted contact viewed {count, plural, =1{1 shared instruction} other{{count} shared instructions}}",
+  "@activityReleaseViewedCountNoName": {
+    "description": "Activity: a contact opened several instructions; the name is not known.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  },
+  "activityReleaseViewedUnknown": "{name} viewed what you shared",
+  "@activityReleaseViewedUnknown": {
+    "description": "Activity: a contact opened what was shared; no titles.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Brother"
+      }
+    }
+  },
+  "activityReleaseViewedUnknownNoName": "A trusted contact viewed what you shared",
+  "@activityReleaseViewedUnknownNoName": {
+    "description": "Activity: a contact opened what was shared; no name, no titles."
+  },
+  "activityAndMore": "and {count} more",
+  "@activityAndMore": {
+    "description": "Activity: after a list of instruction titles.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "2"
+      }
+    }
+  },
+  "activityRecipientsChanged": "The people who receive \"{title}\" were changed",
+  "@activityRecipientsChanged": {
+    "description": "Activity: recipients of an instruction changed.",
+    "placeholders": {
+      "title": {
+        "type": "String",
+        "example": "House emergency"
+      }
+    }
+  },
+  "activityRecipientsChangedNoTitle": "The people who receive one of your instructions were changed",
+  "@activityRecipientsChangedNoTitle": {
+    "description": "Activity: recipients of an instruction changed; the title is not known."
+  },
+  "activityRecipientsAdded": "{count, plural, =1{1 person added} other{{count} people added}}",
+  "@activityRecipientsAdded": {
+    "description": "Activity: detail under a recipients change.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "1"
+      }
+    }
+  },
+  "activityRecipientsRemoved": "{count, plural, =1{1 person removed} other{{count} people removed}}",
+  "@activityRecipientsRemoved": {
+    "description": "Activity: detail under a recipients change.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "1"
+      }
+    }
+  },
+  "activityLogoutAll": "You signed out everywhere",
+  "@activityLogoutAll": {
+    "description": "Activity: log out everywhere."
+  },
+  "activitySessionsEnded": "{count, plural, =1{1 session ended} other{{count} sessions ended}}",
+  "@activitySessionsEnded": {
+    "description": "Activity: detail under log out everywhere.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "2"
+      }
+    }
+  },
+  "activityPasswordChanged": "Your password was changed",
+  "@activityPasswordChanged": {
+    "description": "Activity: password changed."
+  },
+  "activityPasswordReset": "Your password was reset",
+  "@activityPasswordReset": {
+    "description": "Activity: password reset."
+  },
+  "activityEmailChanged": "Your email address was changed",
+  "@activityEmailChanged": {
+    "description": "Activity: email changed."
+  },
+  "activityTimezoneChanged": "Your timezone was changed",
+  "@activityTimezoneChanged": {
+    "description": "Activity: timezone changed."
+  },
+  "activityRefreshReuse": "We ended a session for your safety",
+  "@activityRefreshReuse": {
+    "description": "Activity: a sign-in was used twice and its session was ended."
+  },
+  "activityLoginNewDevice": "You signed in on a new device",
+  "@activityLoginNewDevice": {
+    "description": "Activity: first sign-in on a device."
+  },
+  "activityWebLogin": "You signed in on the website",
+  "@activityWebLogin": {
+    "description": "Activity: a sign-in on the lost-phone page."
+  },
+  "activityExported": "You exported your data",
+  "@activityExported": {
+    "description": "Activity: the data export."
+  },
+  "activitySubscription": "Your subscription changed",
+  "@activitySubscription": {
+    "description": "Activity: billing change."
+  },
+  "staleDataNote": "Showing the last information we have. We couldn't refresh it just now.",
+  "@staleDataNote": {
+    "description": "Note above a list that could not be refreshed (offline or a server problem)."
+  },
+  "upgradeTitle": "Update AfterMe",
+  "@upgradeTitle": {
+    "description": "Blocking screen when the server no longer supports this version."
+  },
+  "upgradeBody": "This version of AfterMe isn't supported any more. Please update AfterMe to keep your plan running.",
+  "@upgradeBody": {
+    "description": "Upgrade screen: what is wrong."
+  },
+  "upgradeKept": "Nothing you have saved is lost. A check-in that hasn't been received yet is kept on this phone, and AfterMe will try to send it after you update.",
+  "@upgradeKept": {
+    "description": "Upgrade screen: what is kept."
+  },
+  "upgradeOpenStore": "Update in Google Play",
+  "@upgradeOpenStore": {
+    "description": "Upgrade screen: opens the store page."
+  },
+  "upgradeCheckAgain": "Check again",
+  "@upgradeCheckAgain": {
+    "description": "Upgrade screen: asks the server again."
+  },
+  "upgradeOpenFailed": "We couldn't open Google Play. Open it yourself and update AfterMe there.",
+  "@upgradeOpenFailed": {
+    "description": "Upgrade screen: the store page could not be opened."
+  },
+  "upgradeStillOld": "This version still isn't supported. Update AfterMe, then open it again.",
+  "@upgradeStillOld": {
+    "description": "Upgrade screen: after Check again, still refused."
+  },
+  "errorUnconfirmedSave": "We couldn't confirm that this was saved. Nothing on this screen has changed and what you entered is still here. Try again when you're back online.",
+  "@errorUnconfirmedSave": {
+    "description": "A save that got no answer (offline or a server problem)."
+  },
+  "errorUnconfirmedSafe": "We couldn't confirm that you're safe. Nothing on this screen has changed yet. Try again when you're back online.",
+  "@errorUnconfirmedSafe": {
+    "description": "I'M SAFE that got no answer."
+  },
+  "errorUnconfirmedExport": "We couldn't get your file, so nothing was saved. Try again when you're back online.",
+  "@errorUnconfirmedExport": {
+    "description": "The export that got no answer."
+  },
+  "errorUnconfirmedDelete": "We couldn't confirm that your account was closed. Nothing on this screen has changed. You can try again: if it did go through, we'll tell you.",
+  "@errorUnconfirmedDelete": {
+    "description": "The account deletion that got no answer."
+  },
+  "reauthReasonExportData": "Exporting your data needs your password, because the file holds your instructions as readable text.",
+  "@reauthReasonExportData": {
+    "description": "Reauth sheet body for the export."
+  },
+  "reauthReasonDeleteAccount": "Closing your account needs your password, so nobody else can do it from your phone.",
+  "@reauthReasonDeleteAccount": {
+    "description": "Reauth sheet body for the account deletion."
+  },
+  "exportIntro": "You get one file with your profile, trusted contacts, schedule, plan, instructions, check-in history, past incidents and activity.",
+  "@exportIntro": {
+    "description": "Export screen: what is in the file."
+  },
+  "exportWarningTitle": "Keep this file safe",
+  "@exportWarningTitle": {
+    "description": "Export screen: warning title."
+  },
+  "exportWarning": "The file holds your instructions as plain, readable text. Anyone who gets the file can read them, so save it somewhere only you can open.",
+  "@exportWarning": {
+    "description": "Export screen: the file is not encrypted."
+  },
+  "exportWhere": "You choose where it is saved. AfterMe doesn't keep a copy.",
+  "@exportWhere": {
+    "description": "Export screen: where the file goes."
+  },
+  "exportNeedsPassword": "We'll ask for your password first. You can export up to 3 times an hour.",
+  "@exportNeedsPassword": {
+    "description": "Export screen: password and limit."
+  },
+  "exportButton": "Export my data",
+  "@exportButton": {
+    "description": "Export screen: the button."
+  },
+  "exportWorking": "Getting your file…",
+  "@exportWorking": {
+    "description": "Export screen: waiting for the server."
+  },
+  "exportSaving": "Choose where to save it, then come back here.",
+  "@exportSaving": {
+    "description": "Export screen: the system's save screen is open."
+  },
+  "exportSaved": "Saved. The file is where you chose to put it.",
+  "@exportSaved": {
+    "description": "Export screen: the system confirmed the write."
+  },
+  "exportCancelled": "Nothing was saved. You closed the save screen, so the file wasn't kept. Export again if you still want a copy.",
+  "@exportCancelled": {
+    "description": "Export screen: the save screen was closed."
+  },
+  "exportSaveFailed": "The file couldn't be saved there, and AfterMe kept no copy. Try again and choose another place.",
+  "@exportSaveFailed": {
+    "description": "Export screen: the write failed."
+  },
+  "exportNoSaveApp": "There is no app on this phone that can save a file, so nothing was saved.",
+  "@exportNoSaveApp": {
+    "description": "Export screen: no document provider."
+  },
+  "exportTooLarge": "Your export is too large for this phone to handle, so nothing was saved. Please contact support and we'll help.",
+  "@exportTooLarge": {
+    "description": "Export screen: the file is larger than the app can hold."
+  },
+  "deleteTitle": "Delete your account",
+  "@deleteTitle": {
+    "description": "Delete screen: heading."
+  },
+  "deleteIntro": "This closes your AfterMe account for good. Here is exactly what happens:",
+  "@deleteIntro": {
+    "description": "Delete screen: introduction."
+  },
+  "deleteEffectCheckins": "Your check-ins stop.",
+  "@deleteEffectCheckins": {
+    "description": "Delete screen: effect."
+  },
+  "deleteEffectInstructions": "Your instructions are erased, and nobody will receive them.",
+  "@deleteEffectInstructions": {
+    "description": "Delete screen: effect."
+  },
+  "deleteEffectContacts": "The details of your trusted contacts are removed.",
+  "@deleteEffectContacts": {
+    "description": "Delete screen: effect."
+  },
+  "deleteEffectAlert": "If a missed check-in is open, the contacts who were already told get a message that the alert is withdrawn.",
+  "@deleteEffectAlert": {
+    "description": "Delete screen: effect."
+  },
+  "deleteEffectSignedOut": "You're signed out on every device, including this one.",
+  "@deleteEffectSignedOut": {
+    "description": "Delete screen: effect."
+  },
+  "deleteEffectPurge": "Everything that remains is removed after 30 days.",
+  "@deleteEffectPurge": {
+    "description": "Delete screen: effect."
+  },
+  "deleteEffectUndone": "This can't be undone.",
+  "@deleteEffectUndone": {
+    "description": "Delete screen: it is permanent."
+  },
+  "deleteExportFirst": "Want a copy of your information first? Export it before you delete.",
+  "@deleteExportFirst": {
+    "description": "Delete screen: suggestion."
+  },
+  "deleteConfirmLabel": "Type DELETE to confirm",
+  "@deleteConfirmLabel": {
+    "description": "Delete screen: the confirmation field."
+  },
+  "deleteConfirmHelper": "Capital letters, exactly as shown.",
+  "@deleteConfirmHelper": {
+    "description": "Delete screen: helper under the field."
+  },
+  "deleteConfirmWrong": "Type the word DELETE exactly as shown.",
+  "@deleteConfirmWrong": {
+    "description": "Delete screen: the server did not accept the word."
+  },
+  "deleteButton": "Delete my account",
+  "@deleteButton": {
+    "description": "Delete screen: the destructive button."
+  },
+  "deleteKeep": "Keep my account",
+  "@deleteKeep": {
+    "description": "Delete screen: leaves without deleting."
+  },
+  "deleteWorking": "Closing your account. Please wait…",
+  "@deleteWorking": {
+    "description": "Delete screen: the request is on its way."
+  },
+  "accountClosedTitle": "Your account has been closed",
+  "@accountClosedTitle": {
+    "description": "Final screen after the deletion."
+  },
+  "accountClosedBody": "Your check-ins have stopped and your instructions were erased. Contacts who had been told about a missed check-in are being sent a message that the alert is withdrawn.",
+  "@accountClosedBody": {
+    "description": "Final screen: what happened."
+  },
+  "accountClosedPurge": "The rest of your information is removed by {date}.",
+  "@accountClosedPurge": {
+    "description": "Final screen: the purge date.",
+    "placeholders": {
+      "date": {
+        "type": "String",
+        "example": "Saturday, November 7, 2026"
+      }
+    }
+  },
+  "accountClosedPurgeUnknown": "The rest of your information is removed within 30 days.",
+  "@accountClosedPurgeUnknown": {
+    "description": "Final screen: the purge date is not known."
+  },
+  "accountClosedEmail": "A confirmation is on its way to your email address.",
+  "@accountClosedEmail": {
+    "description": "Final screen: the confirmation email."
+  },
+  "accountClosedContinue": "Continue",
+  "@accountClosedContinue": {
+    "description": "Final screen: leads to sign-in."
+  },
+  "privacyKeepsIntro": "In plain words, this is what AfterMe stores and why.",
+  "@privacyKeepsIntro": {
+    "description": "Privacy info: introduction."
+  },
+  "privacyKeepsAccountTitle": "Your account",
+  "@privacyKeepsAccountTitle": {
+    "description": "Privacy info: heading."
+  },
+  "privacyKeepsAccount": "Your email address and your name, and a protected form of your password (the password itself is never stored).",
+  "@privacyKeepsAccount": {
+    "description": "Privacy info: account data."
+  },
+  "privacyKeepsContactsTitle": "Your trusted contacts",
+  "@privacyKeepsContactsTitle": {
+    "description": "Privacy info: heading."
+  },
+  "privacyKeepsContacts": "Their names and email addresses, so we can invite them and tell them if you miss a check-in. Messages to them are sent through our email provider.",
+  "@privacyKeepsContacts": {
+    "description": "Privacy info: contacts data."
+  },
+  "privacyKeepsInstructionsTitle": "Your instructions",
+  "@privacyKeepsInstructionsTitle": {
+    "description": "Privacy info: heading."
+  },
+  "privacyKeepsInstructions": "Stored encrypted, and shared only with the people you chose, on the schedule you set. AfterMe can open them, because it has to deliver them when you can't.",
+  "@privacyKeepsInstructions": {
+    "description": "Privacy info: instructions."
+  },
+  "privacyKeepsHistoryTitle": "Your history",
+  "@privacyKeepsHistoryTitle": {
+    "description": "Privacy info: heading."
+  },
+  "privacyKeepsHistory": "Your check-ins, any missed check-ins and who was told, and a short log of changes to your account. That is what Activity shows.",
+  "@privacyKeepsHistory": {
+    "description": "Privacy info: history."
+  },
+  "privacyKeepsNeverTitle": "What we don't do",
+  "@privacyKeepsNeverTitle": {
+    "description": "Privacy info: heading."
+  },
+  "privacyKeepsNever": "We don't sell your information, show advertising or use advertising trackers.",
+  "@privacyKeepsNever": {
+    "description": "Privacy info: promises."
+  },
+  "privacyKeepsDeletionTitle": "If you delete your account",
+  "@privacyKeepsDeletionTitle": {
+    "description": "Privacy info: heading."
+  },
+  "privacyKeepsDeletion": "Your instructions are erased at once and the rest is removed after 30 days. Backups are replaced on a schedule, so the last copies are gone within 35 days.",
+  "@privacyKeepsDeletion": {
+    "description": "Privacy info: deletion and backups."
+  },
+  "yourPlanTierFree": "Free",
+  "@yourPlanTierFree": {
+    "description": "Your plan: the free tier."
+  },
+  "yourPlanTierPremium": "Premium",
+  "@yourPlanTierPremium": {
+    "description": "Your plan: the premium tier."
+  },
+  "yourPlanTierOther": "Your plan",
+  "@yourPlanTierOther": {
+    "description": "Your plan: a tier this version does not know."
+  },
+  "yourPlanContactsOf": "{used} of {limit, plural, =1{1 contact} other{{limit} contacts}}",
+  "@yourPlanContactsOf": {
+    "description": "Your plan: summary part.",
+    "placeholders": {
+      "used": {
+        "type": "int",
+        "example": "1"
+      },
+      "limit": {
+        "type": "int",
+        "example": "1"
+      }
+    }
+  },
+  "yourPlanInstructionsOf": "{used} of {limit, plural, =1{1 instruction} other{{limit} instructions}}",
+  "@yourPlanInstructionsOf": {
+    "description": "Your plan: summary part.",
+    "placeholders": {
+      "used": {
+        "type": "int",
+        "example": "0"
+      },
+      "limit": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  },
+  "yourPlanStagesOf": "{used} of {limit, plural, =1{1 stage} other{{limit} stages}}",
+  "@yourPlanStagesOf": {
+    "description": "Your plan: summary part.",
+    "placeholders": {
+      "used": {
+        "type": "int",
+        "example": "1"
+      },
+      "limit": {
+        "type": "int",
+        "example": "2"
+      }
+    }
+  },
+  "yourPlanUsageTitle": "What you've used",
+  "@yourPlanUsageTitle": {
+    "description": "Your plan: card title."
+  },
+  "yourPlanContacts": "Trusted contacts",
+  "@yourPlanContacts": {
+    "description": "Your plan: row label."
+  },
+  "yourPlanInstructions": "Instructions",
+  "@yourPlanInstructions": {
+    "description": "Your plan: row label."
+  },
+  "yourPlanStages": "Stages in your plan",
+  "@yourPlanStages": {
+    "description": "Your plan: row label."
+  },
+  "yourPlanOwnTimes": "Choosing your own times",
+  "@yourPlanOwnTimes": {
+    "description": "Your plan: row label (custom offsets)."
+  },
+  "yourPlanUsed": "{used} of {limit}",
+  "@yourPlanUsed": {
+    "description": "Your plan: a count against its limit.",
+    "placeholders": {
+      "used": {
+        "type": "int",
+        "example": "1"
+      },
+      "limit": {
+        "type": "int",
+        "example": "1"
+      }
+    }
+  },
+  "yourPlanIncluded": "Included",
+  "@yourPlanIncluded": {
+    "description": "Your plan: a feature the tier has."
+  },
+  "yourPlanNotIncluded": "Not on Free",
+  "@yourPlanNotIncluded": {
+    "description": "Your plan: a feature the free tier does not have."
+  },
+  "yourPlanFreeNote": "Premium adds room for more contacts, instructions and stages, and lets you choose your own times.",
+  "@yourPlanFreeNote": {
+    "description": "Your plan: what premium adds."
+  },
+  "yourPlanPremiumSoon": "Premium isn't available yet. We'll let you know when it is.",
+  "@yourPlanPremiumSoon": {
+    "description": "Your plan: no purchase yet."
+  },
+  "yourPlanPremiumNote": "Your plan includes more contacts, instructions and stages, and your own times.",
+  "@yourPlanPremiumNote": {
+    "description": "Your plan: premium."
+  },
+  "lostPhoneBody": "Your plan keeps working without your phone. From any web browser you can check in, or confirm that you're safe.",
+  "@lostPhoneBody": {
+    "description": "Lost phone: explanation."
+  },
+  "lostPhoneAddressLabel": "Open this page in a browser",
+  "@lostPhoneAddressLabel": {
+    "description": "Lost phone: label of the address."
+  },
+  "lostPhoneStepSignIn": "1. Sign in with your email address and password.",
+  "@lostPhoneStepSignIn": {
+    "description": "Lost phone: step."
+  },
+  "lostPhoneStepCheckIn": "2. Choose I'M OK to check in.",
+  "@lostPhoneStepCheckIn": {
+    "description": "Lost phone: step."
+  },
+  "lostPhoneStepSafe": "3. If your contacts were already told, confirm I'M SAFE.",
+  "@lostPhoneStepSafe": {
+    "description": "Lost phone: step."
+  },
+  "lostPhoneNoted": "Signing in on the web is shown in your Activity, and we email you each time.",
+  "@lostPhoneNoted": {
+    "description": "Lost phone: note."
+  },
+  "lostPhoneOpen": "Open the page",
+  "@lostPhoneOpen": {
+    "description": "Lost phone: opens the page in the browser."
+  },
+  "accountUnconfirmedTitle": "We couldn't confirm that your account was closed",
+  "@accountUnconfirmedTitle": {
+    "description": "Final screen when the deletion request lost its answer and the next request was refused: the account may or may not be closed."
+  },
+  "accountUnconfirmedBody": "Your phone lost contact with AfterMe while your account was being closed, and you've been signed out. If the account was closed, we'll send you an email. If you don't get one, sign in again so your check-ins carry on.",
+  "@accountUnconfirmedBody": {
+    "description": "Unconfirmed deletion: what is known and what to do next."
+  },
+  "accountUnconfirmedKept": "Nothing on this phone was removed.",
+  "@accountUnconfirmedKept": {
+    "description": "Unconfirmed deletion: the phone was left as it was."
+  },
+  "accountUnconfirmedSignIn": "Sign in",
+  "@accountUnconfirmedSignIn": {
+    "description": "Unconfirmed deletion: leads to sign-in."
+  },
+  "upgradeCheckFailed": "We couldn't check just now. Check your connection and try again.",
+  "@upgradeCheckFailed": {
+    "description": "Upgrade screen: after Check again, no usable answer (offline or a server problem)."
+  },
+  "signOutConfirmPendingBody": "Your last I'M OK hasn't been received yet. It stays on this phone and is sent after you sign in again, but until then it hasn't counted.",
+  "@signOutConfirmPendingBody": {
+    "description": "Sign-out dialog body when a check-in is still waiting to be received."
+  },
+  "homeUnavailableTitle": "We can't show your latest status",
+  "@homeUnavailableTitle": {
+    "description": "Home banner title when the status could not be loaded for a reason that is not simply being offline."
+  },
+  "homeUnavailableTapNote": "You can still tap I'M OK. A check-in that can't be sent right away is kept, and sent as soon as it can be.",
+  "@homeUnavailableTapNote": {
+    "description": "Home note under the banner when the status could not be loaded for another reason than being offline."
+  },
+  "reauthReasonInstructionRead": "Your instructions stay hidden until you confirm your password, so nobody who picks up your phone can read them.",
+  "@reauthReasonInstructionRead": {
+    "description": "Body of the re-authentication sheet before the instructions are read (the server asks for a password entered in the last few minutes, SECURITY 7)."
+  },
+  "instructionsLockedTitle": "Your instructions are hidden",
+  "@instructionsLockedTitle": {
+    "description": "Title of the Instructions tab while the password is needed to read them."
+  },
+  "instructionsLockedBody": "They stay hidden until you confirm your password. Nothing was changed or lost.",
+  "@instructionsLockedBody": {
+    "description": "Body of the Instructions tab while the password is needed to read them."
+  },
+  "instructionsShow": "Show my instructions",
+  "@instructionsShow": {
+    "description": "Button that asks for the password and then shows the instructions."
+  },
+  "instructionsShowCancelled": "Your instructions stay hidden until you confirm your password.",
+  "@instructionsShowCancelled": {
+    "description": "Snackbar after the password sheet was closed without confirming."
+  },
+  "instructionDetailLockedBody": "This instruction stays hidden until you confirm your password. Nothing was changed.",
+  "@instructionDetailLockedBody": {
+    "description": "Body of the instruction page while the password is needed to read it."
+  },
+  "instructionShowOne": "Show this instruction",
+  "@instructionShowOne": {
+    "description": "Button on the instruction page that asks for the password and then shows it."
+  },
+  "planInUseShowTitles": "Show which ones",
+  "@planInUseShowTitles": {
+    "description": "Button on the plan editor's notice about a stage that shares instructions: asks for the password and then names them."
   }
 }

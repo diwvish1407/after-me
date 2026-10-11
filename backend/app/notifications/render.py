@@ -14,7 +14,12 @@ from typing import Final
 from zoneinfo import ZoneInfo
 
 from app.notifications import outbox
-from app.notifications.push import PushMessage
+from app.notifications.push import (
+    CHANNEL_ACCOUNT,
+    CHANNEL_INCIDENTS,
+    CHANNEL_REMINDERS,
+    PushMessage,
+)
 
 _NOON: Final = 12
 
@@ -40,6 +45,27 @@ PUSH_COPY: Final[dict[str, tuple[str, str]]] = {
     ),
     outbox.USER_ALL_CLEAR: ("All clear sent", "Your contacts know you're safe."),
     outbox.USER_HOLD_NOTICE: ("We had a service interruption", "Please check in."),
+    # No name: a push shows on a locked screen (FR-NOT-04). The app says who.
+    outbox.USER_CONTACT_UNREACHABLE: (
+        "A contact could not be reached",
+        "Open AfterMe to see who and what to do.",
+    ),
+}
+
+
+_HOUR: Final = 3_600
+# (channel, time to live in seconds) per push type.
+PUSH_DELIVERY: Final[dict[str, tuple[str, int]]] = {
+    outbox.USER_PRE_REMINDER: (CHANNEL_REMINDERS, _HOUR),
+    outbox.USER_MISSED: (CHANNEL_REMINDERS, _HOUR),
+    outbox.USER_MIDPOINT: (CHANNEL_REMINDERS, _HOUR),
+    outbox.USER_LAST_CHANCE: (CHANNEL_REMINDERS, 15 * 60),  # true for 15 minutes
+    outbox.USER_STAGE_DEFERRED: (CHANNEL_REMINDERS, 2 * _HOUR),
+    outbox.USER_STAGE_EXECUTED: (CHANNEL_INCIDENTS, 24 * _HOUR),
+    outbox.USER_FINAL_WARNING: (CHANNEL_INCIDENTS, _HOUR),
+    outbox.USER_ALL_CLEAR: (CHANNEL_INCIDENTS, 24 * _HOUR),
+    outbox.USER_HOLD_NOTICE: (CHANNEL_INCIDENTS, 24 * _HOUR),
+    outbox.USER_CONTACT_UNREACHABLE: (CHANNEL_ACCOUNT, 24 * _HOUR),
 }
 
 
@@ -47,8 +73,15 @@ def push_message(template_key: str, *, token: str, incident_id: str | None) -> P
     copy = PUSH_COPY.get(template_key)
     if copy is None:
         return None
+    channel, ttl = PUSH_DELIVERY.get(template_key, (CHANNEL_INCIDENTS, 24 * _HOUR))
     return PushMessage(
-        token=token, type=template_key, title=copy[0], body=copy[1], incident_id=incident_id
+        token=token,
+        type=template_key,
+        title=copy[0],
+        body=copy[1],
+        incident_id=incident_id,
+        channel=channel,
+        ttl_seconds=ttl,
     )
 
 

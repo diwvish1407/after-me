@@ -9,8 +9,10 @@ import '../../../app/theme/dimens.dart';
 import '../../../app/theme/tokens.dart';
 import '../../../core/api/failures/app_failure.dart';
 import '../../../core/design_system/design_system.dart';
+import '../../../core/freshness/stale_data.dart';
 import '../../../core/security/secure_screen.dart';
 import '../../../l10n/gen/app_localizations.dart';
+import '../../auth/presentation/reauth_sheet.dart';
 import '../../contacts/application/contacts_controller.dart';
 import '../../plan/application/plan_controller.dart';
 import '../application/instructions_controller.dart';
@@ -50,6 +52,38 @@ void addInstructionOrExplainLimit(
 class InstructionsScreen extends ConsumerWidget {
   const InstructionsScreen({super.key});
 
+  /// Reads the list again. The server shows instruction content only to a password
+  /// entered in the last 5 minutes (403 `reauth_required`): then the password sheet is
+  /// shown once and the same read repeated once, through `withReauth` like every other
+  /// step-up. Closing the sheet changes nothing and says, calmly, that the list stays
+  /// hidden; another failure is said as it is. The list on hand is kept in every case.
+  static Future<void> _read(BuildContext context, WidgetRef ref) async {
+    final l10n = AppLocalizations.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    final controller = ref.read(instructionsControllerProvider.notifier);
+    try {
+      final read = await withReauth<bool>(context, () async {
+        await controller.refresh();
+        return true;
+      }, reason: ReauthReason.instructionRead);
+      if (read == null) {
+        messenger.showSnackBar(
+          SnackBar(content: Text(l10n.instructionsShowCancelled)),
+        );
+      }
+    } on AppFailure catch (failure) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            isPasswordRequired(failure)
+                ? l10n.instructionsShowCancelled
+                : failureMessage(l10n, failure),
+          ),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
@@ -57,16 +91,8 @@ class InstructionsScreen extends ConsumerWidget {
     // Loaded here so that Add knows the limit before it opens.
     ref.watch(entitlementsProvider);
     Future<void> refresh() async {
-      final messenger = ScaffoldMessenger.of(context);
       ref.invalidate(entitlementsProvider);
-      final failure = await ref
-          .read(instructionsControllerProvider.notifier)
-          .reload();
-      if (failure != null) {
-        messenger.showSnackBar(
-          SnackBar(content: Text(failureMessage(l10n, failure))),
-        );
-      }
+      await _read(context, ref);
     }
 
     return SecureScreen(
@@ -89,24 +115,44 @@ class InstructionsScreen extends ConsumerWidget {
               physics: const AlwaysScrollableScrollPhysics(),
               child: items.when(
                 skipLoadingOnReload: true,
-                data: (list) => list.isEmpty
-                    ? _Empty(
+                data: (list) => Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const StaleDataNote(area: DataArea.instructions),
+                    if (list.isEmpty)
+                      _Empty(
                         onAdd: (starter) => addInstructionOrExplainLimit(
                           context,
                           ref,
                           starter: starter,
                         ),
                       )
-                    : _InstructionList(items: list),
-                loading: () => const LoadingView(),
-                error: (error, _) => ErrorView(
-                  failure: error is AppFailure
-                      ? error
-                      : UnknownFailure(cause: error),
-                  onRetry: () => unawaited(
-                    ref.read(instructionsControllerProvider.notifier).reload(),
-                  ),
+                    else
+                      _InstructionList(items: list),
+                  ],
                 ),
+                loading: () => const LoadingView(),
+                error: (error, _) => isPasswordRequired(error)
+                    ? EmptyState(
+                        icon: Icons.lock_outline_rounded,
+                        title: l10n.instructionsLockedTitle,
+                        message: l10n.instructionsLockedBody,
+                        action: AppButton.primary(
+                          label: l10n.instructionsShow,
+                          icon: Icons.visibility_outlined,
+                          onPressed: () => unawaited(_read(context, ref)),
+                        ),
+                      )
+                    : ErrorView(
+                        failure: error is AppFailure
+                            ? error
+                            : UnknownFailure(cause: error),
+                        onRetry: () => unawaited(
+                          ref
+                              .read(instructionsControllerProvider.notifier)
+                              .reload(),
+                        ),
+                      ),
               ),
             ),
           ),

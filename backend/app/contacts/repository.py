@@ -151,6 +151,53 @@ class ContactRepository:
         )
         return (await self._session.execute(stmt)).scalar_one_or_none() is not None
 
+    async def scrub_for_account_deletion(
+        self, *, owner_id: uuid.UUID, keep: set[uuid.UUID], now: datetime
+    ) -> int:
+        """Account deletion (DATABASE §4): mark every live contact deleted and remove every
+        personal field, the name included. ``keep`` are contacts that still have a message
+        waiting (the all-clear that undoes an alarm): the dispatcher re-reads a contact before
+        it sends, and a deleted contact is never written to, so those rows are scrubbed by the
+        maintenance job once their message has left."""
+        stmt = (
+            update(TrustedContact)
+            .where(TrustedContact.user_id == owner_id, TrustedContact.deleted_at.is_(None))
+            .values(
+                deleted_at=now,
+                display_name="Deleted contact",
+                email=None,
+                email_normalized=None,
+                phone_e164=None,
+                relationship_label=None,
+                is_active=False,
+                updated_at=now,
+            )
+            .returning(TrustedContact.id)
+        )
+        if keep:
+            stmt = stmt.where(TrustedContact.id.not_in(keep))
+            # What the all-clear needs is the name and the address: nothing else is kept.
+            await self._session.execute(
+                update(TrustedContact)
+                .where(TrustedContact.user_id == owner_id, TrustedContact.id.in_(keep))
+                .values(phone_e164=None, relationship_label=None, updated_at=now)
+            )
+        return len((await self._session.execute(stmt)).all())
+
+    async def invalidate_all_invitations(self, *, owner_id: uuid.UUID, now: datetime) -> int:
+        """Every unanswered invitation of every contact of this account stops working now."""
+        owned = select(TrustedContact.id).where(TrustedContact.user_id == owner_id)
+        stmt = (
+            update(ContactVerification)
+            .where(
+                ContactVerification.contact_id.in_(owned),
+                ContactVerification.responded_at.is_(None),
+                ContactVerification.expires_at > now,
+            )
+            .values(expires_at=now)
+        )
+        return int((await self._session.execute(stmt)).rowcount or 0)  # type: ignore[attr-defined]
+
     # ------------------------------------------------------------------ invitations
 
     async def invalidate_invitations(
@@ -373,6 +420,26 @@ class SuppressionRepository:
             .on_conflict_do_nothing(index_elements=[EmailSuppression.email_hash])
         )
         await self._session.execute(stmt)
+
+    async def mark_bounced_with_email(
+        self, *, email_normalized: str, now: datetime
+    ) -> list[tuple[uuid.UUID, uuid.UUID]]:
+        """An address that hard-bounced does not exist, for everyone who lists it: every live
+        contact row holding it (whoever owns it) becomes ``bounced``, so each owner sees it in
+        People and is told. Authorised by a verified provider webhook for that very address,
+        never by request input. Returns ``(contact id, owner id)`` of the rows that changed
+        (a repeat of the same event changes none)."""
+        result = await self._session.execute(
+            update(TrustedContact)
+            .where(
+                TrustedContact.email_normalized == email_normalized,
+                TrustedContact.deleted_at.is_(None),
+                TrustedContact.verification_status.in_(("pending", "verified")),
+            )
+            .values(verification_status="bounced", status_changed_at=now, updated_at=now)
+            .returning(TrustedContact.id, TrustedContact.user_id)
+        )
+        return [(row[0], row[1]) for row in result.all()]
 
     async def opt_out_all_contacts_with_email(
         self,

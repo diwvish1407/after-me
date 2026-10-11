@@ -59,6 +59,40 @@ String failureMessage(
   UnknownFailure() => l10n.errorUnknown,
 };
 
+/// An action that cannot be queued for later: the answer is needed now.
+enum UnconfirmedAction {
+  /// A save of the person's own input (the plan, an instruction, a contact).
+  save,
+
+  /// I'M SAFE.
+  safe,
+
+  /// The data export.
+  export,
+
+  /// Closing the account.
+  delete,
+}
+
+/// The message for a failed [action] that has no queue (USER_FLOWS.md §14, "fail-safe, not
+/// fail-trigger"): when no usable answer came back (offline, a timeout, server trouble)
+/// it says plainly that **nothing was confirmed**, that nothing on the screen has changed
+/// and that the person's input is still there. Any other failure is a real answer and is
+/// worded by [failureMessage].
+String actionFailureMessage(
+  AppLocalizations l10n,
+  AppFailure failure,
+  UnconfirmedAction action,
+) => switch (failure) {
+  NetworkFailure() || ServerFailure() || UnknownFailure() => switch (action) {
+    UnconfirmedAction.save => l10n.errorUnconfirmedSave,
+    UnconfirmedAction.safe => l10n.errorUnconfirmedSafe,
+    UnconfirmedAction.export => l10n.errorUnconfirmedExport,
+    UnconfirmedAction.delete => l10n.errorUnconfirmedDelete,
+  },
+  _ => failureMessage(l10n, failure),
+};
+
 /// Shows a failure calmly: an icon, the message from [failureMessage], and a retry
 /// button for transient failures when [onRetry] is provided.
 class ErrorView extends StatelessWidget {

@@ -17,6 +17,7 @@ from app.audit.writer import (
     PHASE4_ACTIONS,
     PHASE5_ACTIONS,
     PHASE6_ACTIONS,
+    PHASE7_ACTIONS,
     USER_VISIBLE_ACTIONS,
     AuditEvent,
     AuditMetadataError,
@@ -220,6 +221,29 @@ SAMPLE_CONTEXT: dict[EmailTemplate, dict[str, Any]] = {
         "checked_in_at": "9:01 PM IST",
         "optout_link": "https://afterme.test/c/optout#oo_example",
     },
+    EmailTemplate.CONTACT_ALERT_WITHDRAWN: {
+        "contact_name": "Asha",
+        "user_name": "Diwakar",
+        "reason": "account_deleted",
+        "optout_link": "https://afterme.test/c/optout#oo_example",
+    },
+    EmailTemplate.CONTACT_UNREACHABLE: {
+        "user_name": "Asha",
+        "contact_name": "Mom",
+        "reason": "bounced",
+    },
+    EmailTemplate.ALERT_WITHDRAWN_NOTICE: {
+        "user_name": "Asha",
+        "names": "Mom and Brother",
+        "next_due_at": "Fri 9 Oct, 8:00 PM",
+    },
+    # Phase 7: account deletion and the lost-phone web page.
+    EmailTemplate.ACCOUNT_DELETION_LINK: {
+        "link": "https://afterme.test/a/delete/confirm#ad_example",
+        "expires_minutes": 30,
+    },
+    EmailTemplate.ACCOUNT_DELETION_REQUESTED: {"purge_date": "10 November 2026", "all_clear": True},
+    EmailTemplate.WEB_LOGIN_NOTICE: {"site": "https://afterme.test"},
 }
 
 
@@ -239,8 +263,8 @@ def test_every_email_template_renders(template: EmailTemplate) -> None:
     assert message.text.startswith(("Hello,", "Hi Asha,"))
     assert "AfterMe is not an emergency service." in message.text
     assert len(message.text) < 1500  # short enough to read on a lock screen preview
-    for value in SAMPLE_CONTEXT[template].values():
-        if isinstance(value, str):
+    for key, value in SAMPLE_CONTEXT[template].items():
+        if isinstance(value, str) and key != "reason":  # a code that selects wording, not text
             assert value in message.text
 
 
@@ -266,7 +290,7 @@ def test_audit_action_catalogue() -> None:
     assert PHASE6_ACTIONS.isdisjoint(
         PHASE1_ACTIONS | PHASE2_ACTIONS | PHASE3_ACTIONS | PHASE4_ACTIONS | PHASE5_ACTIONS
     )
-    assert KNOWN_ACTIONS == (
+    assert PHASE7_ACTIONS.isdisjoint(
         PHASE1_ACTIONS
         | PHASE2_ACTIONS
         | PHASE3_ACTIONS
@@ -274,6 +298,18 @@ def test_audit_action_catalogue() -> None:
         | PHASE5_ACTIONS
         | PHASE6_ACTIONS
     )
+    assert KNOWN_ACTIONS == (
+        PHASE1_ACTIONS
+        | PHASE2_ACTIONS
+        | PHASE3_ACTIONS
+        | PHASE4_ACTIONS
+        | PHASE5_ACTIONS
+        | PHASE6_ACTIONS
+        | PHASE7_ACTIONS
+    )
+    # Phase 7: the owner sees their own export and web sign-ins; a closed account sees nothing.
+    assert {"account.exported", "auth.web_login_succeeded"} <= USER_VISIBLE_ACTIONS
+    assert {"account.deletion_requested", "account.purged"}.isdisjoint(USER_VISIBLE_ACTIONS)
     # SECURITY §9 marks these Phase 6 events as shown in the Activity feed.
     assert {
         "instruction.recipients_changed",

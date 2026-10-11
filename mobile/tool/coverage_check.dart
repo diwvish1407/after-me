@@ -1,9 +1,12 @@
 // Enforces the mobile coverage gates (TEST_PLAN.md §10) on coverage/lcov.info:
 //   * >= 70% line coverage overall,
 //   * >= 90% for the API interceptors and the session/auth code,
-//   * >= 90% for every Phase 2-6 feature area (auth, onboarding, settings, home,
-//     contacts, check-ins, plan, instructions, app lock and the secure-screen flag,
-//     permissions, forms, pickers, device and platform gateways, time formatting).
+//   * >= 90% for every Phase 2-8 feature area (auth, onboarding, settings, home,
+//     contacts, check-ins, plan, instructions, incidents, activity, privacy and data
+//     (export and account deletion), notifications (push: the token's life, what is shown
+//     and where a tap goes, the devices API) and the push gateways, app lock and the
+//     secure-screen flag, the "Update AfterMe" gate, the stale-data notes, permissions,
+//     forms, pickers, device and platform gateways, time formatting).
 // Generated code (*.g.dart, *.freezed.dart, lib/l10n/gen/) is excluded.
 //
 // `flutter test --coverage` only reports libraries that some test loads, so a lib
@@ -30,6 +33,21 @@ const _gates = <String, double>{
   // Phase 5 (the plan) and Phase 6 (instructions: data, controllers, screens, FLAG_SECURE).
   'lib/features/plan/': 90,
   'lib/features/instructions/': 90,
+  // Phase 7 (incidents: the timeline, I'M SAFE with its idempotency key, the history).
+  'lib/features/incidents/': 90,
+  // Phase 7 (the Activity feed, and privacy and data: export and account deletion).
+  'lib/features/activity/': 90,
+  'lib/features/privacy/': 90,
+  // Phase 8 (notifications): the push coordinator (token lifecycle, foreground display,
+  // taps), the message model, the devices repository and the Settings > Notifications
+  // content, and the two gateways over Firebase Messaging and the local-notifications
+  // plugin (tested against mocked platform channels and a fake platform interface).
+  'lib/features/notifications/': 90,
+  'lib/core/push/': 90,
+  // Phase 7 (the "Update AfterMe" gate for a 426, and the "last information we have"
+  // notes of the lists that could not be refreshed).
+  'lib/core/upgrade/': 90,
+  'lib/core/freshness/': 90,
   'lib/core/security/': 90,
   'lib/core/permissions/': 90,
   'lib/core/forms/': 90,
@@ -51,6 +69,8 @@ const _noCoverageAllowlist = <String>{
   'lib/features/checkin/data/checkin_repository.dart',
   'lib/features/checkin/data/schedule_repository.dart',
   'lib/features/home/data/home_repository.dart',
+  'lib/features/incidents/data/incidents_repository.dart',
+  'lib/features/activity/data/activity_repository.dart',
 };
 
 bool _isGenerated(String path) =>

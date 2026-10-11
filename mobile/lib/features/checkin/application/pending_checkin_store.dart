@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/storage/preferences_store.dart';
+import '../../../core/auth/session_store.dart';
 import '../../../core/storage/secure_store.dart';
 
 /// How old an unconfirmed tap may be and still be sent. It matches the 12 h minimum
@@ -18,7 +18,9 @@ const Duration pendingCheckInMaxAge = Duration(hours: 12);
 /// The [idempotencyKey] belongs to this tap: every retry of it, in this process or after
 /// the app was killed, sends the same key, so the server records the tap exactly once.
 /// [userId] ties the record to the account that tapped, so a check-in can never be sent
-/// for somebody who signed in later on the same phone.
+/// for somebody who signed in later on the same phone. It is the id of the **session**
+/// (`SessionKeys.userId`), never empty: a record that names nobody belongs to nobody and
+/// is neither written nor read.
 @immutable
 class PendingCheckIn {
   const PendingCheckIn({
@@ -61,7 +63,7 @@ class PendingCheckIn {
       final user = json['user'];
       final key = json['key'];
       final reported = json['reported_at'];
-      if (user is! String || key is! String || key.isEmpty) {
+      if (user is! String || user.isEmpty || key is! String || key.isEmpty) {
         return null;
       }
       if (reported is! String) {
@@ -95,27 +97,31 @@ class PendingCheckIn {
 /// Storage failures never stop a check-in: a record that cannot be written still works
 /// for as long as the process lives.
 class PendingCheckInStore {
-  PendingCheckInStore({required this._secure, required this._prefs});
+  PendingCheckInStore({required this._secure});
 
   /// The secure-storage key of the record.
   static const storageKey = 'checkin.pending';
 
   final SecureStore _secure;
-  final PreferencesStore _prefs;
 
-  /// The account the app is signed in as, as an opaque id (the same one onboarding
-  /// progress is keyed by). Empty when it is not known.
+  /// The account the app is signed in as, as an opaque id: the one the session was
+  /// started for (`SessionKeys.userId`, written with the tokens at sign-in and removed
+  /// with them). Empty when it is not known (no session, or storage cannot be read).
   Future<String> currentUserId() async {
     try {
-      return await _prefs.getString(PreferenceKey.onboardingUserId) ?? '';
+      return await _secure.read(SessionKeys.userId) ?? '';
     } on Object {
       return '';
     }
   }
 
   /// The saved record when it belongs to [userId]. A record of another account is left
-  /// alone (it is not this person's tap) and reported as none.
+  /// alone (it is not this person's tap) and reported as none, and so is anything for an
+  /// empty [userId]: nobody is signed in as nobody.
   Future<PendingCheckIn?> read(String userId) async {
+    if (userId.isEmpty) {
+      return null;
+    }
     try {
       final record = PendingCheckIn.tryDecode(await _secure.read(storageKey));
       return record != null && record.userId == userId ? record : null;
@@ -124,7 +130,13 @@ class PendingCheckInStore {
     }
   }
 
+  /// Keeps [record] for a restart. A record without an owner is not kept: it could be
+  /// sent for the wrong person later. The tap itself still works for as long as the
+  /// process lives.
   Future<void> write(PendingCheckIn record) async {
+    if (record.userId.isEmpty) {
+      return;
+    }
     try {
       await _secure.write(storageKey, record.encode());
     } on Object {
@@ -132,6 +144,7 @@ class PendingCheckInStore {
     }
   }
 
+  /// Removes the record, whoever it belongs to (the account it belonged to is closed).
   Future<void> clear() async {
     try {
       await _secure.delete(storageKey);
@@ -140,11 +153,27 @@ class PendingCheckInStore {
       // the server answers with the original result.
     }
   }
+
+  /// Removes the record when it is [userId]'s (or is damaged and so nobody's). A record
+  /// of another account stays: this tap was confirmed, or dropped, and that one is not
+  /// ours to forget.
+  Future<void> clearFor(String userId) async {
+    try {
+      final raw = await _secure.read(storageKey);
+      if (raw == null) {
+        return;
+      }
+      final record = PendingCheckIn.tryDecode(raw);
+      if (record != null && record.userId != userId) {
+        return;
+      }
+      await _secure.delete(storageKey);
+    } on Object {
+      // As in [clear].
+    }
+  }
 }
 
 final pendingCheckInStoreProvider = Provider<PendingCheckInStore>(
-  (ref) => PendingCheckInStore(
-    secure: ref.watch(secureStoreProvider),
-    prefs: ref.watch(preferencesStoreProvider),
-  ),
+  (ref) => PendingCheckInStore(secure: ref.watch(secureStoreProvider)),
 );

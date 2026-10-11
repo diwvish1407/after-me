@@ -78,9 +78,9 @@ async def test_failure_counters_persist_despite_error_responses(h: Harness, owne
         assert (await h.login("count@example.com", "bad password guess")).status_code == 401
     assert _user(owner_db, "count@example.com")["failed_login_count"] == 3
     counters = owner_db.execute(
-        "SELECT key, count FROM rate_limit_counters WHERE key LIKE 'login_account:%'"
+        "SELECT key, count FROM rate_limit_counters WHERE key LIKE 'login_account_net:%'"
     ).fetchall()
-    assert [c["count"] for c in counters] == [3]
+    assert [c["count"] for c in counters] == [3]  # one budget: this account on this network
     failures = owner_db.execute(
         "SELECT count(*) AS n FROM audit_logs WHERE action = 'auth.login_failed'"
     ).fetchone()
@@ -93,7 +93,7 @@ async def test_failure_counters_persist_despite_error_responses(h: Harness, owne
 async def test_lockout_after_ten_failures_and_unlock_after_fifteen_minutes(
     h: Harness, owner_db: Db
 ) -> None:
-    await h.signup("lock@example.com")
+    tokens = await h.signup("lock@example.com")
     h.mail.clear()
     for attempt in range(1, 11):
         response = await h.login("lock@example.com", "wrong password attempt")
@@ -106,20 +106,37 @@ async def test_lockout_after_ten_failures_and_unlock_after_fifteen_minutes(
     ).fetchall()
     assert locked_audit == [{"metadata": {"reason": "too_many_failures", "lock_minutes": 15}}]
 
-    # While locked, even the right password gets a generic 429.
+    # While locked, the right password from somewhere the account does not know is answered
+    # exactly like a wrong one (Phase 9, F13): same status, same body, no Retry-After, nothing
+    # that says the address exists or that it is locked. The owner has the email.
     h.clock.advance(minutes=14, seconds=59)
     locked = await h.login("lock@example.com")
-    assert locked.status_code == 429
-    assert problem(locked)["code"] == "rate_limited"
-    assert locked.headers["retry-after"] == "1"
-    # The lockout response describes the lock, not a stale per-account window.
-    assert locked.headers["ratelimit-limit"] == "10"
-    assert locked.headers["ratelimit-remaining"] == "0"
-    assert locked.headers["ratelimit-reset"] == locked.headers["retry-after"]
+    wrong = await h.login("lock@example.com", "another wrong password")
+    unknown = await h.login("nobody-here@example.com", "another wrong password")
+    for response in (locked, wrong, unknown):
+        assert response.status_code == 401
+        assert problem(response)["code"] == "invalid_credentials"
+        assert "retry-after" not in response.headers
+    assert _user(owner_db, "lock@example.com")["locked_until"] is not None
 
-    h.clock.advance(seconds=1)
-    assert (await h.login("lock@example.com")).status_code == 200
+    # ...but the phone the account already knows is not bound by the lock: a stranger's failures
+    # must not be able to keep the person out of their own account (Phase 9, F1).
+    known = await h.login("lock@example.com", device_id=tokens["device_id"])
+    assert known.status_code == 200
     assert _user(owner_db, "lock@example.com")["locked_until"] is None
+
+
+@pytest.mark.no_rate_limit
+async def test_a_lock_that_nobody_cleared_ends_after_fifteen_minutes(
+    h: Harness, owner_db: Db
+) -> None:
+    await h.signup("expiry@example.com")
+    for _ in range(10):
+        await h.login("expiry@example.com", "wrong password attempt")
+    assert _user(owner_db, "expiry@example.com")["locked_until"] is not None
+    h.clock.advance(minutes=15)
+    assert (await h.login("expiry@example.com")).status_code == 200
+    assert _user(owner_db, "expiry@example.com")["locked_until"] is None
 
 
 async def test_lockout_is_reached_under_real_rate_limits(h: Harness, owner_db: Db) -> None:

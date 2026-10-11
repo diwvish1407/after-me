@@ -1,0 +1,254 @@
+{
+  "contract": "afterme-phase8",
+  "version": 1,
+  "payloads": [
+    {
+      "type": "checkin_pre_reminder",
+      "opens": "home",
+      "message": {
+        "notification": {
+          "title": "Check-in due soon",
+          "body": "Tap to let AfterMe know you're OK."
+        },
+        "data": {
+          "type": "checkin_pre_reminder",
+          "v": "1"
+        },
+        "android": {
+          "priority": "HIGH",
+          "ttl": "3600s",
+          "notification": {
+            "channel_id": "reminders",
+            "tag": "checkin_pre_reminder",
+            "visibility": "PRIVATE",
+            "notification_priority": "PRIORITY_HIGH"
+          }
+        }
+      }
+    },
+    {
+      "type": "incident_missed",
+      "opens": "home",
+      "message": {
+        "notification": {
+          "title": "You missed your check-in",
+          "body": "Tap I'M OK to stop the reminders."
+        },
+        "data": {
+          "type": "incident_missed",
+          "v": "1",
+          "incident_id": "11111111-1111-4111-8111-111111111111"
+        },
+        "android": {
+          "priority": "HIGH",
+          "ttl": "3600s",
+          "notification": {
+            "channel_id": "reminders",
+            "tag": "incident_missed",
+            "visibility": "PRIVATE",
+            "notification_priority": "PRIORITY_HIGH"
+          }
+        }
+      }
+    },
+    {
+      "type": "incident_midpoint",
+      "opens": "home",
+      "message": {
+        "notification": {
+          "title": "Still waiting for your check-in",
+          "body": "Tap to check in."
+        },
+        "data": {
+          "type": "incident_midpoint",
+          "v": "1",
+          "incident_id": "11111111-1111-4111-8111-111111111111"
+        },
+        "android": {
+          "priority": "HIGH",
+          "ttl": "3600s",
+          "notification": {
+            "channel_id": "reminders",
+            "tag": "incident_midpoint",
+            "visibility": "PRIVATE",
+            "notification_priority": "PRIORITY_HIGH"
+          }
+        }
+      }
+    },
+    {
+      "type": "incident_last_chance",
+      "opens": "home",
+      "message": {
+        "notification": {
+          "title": "Your contacts will be notified in 15 minutes",
+          "body": "Tap to check in now."
+        },
+        "data": {
+          "type": "incident_last_chance",
+          "v": "1",
+          "incident_id": "11111111-1111-4111-8111-111111111111"
+        },
+        "android": {
+          "priority": "HIGH",
+          "ttl": "900s",
+          "notification": {
+            "channel_id": "reminders",
+            "tag": "incident_last_chance",
+            "visibility": "PRIVATE",
+            "notification_priority": "PRIORITY_HIGH"
+          }
+        }
+      }
+    },
+    {
+      "type": "incident_delayed",
+      "opens": "home",
+      "message": {
+        "notification": {
+          "title": "We gave you more time",
+          "body": "We had an interruption. Open AfterMe and check in."
+        },
+        "data": {
+          "type": "incident_delayed",
+          "v": "1",
+          "incident_id": "11111111-1111-4111-8111-111111111111"
+        },
+        "android": {
+          "priority": "HIGH",
+          "ttl": "7200s",
+          "notification": {
+            "channel_id": "reminders",
+            "tag": "incident_delayed",
+            "visibility": "PRIVATE",
+            "notification_priority": "PRIORITY_HIGH"
+          }
+        }
+      }
+    },
+    {
+      "type": "stage_executed",
+      "opens": "home",
+      "message": {
+        "notification": {
+          "title": "Your contacts have been notified",
+          "body": "If you're safe, open AfterMe and tap I'M SAFE."
+        },
+        "data": {
+          "type": "stage_executed",
+          "v": "1",
+          "incident_id": "11111111-1111-4111-8111-111111111111"
+        },
+        "android": {
+          "priority": "HIGH",
+          "ttl": "86400s",
+          "notification": {
+            "channel_id": "incidents",
+            "tag": "stage_executed",
+            "visibility": "PRIVATE",
+            "notification_priority": "PRIORITY_HIGH"
+          }
+        }
+      }
+    },
+    {
+      "type": "release_final_warning",
+      "opens": "home",
+      "message": {
+        "notification": {
+          "title": "Information will be shared in 1 hour",
+          "body": "Tap I'M SAFE to stop it."
+        },
+        "data": {
+          "type": "release_final_warning",
+          "v": "1",
+          "incident_id": "11111111-1111-4111-8111-111111111111"
+        },
+        "android": {
+          "priority": "HIGH",
+          "ttl": "3600s",
+          "notification": {
+            "channel_id": "incidents",
+            "tag": "release_final_warning",
+            "visibility": "PRIVATE",
+            "notification_priority": "PRIORITY_HIGH"
+          }
+        }
+      }
+    },
+    {
+      "type": "all_clear_confirmation",
+      "opens": "home",
+      "message": {
+        "notification": {
+          "title": "All clear sent",
+          "body": "Your contacts know you're safe."
+        },
+        "data": {
+          "type": "all_clear_confirmation",
+          "v": "1",
+          "incident_id": "11111111-1111-4111-8111-111111111111"
+        },
+        "android": {
+          "priority": "HIGH",
+          "ttl": "86400s",
+          "notification": {
+            "channel_id": "incidents",
+            "tag": "all_clear_confirmation",
+            "visibility": "PRIVATE",
+            "notification_priority": "PRIORITY_HIGH"
+          }
+        }
+      }
+    },
+    {
+      "type": "service_interruption",
+      "opens": "home",
+      "message": {
+        "notification": {
+          "title": "We had a service interruption",
+          "body": "Please check in."
+        },
+        "data": {
+          "type": "service_interruption",
+          "v": "1",
+          "incident_id": "11111111-1111-4111-8111-111111111111"
+        },
+        "android": {
+          "priority": "HIGH",
+          "ttl": "86400s",
+          "notification": {
+            "channel_id": "incidents",
+            "tag": "service_interruption",
+            "visibility": "PRIVATE",
+            "notification_priority": "PRIORITY_HIGH"
+          }
+        }
+      }
+    },
+    {
+      "type": "contact_unreachable",
+      "opens": "people",
+      "message": {
+        "notification": {
+          "title": "A contact could not be reached",
+          "body": "Open AfterMe to see who and what to do."
+        },
+        "data": {
+          "type": "contact_unreachable",
+          "v": "1"
+        },
+        "android": {
+          "priority": "HIGH",
+          "ttl": "86400s",
+          "notification": {
+            "channel_id": "account",
+            "tag": "contact_unreachable",
+            "visibility": "PRIVATE",
+            "notification_priority": "PRIORITY_HIGH"
+          }
+        }
+      }
+    }
+  ]
+}

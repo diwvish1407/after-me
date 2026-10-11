@@ -7,6 +7,8 @@ entry fails the build, so no endpoint can skip its authorization tests.
 from __future__ import annotations
 
 import base64
+import hashlib
+import hmac
 import json
 import re
 import uuid
@@ -24,14 +26,20 @@ from fastapi.routing import iter_route_contexts
 
 from app.core.config import Settings
 from app.main import create_app
-from tests.support import Harness, bearer, jwt_private_key_pem, problem
+from tests.security.sec_support import snapshot
+from tests.support import Harness, bearer, jwt_private_key_pem, make_settings, problem
 
 
 @dataclass(frozen=True)
 class Public:
-    """No authentication. ``rate_limited`` routes count requests per IP (and more)."""
+    """No session. ``rate_limited`` routes count requests per IP (and more).
+
+    ``secret`` names the credential of a machine-to-machine route (a shared secret or a provider
+    signature): such a route is public to the session layer but refuses a request without it.
+    """
 
     rate_limited: bool = False
+    secret: str | None = None
 
 
 @dataclass(frozen=True)
@@ -54,7 +62,20 @@ class Owned:
 
 @dataclass(frozen=True)
 class Reauth:
+    """Step-up: the password entered within the last five minutes (FR-AUTH-08)."""
+
     body: dict[str, Any] | None = field(default=None)
+
+
+@dataclass(frozen=True)
+class FreshReauth:
+    """Step-up with the 60-second window, for what cannot be taken back or reads everything
+    (``FreshReauthUserDep``): a confirmation of two minutes ago does not count. ``destructive``
+    routes end the account (and so the session) when they succeed, so their success is checked
+    once, last."""
+
+    body: dict[str, Any] | None = field(default=None)
+    destructive: bool = False
 
 
 @dataclass(frozen=True)
@@ -64,9 +85,16 @@ class Web:
 
     form: dict[str, str] = field(default_factory=dict)
     csrf_page: str = "/a/reset"
+    # POSTs one address may send in the window before the 429 page (API_SPEC §16). ``None``: no
+    # per-address budget (the route has a per-user one, or none at all).
+    ip_limit: int | None = None
+
+    @property
+    def rate_limited(self) -> bool:
+        return self.ip_limit is not None
 
 
-Policy = Public | Authenticated | Owned | Reauth | Web
+Policy = Public | Authenticated | Owned | Reauth | FreshReauth | Web
 
 CONTACT_TABLES = ("trusted_contacts", "contact_verifications", "email_suppressions", "audit_logs")
 
@@ -79,8 +107,12 @@ ROUTE_POLICY: dict[tuple[str, str], Policy] = {
     ("HEAD", "/v1/docs"): Public(),
     ("GET", "/v1/docs/oauth2-redirect"): Public(),
     ("HEAD", "/v1/docs/oauth2-redirect"): Public(),
-    # The uptime monitor authenticates with its own shared secret (X-Probe-Token), not a session.
-    ("POST", "/internal/probe"): Public(),
+    # The uptime monitor authenticates with its own shared secret (X-Probe-Token), not a session;
+    # 10 a minute per address (``ops/router.py``).
+    ("POST", "/internal/probe"): Public(rate_limited=True, secret="X-Probe-Token"),
+    # Provider webhooks (Phase 8): machine to machine, authenticated by the provider's signature
+    # or password; an unconfigured provider is a bare 404; 600 a minute per address.
+    ("POST", "/webhooks/email/{provider}"): Public(rate_limited=True, secret="signature"),
     ("POST", "/v1/auth/register/start"): Public(rate_limited=True),
     ("POST", "/v1/auth/register/verify"): Public(rate_limited=True),
     ("POST", "/v1/auth/register/resend"): Public(rate_limited=True),
@@ -100,6 +132,23 @@ ROUTE_POLICY: dict[tuple[str, str], Policy] = {
     ("GET", "/v1/me"): Authenticated(),
     ("PATCH", "/v1/me/profile"): Authenticated(body={"display_name": "Someone"}),
     ("GET", "/v1/me/entitlements"): Authenticated(),
+    ("GET", "/v1/activity"): Authenticated(),
+    ("PUT", "/v1/devices/current"): Authenticated(
+        body={
+            "platform": "android",
+            "app_version": "1.0.0+1",
+            "os_version": "15",
+            "locale": "en",
+            "push_token": "t" * 40,
+        }
+    ),
+    ("DELETE", "/v1/devices/current/push-token"): Authenticated(),
+    # The password entered within the last 60 seconds *and* the word DELETE (FreshReauthUserDep,
+    # DeleteAccountRequest). Success closes the account and ends the session, so the FreshReauth
+    # check runs it last (tests/engine/test_deletion.py covers what deletion then does).
+    ("DELETE", "/v1/me"): FreshReauth(body={"confirm": "DELETE"}, destructive=True),
+    # The export holds the decrypted instructions: the same 60-second window.
+    ("POST", "/v1/me/export"): FreshReauth(),
     ("GET", "/v1/contacts"): Authenticated(),
     ("POST", "/v1/contacts"): Authenticated(
         body={
@@ -149,12 +198,18 @@ ROUTE_POLICY: dict[tuple[str, str], Policy] = {
         body={"grace_minutes": 180, "stages": [{"offset_minutes": 180, "notify_contact_ids": []}]}
     ),
     ("GET", "/v1/instruction-categories"): Authenticated(),
-    ("GET", "/v1/instructions"): Authenticated(),
+    # Reading decrypts the content, so both reads need the password entered in the last five
+    # minutes (and a successful read is audited). The stranger of the Owned check re-authenticates
+    # first and still gets 404.
+    ("GET", "/v1/instructions"): Reauth(),
     ("POST", "/v1/instructions"): Authenticated(
         body={"category": "home", "title": "House", "body": "Where the key is."}
     ),
     ("GET", "/v1/instructions/{instruction_id}"): Owned(
-        "instruction_id", factory="instruction", tables=("instructions", "instruction_recipients")
+        "instruction_id",
+        factory="instruction",
+        tables=("instructions", "instruction_recipients"),
+        reauth=True,
     ),
     ("PATCH", "/v1/instructions/{instruction_id}"): Owned(
         "instruction_id",
@@ -169,32 +224,81 @@ ROUTE_POLICY: dict[tuple[str, str], Policy] = {
     ),
     ("GET", "/a/reset"): Web(),
     ("POST", "/a/reset"): Web(
-        form={"token": "pr_" + "A" * 43, "new_password": "a new passphrase 42"}
+        form={"token": "pr_" + "A" * 43, "new_password": "a new passphrase 42"}, ip_limit=10
     ),
     ("GET", "/a/assets/web.css"): Web(),
+    # Phase 7: account deletion without the app, and the lost-phone pages. Every page that needs
+    # a session shows the sign-in form instead when it has none.
+    ("GET", "/a/delete"): Web(csrf_page="/a/delete"),
+    ("POST", "/a/delete"): Web(
+        form={"email": "someone@example.com"}, csrf_page="/a/delete", ip_limit=10
+    ),
+    ("GET", "/a/delete/confirm"): Web(csrf_page="/a/delete/confirm"),
+    ("POST", "/a/delete/confirm"): Web(
+        form={"token": "ad_" + "A" * 43, "password": "x"},
+        csrf_page="/a/delete/confirm",
+        ip_limit=10,
+    ),
+    ("GET", "/a/login"): Web(csrf_page="/a/login"),
+    ("POST", "/a/login"): Web(
+        form={"email": "someone@example.com", "password": "x"}, csrf_page="/a/login", ip_limit=10
+    ),
+    ("GET", "/a/checkin"): Web(csrf_page="/a/login"),
+    ("POST", "/a/checkin"): Web(form={"key": "web-" + "a" * 20}, csrf_page="/a/login"),
+    (
+        "POST",
+        "/a/safe",
+    ): Web(
+        form={"key": "web-" + "a" * 20, "incident_id": str(uuid.uuid4()), "password": "x"},
+        csrf_page="/a/login",
+    ),
+    ("POST", "/a/logout"): Web(csrf_page="/a/login"),
     ("GET", "/c/open"): Web(csrf_page="/c/open"),
     ("GET", "/c/optout"): Web(csrf_page="/c/open"),
-    ("POST", "/c/session"): Web(form={"token": "ci_" + "A" * 43}, csrf_page="/c/open"),
-    ("POST", "/c/invite/accept"): Web(form={"token": "ci_" + "A" * 43}, csrf_page="/c/open"),
+    # One shared budget of 20 an hour per address for the five invitation and opt-out POSTs.
+    ("POST", "/c/session"): Web(form={"token": "ci_" + "A" * 43}, csrf_page="/c/open", ip_limit=20),
+    ("POST", "/c/invite/accept"): Web(
+        form={"token": "ci_" + "A" * 43}, csrf_page="/c/open", ip_limit=20
+    ),
     ("POST", "/c/invite/decline"): Web(
-        form={"token": "ci_" + "A" * 43, "never_contact": "1"}, csrf_page="/c/open"
+        form={"token": "ci_" + "A" * 43, "never_contact": "1"}, csrf_page="/c/open", ip_limit=20
     ),
     ("POST", "/c/optout/confirm"): Web(
-        form={"token": "oo_" + str(uuid.uuid4()) + "." + "A" * 43}, csrf_page="/c/open"
+        form={"token": "oo_" + str(uuid.uuid4()) + "." + "A" * 43},
+        csrf_page="/c/open",
+        ip_limit=20,
     ),
     ("POST", "/c/optout"): Web(
         form={"token": "oo_" + str(uuid.uuid4()) + "." + "A" * 43, "scope": "everyone"},
         csrf_page="/c/open",
+        ip_limit=20,
     ),
     # Phase 6: the release pages. A session and a one-time code stand between the link and any
     # content; a GET shows a static form only.
     ("GET", "/c/release"): Web(csrf_page="/c/release"),
-    ("POST", "/c/release/session"): Web(form={"token": "rt_" + "A" * 43}, csrf_page="/c/release"),
-    ("POST", "/c/release/code"): Web(csrf_page="/c/release"),
-    ("POST", "/c/release/verify"): Web(form={"code": "123456"}, csrf_page="/c/release"),
-    ("POST", "/c/release/view"): Web(csrf_page="/c/release"),
-    ("POST", "/c/release/new-link"): Web(form={"token": "rt_" + "A" * 43}, csrf_page="/c/release"),
-    ("POST", "/c/release/end"): Web(csrf_page="/c/release"),
+    # One shared budget of 60 an hour per address for every POST of the release pages.
+    ("POST", "/c/release/session"): Web(
+        form={"token": "rt_" + "A" * 43}, csrf_page="/c/release", ip_limit=60
+    ),
+    ("POST", "/c/release/code"): Web(csrf_page="/c/release", ip_limit=60),
+    ("POST", "/c/release/verify"): Web(
+        form={"code": "123456"}, csrf_page="/c/release", ip_limit=60
+    ),
+    ("POST", "/c/release/view"): Web(csrf_page="/c/release", ip_limit=60),
+    ("POST", "/c/release/new-link"): Web(
+        form={"token": "rt_" + "A" * 43}, csrf_page="/c/release", ip_limit=60
+    ),
+    ("POST", "/c/release/end"): Web(csrf_page="/c/release", ip_limit=60),
+}
+
+# Routes ``create_app`` mounts only when ``TEST_SUPPORT_ENABLED`` is set (never in production):
+# the movable clock and the mail reader. Every one needs the ``X-Test-Token`` header.
+TEST_SUPPORT_TOKEN = "t" * 40
+TEST_SUPPORT_ROUTE_POLICY: dict[tuple[str, str], Policy] = {
+    ("GET", "/test/clock"): Public(secret="X-Test-Token"),
+    ("POST", "/test/clock/advance"): Public(secret="X-Test-Token"),
+    ("POST", "/test/clock/reset"): Public(secret="X-Test-Token"),
+    ("GET", "/test/mail"): Public(secret="X-Test-Token"),
 }
 
 # Routes registered only by the test suite (tests/routes.py).
@@ -229,6 +333,41 @@ def test_every_production_route_has_a_policy(settings: Settings) -> None:
 def test_every_test_route_has_a_policy(app: FastAPI) -> None:
     routes = app_routes(app)
     assert routes == ROUTE_POLICY.keys() | TEST_ROUTE_POLICY.keys()
+
+
+async def test_every_test_support_route_has_a_policy_and_a_token_guard(tmp_path: Any) -> None:
+    """The matrix app never has test support, so the routes that exist only with it are scanned
+    in an app built with it: nothing but the documented four, and none answers without the
+    token (including the one that moves time backwards)."""
+    settings = make_settings(
+        test_support_enabled=True,
+        test_support_token=TEST_SUPPORT_TOKEN,
+        email_provider="console",
+        dev_mail_dir=tmp_path / "mail",
+        rate_limit_enabled=False,
+    )
+    support_app = create_app(settings)
+    try:
+        routes = app_routes(support_app)
+        assert routes == ROUTE_POLICY.keys() | TEST_SUPPORT_ROUTE_POLICY.keys()
+        assert {r for r in routes if r[1].startswith("/test")} == TEST_SUPPORT_ROUTE_POLICY.keys()
+        transport = httpx.ASGITransport(app=support_app, client=("203.0.113.10", 51000))
+        async with httpx.AsyncClient(transport=transport, base_url="https://api.afterme.test") as c:
+            for method, path in sorted(TEST_SUPPORT_ROUTE_POLICY):
+                body = {"seconds": 60} if path.endswith("/advance") else None
+                for token in (None, "", "wrong", TEST_SUPPORT_TOKEN[:-1], TEST_SUPPORT_TOKEN + "x"):
+                    headers = {} if token is None else {"X-Test-Token": token}
+                    refused = await c.request(method, path, headers=headers, json=body)
+                    assert refused.status_code == 401, (method, path, token)
+            # the guard is the only thing in the way: with the token the routes answer
+            allowed = {"X-Test-Token": TEST_SUPPORT_TOKEN}
+            for method, path in sorted(TEST_SUPPORT_ROUTE_POLICY):
+                body = {"seconds": 1} if path.endswith("/advance") else None
+                answered = await c.request(method, path, headers=allowed, json=body)
+                assert answered.status_code in (200, 501), (method, path, answered.text)
+            await c.post("/test/clock/reset", headers=allowed)
+    finally:
+        await support_app.state.services.db.dispose()
 
 
 def test_no_route_can_trigger_escalation_or_release(settings: Settings) -> None:
@@ -511,7 +650,11 @@ async def test_reauth_routes_need_a_fresh_password(
 
 @pytest.mark.parametrize(
     ("route", "policy"),
-    [(k, p) for k, p in ROUTE_POLICY.items() if isinstance(p, Public) and p.rate_limited],
+    [
+        (k, p)
+        for k, p in ROUTE_POLICY.items()
+        if isinstance(p, Public) and p.rate_limited and p.secret is None
+    ],
     ids=str,
 )
 async def test_public_auth_routes_do_not_require_tokens(
@@ -521,6 +664,150 @@ async def test_public_auth_routes_do_not_require_tokens(
     response = await h.client.request(method, path, json={})
     assert response.status_code == 422  # reached validation: no auth gate in front
     assert "ratelimit-limit" in response.headers
+
+
+# --- machine-to-machine routes: no session, but a secret, and a budget -------------------------
+
+PROBE_TOKEN = "p" * 40
+WHSEC = "whsec_" + base64.b64encode(b"0123456789abcdef0123456789abcdef").decode()
+SECRET_ROUTES = {k for k, p in ROUTE_POLICY.items() if isinstance(p, Public) and p.secret}
+
+
+def test_the_secret_authenticated_routes_are_exactly_the_probe_and_the_webhooks() -> None:
+    """A new route that is public to the session layer but guarded by a secret must be added
+    here, with its own refusal test below."""
+    assert {("POST", "/internal/probe"), ("POST", "/webhooks/email/{provider}")} == SECRET_ROUTES
+    for key in SECRET_ROUTES:
+        policy = ROUTE_POLICY[key]
+        assert isinstance(policy, Public)
+        assert policy.rate_limited, key
+
+
+@pytest.mark.settings(probe_token=PROBE_TOKEN)
+async def test_the_probe_needs_its_secret_and_is_rate_limited(
+    h: Harness, owner_db: psycopg.Connection[dict[str, Any]]
+) -> None:
+    """The route is public to the session layer, guarded by ``X-Probe-Token``, and a flood of
+    requests without it is stopped. (How the budgets are split between right and wrong tokens,
+    and the numbers, are asserted where the probe is tested: ``engine/test_hold.py``.)"""
+    for headers in ({}, {"X-Probe-Token": "wrong-" + PROBE_TOKEN}, {"X-Probe-Token": ""}):
+        refused = await h.client.post("/internal/probe", headers=headers)
+        assert refused.status_code == 401, headers
+        assert problem(refused)["code"] == "unauthenticated"
+    assert owner_db.execute("SELECT count(*) AS n FROM ingestion_probes").fetchone() == {"n": 0}
+
+    accepted = await h.client.post("/internal/probe", headers={"X-Probe-Token": PROBE_TOKEN})
+    assert accepted.status_code == 204
+    assert owner_db.execute("SELECT count(*) AS n FROM ingestion_probes").fetchone() == {"n": 1}
+
+    # a flood of guesses meets a 429 (well before this loop ends) and stores nothing
+    stopped = None
+    for _ in range(500):
+        response = await h.client.post("/internal/probe", headers={"X-Probe-Token": "guess"})
+        if response.status_code == 429:
+            stopped = response
+            break
+        assert response.status_code == 401
+    assert stopped is not None, "guessing the probe token is not rate limited"
+    assert problem(stopped)["code"] == "rate_limited"
+    assert 1 <= int(stopped.headers["retry-after"]) <= 3600
+    assert owner_db.execute("SELECT count(*) AS n FROM ingestion_probes").fetchone() == {"n": 1}
+
+
+@pytest.mark.settings(
+    email_provider="resend", email_api_key="re_test_key_00000000", email_webhook_secret=WHSEC
+)
+async def test_a_webhook_needs_the_providers_signature_and_is_counted(
+    h: Harness, owner_db: psycopg.Connection[dict[str, Any]]
+) -> None:
+    raw = json.dumps({"type": "email.delivered", "data": {"email_id": "not-ours"}}).encode()
+    stamp = int(h.clock.current.timestamp())
+
+    def signed(secret: str, *, at: int = stamp) -> dict[str, str]:
+        key = base64.b64decode(secret.removeprefix("whsec_"))
+        digest = hmac.new(key, f"msg_1.{at}.".encode() + raw, hashlib.sha256).digest()
+        return {
+            "content-type": "application/json",
+            "svix-id": "msg_1",
+            "svix-timestamp": str(at),
+            "svix-signature": "v1," + base64.b64encode(digest).decode(),
+        }
+
+    other = "whsec_" + base64.b64encode(b"fedcba9876543210fedcba9876543210").decode()
+    before = snapshot(owner_db)
+    for headers in (
+        {"content-type": "application/json"},  # nothing
+        signed(other),  # somebody else's secret
+        signed(WHSEC, at=stamp - 3600),  # a genuine signature, an hour old: replay
+    ):
+        refused = await h.client.post("/webhooks/email/resend", content=raw, headers=headers)
+        assert refused.status_code == 401, headers
+        assert refused.headers["ratelimit-limit"] == "600"
+    assert snapshot(owner_db) == before
+
+    accepted = await h.client.post("/webhooks/email/resend", content=raw, headers=signed(WHSEC))
+    assert accepted.status_code == 204
+    assert accepted.headers["ratelimit-limit"] == "600"
+    # a provider this deployment does not use looks like a path that does not exist
+    unused = await h.client.post("/webhooks/email/postmark", content=raw, headers=signed(WHSEC))
+    assert unused.status_code == 404
+    assert unused.headers["ratelimit-limit"] == "600"
+
+
+# --- step-up with the 60-second window ----------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("route", "policy"),
+    [(k, p) for k, p in ROUTE_POLICY.items() if isinstance(p, FreshReauth)],
+    ids=str,
+)
+async def test_fresh_reauth_routes_take_only_the_last_sixty_seconds(
+    h: Harness,
+    owner_db: psycopg.Connection[dict[str, Any]],
+    route: tuple[str, str],
+    policy: FreshReauth,
+) -> None:
+    tokens = await h.signup("fresh@example.com")
+    method, path = route
+    headers = bearer(tokens)
+
+    async def attempt(body: Any = policy.body) -> httpx.Response:
+        return await h.client.request(method, path, headers=headers, json=body)
+
+    def account() -> Any:
+        return owner_db.execute(
+            "SELECT status, deletion_requested_at FROM users WHERE id = %s",
+            (tokens["user"]["id"],),
+        ).fetchone()
+
+    untouched = account()
+
+    never = await attempt()
+    assert never.status_code == 403
+    assert problem(never)["code"] == "reauth_required"
+
+    # a confirmation a minute old does not count, although the 5-minute routes would take it
+    assert (await h.reauth(tokens)).status_code == 204
+    h.clock.advance(seconds=61)
+    stale = await attempt()
+    assert stale.status_code == 403
+    assert problem(stale)["code"] == "reauth_required"
+    assert account() == untouched
+
+    assert (await h.reauth(tokens)).status_code == 204
+    if policy.destructive:
+        # the typed word is the second half of the confirmation
+        for wrong in ({}, {"confirm": "delete"}, {"confirm": "DELETE", "tier": "premium"}):
+            refused = await attempt(wrong)
+            assert refused.status_code == 422, wrong
+            assert account() == untouched
+    done = await attempt()
+    assert done.status_code in (200, 202), done.text  # the 403 above was the window, not a bug
+    if policy.destructive:
+        assert account()["status"] == "pending_deletion"
+        gone = await h.client.get("/v1/me", headers=headers)
+        assert gone.status_code == 401  # the session ended with the account
 
 
 # --- web pages --------------------------------------------------------------------------------
@@ -565,6 +852,47 @@ async def test_web_posts_need_a_csrf_token(
     as_json = await h.client.post(path, json={**policy.form, "csrf": csrf})
     assert as_json.status_code == 403  # not a urlencoded form: the CSRF check cannot pass
     assert owner_db.execute("SELECT * FROM users ORDER BY id").fetchall() == before
+
+
+@pytest.mark.parametrize(("route", "policy"), WEB_POSTS, ids=str)
+async def test_web_posts_are_limited_per_address_as_declared(
+    h: Harness, route: tuple[str, str], policy: Web
+) -> None:
+    """``Web.ip_limit`` is how many POSTs one address gets before the 429 page (API_SPEC §16).
+    Every route that declares none must not run into one (its budget, if any, is per user)."""
+    _, path = route
+
+    async def post(client: httpx.AsyncClient, number: int) -> httpx.Response:
+        page = await client.get(policy.csrf_page)
+        found = re.search(r'name="csrf" value="([^"]+)"', page.text)
+        assert found is not None
+        form = dict(policy.form)
+        if "email" in form:  # /a/delete and /a/login also count per address: vary it
+            form["email"] = f"flood{number}@example.com"
+        return await client.post(path, data={**form, "csrf": found[1]})
+
+    # more than the largest declared budget (60): a route sharing any bucket would trip
+    budget = policy.ip_limit if policy.ip_limit is not None else 65
+    for number in range(budget):
+        response = await post(h.client, number)
+        assert response.status_code != 429, (path, number)
+        assert response.status_code < 500, (path, number)
+    over = await post(h.client, budget)
+    if not policy.rate_limited:
+        assert over.status_code != 429
+        return
+    assert over.status_code == 429
+    assert over.headers["content-type"].startswith("text/html")  # a page, not a problem document
+    assert int(over.headers["retry-after"]) >= 1
+    assert over.headers["ratelimit-limit"] == str(policy.ip_limit)
+    assert over.headers["ratelimit-remaining"] == "0"
+    # another address has its own budget ...
+    transport = httpx.ASGITransport(app=h.app, client=("198.51.100.77", 52000))
+    async with httpx.AsyncClient(transport=transport, base_url="https://api.afterme.test") as c:
+        assert (await post(c, 0)).status_code != 429
+    # ... and the window ends
+    h.clock.advance(hours=1)
+    assert (await post(h.client, budget + 1)).status_code != 429
 
 
 @pytest.mark.parametrize(("route", "policy"), WEB_ROUTES, ids=str)

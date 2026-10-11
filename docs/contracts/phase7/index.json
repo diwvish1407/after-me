@@ -1,0 +1,118 @@
+{
+  "contract": "afterme-phase7",
+  "base_path": "/v1",
+  "notes": [
+    "Values are fictional placeholders; IDs are not real.",
+    "Errors are RFC 9457 application/problem+json; see problems[].",
+    "GET /v1/activity is newest first with an opaque cursor. Display strings are composed by the app from `action` and `params`; an action the app does not know is shown generically.",
+    "POST /v1/me/export and DELETE /v1/me need the password to have been confirmed within the last 60 seconds (POST /v1/auth/reauth); an export spends the confirmation, and exports are limited to 3 an hour; the export is a file download.",
+    "DELETE /v1/me ends every session: the app must go back to sign-in whatever else happens.",
+    "incident_with_release_viewed and incident_closed_release_revoked show the incident's `releases` as the owner sees them: viewed once; then taken back with a title that can no longer be opened (null)."
+  ],
+  "endpoints": [
+    {
+      "name": "activity_first_page",
+      "method": "GET",
+      "path": "/v1/activity?limit=3",
+      "auth": "bearer",
+      "status": 200,
+      "request": null,
+      "response": "activity_first_page.response.json"
+    },
+    {
+      "name": "activity_next_page",
+      "method": "GET",
+      "path": "/v1/activity",
+      "auth": "bearer",
+      "status": 200,
+      "request": null,
+      "response": "activity_next_page.response.json"
+    },
+    {
+      "name": "export",
+      "method": "POST",
+      "path": "/v1/me/export",
+      "auth": "bearer",
+      "status": 200,
+      "request": null,
+      "response": "export.response.json",
+      "response_headers": {
+        "Content-Disposition": "attachment; filename=\"afterme-export.json\""
+      }
+    },
+    {
+      "name": "account_delete",
+      "method": "DELETE",
+      "path": "/v1/me",
+      "auth": "bearer",
+      "status": 202,
+      "request": "account_delete.request.json",
+      "response": "account_delete.response.json"
+    },
+    {
+      "name": "incident_with_release_viewed",
+      "method": "GET",
+      "path": "/v1/incidents/current",
+      "auth": "bearer",
+      "status": 200,
+      "request": null,
+      "response": "incident_with_release_viewed.response.json"
+    },
+    {
+      "name": "incident_closed_release_revoked",
+      "method": "GET",
+      "path": "/v1/incidents/{incident_id}",
+      "auth": "bearer",
+      "status": 200,
+      "request": null,
+      "response": "incident_closed_release_revoked.response.json"
+    }
+  ],
+  "problems": [
+    {
+      "name": "problem_activity_bad_cursor",
+      "method": "GET",
+      "path": "/v1/activity",
+      "auth": "bearer",
+      "status": 422,
+      "request": null,
+      "response": "problem_activity_bad_cursor.response.json"
+    },
+    {
+      "name": "problem_reauth_export",
+      "method": "POST",
+      "path": "/v1/me/export",
+      "auth": "bearer",
+      "status": 403,
+      "request": null,
+      "response": "problem_reauth_export.response.json"
+    },
+    {
+      "name": "problem_reauth_delete",
+      "method": "DELETE",
+      "path": "/v1/me",
+      "auth": "bearer",
+      "status": 403,
+      "request": "problem_reauth_delete.request.json",
+      "response": "problem_reauth_delete.response.json"
+    },
+    {
+      "name": "problem_export_rate_limited",
+      "method": "POST",
+      "path": "/v1/me/export",
+      "auth": "bearer",
+      "status": 429,
+      "request": null,
+      "response": "problem_export_rate_limited.response.json"
+    },
+    {
+      "name": "problem_delete_unconfirmed",
+      "method": "DELETE",
+      "path": "/v1/me",
+      "auth": "bearer",
+      "status": 422,
+      "request": "problem_delete_unconfirmed.request.json",
+      "response": "problem_delete_unconfirmed.response.json"
+    }
+  ]
+}

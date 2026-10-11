@@ -15,7 +15,7 @@ from enum import StrEnum
 from functools import cached_property
 from pathlib import Path
 from typing import Annotated, Literal, Self
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urlsplit
 
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.hazmat.primitives.serialization import load_pem_private_key
@@ -34,6 +34,12 @@ MIN_PEPPER_BYTES = 32
 _MIN_RELEASE_OFFSET_FLOOR = 1_440
 _SETTLE_DELAY_FLOOR_SECONDS = 300
 _LATE_SHIFT_FLOOR_MINUTES = 30
+_MIN_API_KEY = 8
+# A webhook secret sits on a public URL that anyone can send requests to: 32 characters is
+# 192 bits of base64, and no more than a password manager generates anyway (Phase 9, F12).
+_MIN_WEBHOOK_SECRET = 32
+_LOOPBACK_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
+_TLS_SSLMODES = frozenset({"require", "verify-ca", "verify-full"})
 # Providers that only exist for development and tests; refused in staging/prod. A module-level
 # set so the production validators can be exercised end to end in tests (Phase 8 adds the real
 # provider and this set then stops being the only gate).
@@ -106,11 +112,36 @@ class Settings(BaseSettings):
     kms_local_key: SecretStr = SecretStr(_DEV_KMS_LOCAL_KEY)
     kms_local_key_previous: SecretStr | None = None
 
-    email_provider: Literal["console", "recording"] = "console"
+    # ------------------------------------------------------------------ notifications
+    # DEPLOYMENT §4. ``console`` and ``recording`` are for development and tests; the others
+    # are real providers (ARCHITECTURE §4.7).
+    email_provider: Literal["console", "recording", "resend", "postmark", "smtp"] = "console"
     email_from: Annotated[str, Field(min_length=3, max_length=200)] = (
         "AfterMe <no-reply@afterme.invalid>"
     )
+    email_api_key: SecretStr | None = None
+    # A second provider that takes over when the first cannot be used (FR-NOT-06).
+    email_fallback_provider: Literal["resend", "postmark", "smtp"] | None = None
+    email_fallback_api_key: SecretStr | None = None
+    # What authenticates a provider's delivery/bounce webhook (POST /webhooks/email/{provider}):
+    # Resend's signing secret (``whsec_…``), or the password of the Basic-auth URL given to
+    # Postmark.
+    email_webhook_secret: SecretStr | None = None
+    email_fallback_webhook_secret: SecretStr | None = None
+    postmark_message_stream: Annotated[str, Field(min_length=1, max_length=64)] = "outbound"
+    smtp_host: str | None = None
+    smtp_port: Annotated[int, Field(ge=1, le=65_535)] = 587
+    smtp_username: str | None = None
+    smtp_password: SecretStr | None = None
+    smtp_implicit_tls: bool = False
     dev_mail_dir: Path = BACKEND_DIR / ".dev_mail"
+
+    # ``log`` only logs the message type (development); ``noop`` drops silently (tests);
+    # ``fcm`` is Firebase Cloud Messaging over HTTP v1. Without ``fcm_credentials_json`` the
+    # adapter uses the metadata server (Workload Identity on Google Cloud).
+    push_provider: Literal["log", "noop", "fcm"] = "log"
+    fcm_project_id: Annotated[str, Field(min_length=1, max_length=64)] | None = None
+    fcm_credentials_json: SecretStr | None = None
 
     trusted_proxy_hops: Annotated[int, Field(ge=0, le=10)] = 0
     min_client_version: str = "0.0.0"
@@ -121,9 +152,21 @@ class Settings(BaseSettings):
 
     rate_limit_enabled: bool = True
 
+    # ------------------------------------------------------------------ test support
+    # A movable clock and a mail reader for integration tests (TEST_PLAN §2). Off by default,
+    # refused in production, and in any environment but ``test`` it needs a token.
+    test_support_enabled: bool = False
+    test_support_token: SecretStr | None = None
+
     # ------------------------------------------------------------------ escalation engine
     # ESCALATION_ENGINE §13. The worker process connects as ``afterme_worker``.
     worker_database_url: SecretStr = SecretStr(_DEV_WORKER_URL)
+    # The retention job (Phase 7: account purge). In production it connects as the
+    # ``afterme_maintenance`` role; in development that role cannot log in, so the default is
+    # the owner URL.
+    maintenance_database_url: SecretStr = SecretStr(_DEV_MIGRATION_URL)
+    # How long a deleted account's remaining rows are kept before the hard delete.
+    account_deletion_days: Annotated[int, Field(ge=1, le=90)] = 30
     tick_seconds: Annotated[int, Field(ge=1, le=300)] = 15
     grace_min_minutes: Annotated[int, Field(ge=1, le=10_080)] = 60
     grace_max_minutes: Annotated[int, Field(ge=1, le=10_080)] = 4_320
@@ -184,6 +227,8 @@ class Settings(BaseSettings):
             *self._check_secrets(),
             *self._check_hardening(),
             *self._check_environment_safety(),
+            *self._check_providers(),
+            *self._check_test_support(),
         ]
         if problems:
             raise ConfigurationError(
@@ -292,12 +337,125 @@ class Settings(BaseSettings):
                 )
         return problems
 
+    def _check_providers(self) -> list[str]:
+        problems: list[str] = []
+        for role, name, key in (
+            ("EMAIL_PROVIDER", self.email_provider, self.email_api_key),
+            ("EMAIL_FALLBACK_PROVIDER", self.email_fallback_provider, self.email_fallback_api_key),
+        ):
+            if name in ("resend", "postmark") and (
+                key is None or len(key.get_secret_value()) < _MIN_API_KEY
+            ):
+                key_name = "EMAIL_API_KEY" if role == "EMAIL_PROVIDER" else "EMAIL_FALLBACK_API_KEY"
+                problems.append(f"{key_name} is required for {role}={name}")
+        smtp_used = "smtp" in (self.email_provider, self.email_fallback_provider)
+        if smtp_used and not self.smtp_host:
+            problems.append("SMTP_HOST is required when a provider is smtp")
+        if (
+            self.email_fallback_provider is not None
+            and self.email_fallback_provider == self.email_provider
+        ):
+            problems.append("EMAIL_FALLBACK_PROVIDER must differ from EMAIL_PROVIDER")
+        if self.push_provider == "fcm" and not self.fcm_project_id:
+            problems.append("FCM_PROJECT_ID is required for PUSH_PROVIDER=fcm")
+        if self.is_production_like:
+            if self.push_provider != "fcm":
+                problems.append("PUSH_PROVIDER must be fcm")
+            for role, name, secret in (
+                ("EMAIL_WEBHOOK_SECRET", self.email_provider, self.email_webhook_secret),
+                (
+                    "EMAIL_FALLBACK_WEBHOOK_SECRET",
+                    self.email_fallback_provider,
+                    self.email_fallback_webhook_secret,
+                ),
+            ):
+                if name in ("resend", "postmark") and (
+                    secret is None or len(secret.get_secret_value()) < _MIN_API_KEY
+                ):
+                    problems.append(f"{role} is required (the provider's bounces must reach us)")
+                elif (
+                    name == "postmark"
+                    and secret is not None
+                    and len(secret.get_secret_value()) < _MIN_WEBHOOK_SECRET
+                ):
+                    problems.append(
+                        f"{role} must be at least {_MIN_WEBHOOK_SECRET} characters: it is a "
+                        "password on a public URL"
+                    )
+                elif (
+                    name == "resend"
+                    and secret is not None
+                    and not _is_svix_secret(secret.get_secret_value())
+                ):
+                    problems.append(f"{role} must be the whsec_ signing secret from Resend")
+            if self.email_from.rstrip(">").endswith(".invalid"):
+                problems.append("EMAIL_FROM must be an address on the verified sending domain")
+        return problems
+
+    def _check_transport_and_logging(self) -> list[str]:
+        problems: list[str] = []
+        if self.log_level == "DEBUG":
+            # Third-party libraries log request detail at DEBUG, and the access log joins each
+            # person to a route and a time: not in an environment with real people in it.
+            problems.append("LOG_LEVEL must not be DEBUG")
+        for name, url in (
+            ("DATABASE_URL", self.database_url),
+            ("WORKER_DATABASE_URL", self.worker_database_url),
+            ("MAINTENANCE_DATABASE_URL", self.maintenance_database_url),
+        ):
+            if not _database_url_is_protected(url.get_secret_value()):
+                problems.append(
+                    f"{name} must require TLS (sslmode=require, verify-ca or verify-full) "
+                    "unless it points at a local proxy"
+                )
+        return problems
+
+    def _check_local_only(self) -> list[str]:
+        """``dev`` and ``test`` carry the development key-encryption key, console mail and no
+        refusals at all. A process that is still ``dev`` because AFTERME_APP_ENV was forgotten
+        must not be able to talk to a database that is not on this machine."""
+        problems: list[str] = []
+        for name, url in (
+            ("DATABASE_URL", self.database_url),
+            ("WORKER_DATABASE_URL", self.worker_database_url),
+            ("MAINTENANCE_DATABASE_URL", self.maintenance_database_url),
+        ):
+            host = _database_host(url.get_secret_value())
+            if host is not None and host not in _LOOPBACK_HOSTS and not host.startswith("/"):
+                problems.append(
+                    f"{name} points at a database that is not on this machine, but APP_ENV is "
+                    f"{self.app_env.value}: set AFTERME_APP_ENV=staging or prod so that the "
+                    "production refusals apply"
+                )
+        return problems
+
+    def _check_test_support(self) -> list[str]:
+        if not self.test_support_enabled:
+            return []
+        problems: list[str] = []
+        if self.app_env is AppEnv.PROD:
+            problems.append("TEST_SUPPORT_ENABLED must never be set in production")
+        token = self.test_support_token
+        if token is None or len(token.get_secret_value()) < MIN_PEPPER_BYTES:
+            problems.append(
+                f"TEST_SUPPORT_TOKEN is required and must be at least {MIN_PEPPER_BYTES} bytes "
+                "when test support is enabled"
+            )
+        if self.email_provider not in DEV_ONLY_EMAIL_PROVIDERS:
+            # Moving the clock opens incidents and alerts contacts for every account in the
+            # database: only where no real message can leave.
+            problems.append(
+                "TEST_SUPPORT_ENABLED needs a development email provider (console or recording)"
+            )
+        return problems
+
     def _check_environment_safety(self) -> list[str]:
         if not self.is_production_like:
-            return []
+            return self._check_local_only()
         problems: list[str] = []
         if self.debug:
             problems.append("DEBUG must be false")
+        problems.extend(self._check_transport_and_logging())
         if self.email_provider in DEV_ONLY_EMAIL_PROVIDERS:
             problems.append(f"EMAIL_PROVIDER={self.email_provider} is for development and tests")
         for name in ("public_base_url", "api_base_url"):
@@ -308,6 +466,8 @@ class Settings(BaseSettings):
             problems.append("DATABASE_URL must be set explicitly")
         if "worker_database_url" not in explicitly_set:
             problems.append("WORKER_DATABASE_URL must be set explicitly")
+        if "maintenance_database_url" not in explicitly_set:
+            problems.append("MAINTENANCE_DATABASE_URL must be set explicitly")
         if self.probe_token is None or len(self.probe_token.get_secret_value()) < MIN_PEPPER_BYTES:
             problems.append(
                 f"PROBE_TOKEN is required and must be at least {MIN_PEPPER_BYTES} bytes"
@@ -324,6 +484,33 @@ class Settings(BaseSettings):
                 "TRUSTED_PROXY_HOPS must be set explicitly (0 = no proxy, 1 = one load balancer)"
             )
         return problems
+
+
+def _database_host(url: str) -> str | None:
+    try:
+        return urlsplit(url).hostname
+    except ValueError:
+        return None
+
+
+def _database_url_is_protected(url: str) -> bool:
+    """TLS required on the wire, or a loopback host (a local proxy that carries it)."""
+    host = _database_host(url)
+    if host is None or host in _LOOPBACK_HOSTS or host.startswith("/"):
+        return True
+    values = parse_qs(urlsplit(url).query).get("sslmode", [])
+    return bool(values) and values[-1] in _TLS_SSLMODES
+
+
+def _is_svix_secret(value: str) -> bool:
+    """``whsec_`` followed by base64: what Resend's webhook signing secret looks like. A secret
+    that cannot be decoded would make every webhook fail verification, silently."""
+    if not value.startswith("whsec_"):
+        return False
+    try:
+        return len(base64.b64decode(value.removeprefix("whsec_"), validate=True)) >= 16  # noqa: PLR2004
+    except ValueError:
+        return False
 
 
 def decode_kek(value: str) -> bytes | None:
@@ -351,7 +538,16 @@ def load_settings() -> Settings:
     The ``backend/.env`` file is read only when the process environment selects ``dev`` (or does
     not select anything). A ``.env`` file can never switch the process into another environment.
     """
-    requested = os.environ.get("AFTERME_APP_ENV", AppEnv.DEV.value).strip().lower()
+    configured = os.environ.get("AFTERME_APP_ENV")
+    if configured is None and not DOTENV_PATH.is_file():
+        # Not a workstation (there is no .env) and the environment was not chosen: running as
+        # "dev" would switch off every production refusal without anyone having said so.
+        msg = (
+            "AFTERME_APP_ENV is not set. Set it to dev, test, staging or prod; staging and prod "
+            "enforce the production refusals"
+        )
+        raise ConfigurationError(msg)
+    requested = (configured or AppEnv.DEV.value).strip().lower()
     if requested == AppEnv.DEV.value and DOTENV_PATH.is_file():
         settings = Settings(_env_file=DOTENV_PATH)
         if settings.app_env is not AppEnv.DEV:

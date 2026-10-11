@@ -4,18 +4,23 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from sqlalchemy.dialects.postgresql import insert
+
 from app.audit.writer import AuditWriter
 from app.auth.tokens import AccessTokenService
 from app.core.clock import Clock, DbClock
 from app.core.config import Settings, decode_kek
 from app.core.db import Database
-from app.notifications.email import ConsoleEmailProvider, EmailProvider, RecordingEmailProvider
-from app.notifications.mailer import Mailer
+from app.notifications.email import EmailMessage, EmailProvider, ProviderResult
+from app.notifications.mailer import Mailer, ReceiptSink
+from app.notifications.models import EmailReceipt
+from app.notifications.providers.factory import build_email_provider
 from app.security.hashing import Pepper
 from app.security.kms import LocalKms
 from app.security.passwords import PasswordHasher
 from app.security.rate_limit import RateLimiter
 from app.security.vault import InstructionVault
+from app.testsupport.clock import OffsetDbClock
 
 
 @dataclass(frozen=True)
@@ -33,9 +38,27 @@ class AppServices:
 
 
 def _email_provider(settings: Settings) -> EmailProvider:
-    if settings.email_provider == "recording":
-        return RecordingEmailProvider()
-    return ConsoleEmailProvider(settings.dev_mail_dir)
+    return build_email_provider(settings)
+
+
+def _receipt_writer(db: Database) -> ReceiptSink:
+    async def write(message: EmailMessage, result: ProviderResult) -> None:
+        if message.contact_id is None or message.owner_id is None:
+            return
+        async with db.independent_session() as session:
+            await session.execute(
+                insert(EmailReceipt)
+                .values(
+                    user_id=message.owner_id,
+                    contact_id=message.contact_id,
+                    template_key=message.template,
+                    provider=result.provider,
+                    provider_message_id=result.message_id,
+                )
+                .on_conflict_do_nothing(index_elements=["provider", "provider_message_id"])
+            )
+
+    return write
 
 
 def _vault(settings: Settings, db: Database) -> InstructionVault:
@@ -73,7 +96,7 @@ def build_services(
     return AppServices(
         settings=settings,
         db=db,
-        clock=clock or DbClock(),
+        clock=clock or (OffsetDbClock() if settings.test_support_enabled else DbClock()),
         pepper=pepper,
         passwords=PasswordHasher(
             time_cost=settings.argon2_time_cost,
@@ -89,7 +112,11 @@ def build_services(
         ),
         limiter=RateLimiter(db=db, pepper=pepper, enabled=settings.rate_limit_enabled),
         audit=AuditWriter(db),
-        mailer=Mailer(email_provider or _email_provider(settings), sender=settings.email_from),
+        mailer=Mailer(
+            email_provider or _email_provider(settings),
+            sender=settings.email_from,
+            receipts=_receipt_writer(db),
+        ),
         vault=_vault(settings, db),
     )
 

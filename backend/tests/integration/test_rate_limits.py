@@ -55,17 +55,43 @@ async def test_login_per_ip(h: Harness, owner_db: Db) -> None:
         assert response.status_code == 401
 
 
-async def test_login_per_account_across_ips(h: Harness) -> None:
+async def test_login_budget_is_per_account_and_network(h: Harness) -> None:
+    """Five failures from one address end that address's attempts at this account (even with
+    the right password: nothing tells it apart from the next guess), and not the owner's from
+    anywhere else. A budget per account alone let a stranger who knew an address keep its owner
+    out with five requests (Phase 9, F1)."""
     await h.signup("target@example.com")
+    async with _client_from(h.app, "198.51.100.1") as stranger:
+        h.client = stranger
+        for _ in range(5):
+            assert (await h.login("target@example.com", "wrong guess number")).status_code == 401
+        _assert_429(await h.login("target@example.com"))
+    async with _client_from(h.app, "198.51.100.200") as owner:
+        h.client = owner
+        assert (await h.login("target@example.com")).status_code == 200
+
+
+async def test_failures_spread_over_networks_do_not_end_anyones_attempts(h: Harness) -> None:
+    await h.signup("spread@example.com")
     for i in range(5):
         async with _client_from(h.app, f"198.51.100.{i + 1}") as c:
             h.client = c
-            assert (await h.login("target@example.com", "wrong guess number")).status_code == 401
+            assert (await h.login("spread@example.com", "wrong guess number")).status_code == 401
     async with _client_from(h.app, "198.51.100.200") as c:
         h.client = c
-        _assert_429(await h.login("target@example.com"))  # even the right password
-        h.clock.advance(minutes=15)
-        assert (await h.login("target@example.com")).status_code == 200
+        assert (await h.login("spread@example.com")).status_code == 200  # no 429 for anybody
+
+
+async def test_recovery_budgets_are_per_address_and_network(h: Harness) -> None:
+    """The reset, signup and deletion-link requests for an address are limited per (address,
+    network): a stranger who used up the owner's three an hour cannot also stop the owner."""
+    await h.signup("recover@example.com")
+    for _ in range(3):
+        assert (await h.forgot("recover@example.com")).status_code == 202
+    _assert_429(await h.forgot("recover@example.com"))
+    async with _client_from(h.app, "198.51.100.77") as owner:
+        h.client = owner
+        assert (await h.forgot("recover@example.com")).status_code == 202
 
 
 async def test_forwarded_for_is_ignored_without_trusted_proxies(h: Harness) -> None:

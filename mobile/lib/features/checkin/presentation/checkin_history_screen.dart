@@ -7,6 +7,7 @@ import '../../../app/theme/dimens.dart';
 import '../../../app/theme/tokens.dart';
 import '../../../core/api/failures/app_failure.dart';
 import '../../../core/design_system/design_system.dart';
+import '../../../core/freshness/stale_data.dart';
 import '../../../core/time/time_format.dart';
 import '../../../l10n/gen/app_localizations.dart';
 import '../../auth/application/me_controller.dart';
@@ -87,6 +88,7 @@ class _HistoryList extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        const StaleDataNote(area: DataArea.checkIns),
         if (timezone != null) ...[
           BodyText(l10n.scheduleTimezoneNote(timezone!)),
           Gap.sm,

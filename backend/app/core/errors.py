@@ -134,6 +134,17 @@ class InvalidState(AppError):
     title = "Conflict"
 
 
+class IdempotencyKeyReused(AppError):
+    """The key belongs to another operation (an I'M OK sent under a key that was used for I'M
+    SAFE, or the reverse). Answering with the other operation's result would tell a person that
+    something was done that was not."""
+
+    status_code = 409
+    code = "idempotency_key_reused"
+    title = "This request key was already used"
+    default_detail = "Try again."
+
+
 class SafeRequired(AppError):
     status_code = 409
     code = "safe_required"

@@ -27,13 +27,22 @@ USER_STAGE_DEFERRED: Final = "incident_delayed"
 USER_STAGE_EXECUTED: Final = "stage_executed"
 USER_FINAL_WARNING: Final = "release_final_warning"
 USER_ALL_CLEAR: Final = "all_clear_confirmation"
+# What the person is told when an operator withdrew an alert for them (no check-in happened).
+USER_ALERT_WITHDRAWN: Final = "alert_withdrawn_notice"
 USER_HOLD_NOTICE: Final = "service_interruption"
+# A contact the person depends on cannot be reached (their address bounced, or a message to
+# them could not be delivered for a day). Email and push.
+USER_CONTACT_UNREACHABLE: Final = "contact_unreachable"
 CONTACT_ALERT: Final = "contact_alert"
 CONTACT_ALERT_WITH_RELEASE: Final = "contact_alert_with_release"
 CONTACT_RELEASE: Final = "contact_release"
 # Messages that carry a link to the portal; the dispatcher mints the link when it sends.
 RELEASE_TEMPLATES: Final = frozenset({CONTACT_ALERT_WITH_RELEASE, CONTACT_RELEASE})
 CONTACT_ALL_CLEAR: Final = "contact_all_clear"
+# The same job when nobody checked in: the account was closed, or an operator voided the incident
+# after a fault. It withdraws the alert and does **not** say the person is safe.
+CONTACT_ALERT_WITHDRAWN: Final = "contact_alert_withdrawn"
+UNDOING_TEMPLATES: Final = frozenset({CONTACT_ALL_CLEAR, CONTACT_ALERT_WITHDRAWN})
 
 # Which channels each user-facing template uses (USER_FLOWS §6, ESCALATION_ENGINE §5.3).
 USER_CHANNELS: Final[dict[str, tuple[str, ...]]] = {
@@ -45,6 +54,8 @@ USER_CHANNELS: Final[dict[str, tuple[str, ...]]] = {
     USER_STAGE_EXECUTED: ("push", "email"),
     USER_FINAL_WARNING: ("push", "email"),
     USER_ALL_CLEAR: ("push", "email"),
+    USER_ALERT_WITHDRAWN: ("email",),
+    USER_CONTACT_UNREACHABLE: ("push", "email"),
     USER_HOLD_NOTICE: ("push", "email"),
 }
 
@@ -135,6 +146,29 @@ async def cancel_for_contact(
             Notification.user_id == owner_id,
             Notification.contact_id == contact_id,
             Notification.status == "queued",
+        )
+        .values(status="cancelled", cancelled_reason=reason, updated_at=now)
+        .returning(Notification.id)
+    )
+    return len(result.all())
+
+
+async def cancel_for_owner(
+    session: AsyncSession,
+    *,
+    owner_id: uuid.UUID,
+    keep_templates: frozenset[str],
+    reason: str,
+    now: datetime,
+) -> int:
+    """Cancel everything of this account that is still queued, except the templates in
+    ``keep_templates`` (account deletion keeps only the all-clear)."""
+    result = await session.execute(
+        update(Notification)
+        .where(
+            Notification.user_id == owner_id,
+            Notification.status == "queued",
+            Notification.template_key.not_in(keep_templates),
         )
         .values(status="cancelled", cancelled_reason=reason, updated_at=now)
         .returning(Notification.id)

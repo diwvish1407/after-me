@@ -27,6 +27,9 @@ from app.core.net import client_ip, rate_limit_subject
 from app.security.rate_limit import DEFAULT_PER_USER, RateLimit, RateLimitResult
 
 REAUTH_WINDOW: Final = timedelta(minutes=5)
+# Export and account deletion: the password must have been entered for *this*, moments ago. A
+# confirmation made a few minutes earlier for something else does not count.
+FRESH_REAUTH_WINDOW: Final = timedelta(seconds=60)
 LAST_USED_RESOLUTION: Final = timedelta(minutes=5)
 USER_AGENT_MAX: Final = 200
 _RATE_LIMIT_RESULT_KEY: Final = "afterme.rate_limit_result"
@@ -205,6 +208,20 @@ async def require_reauth(
 
 
 ReauthUserDep = Annotated[CurrentUser, Depends(require_reauth)]
+
+
+async def require_fresh_reauth(
+    current: CurrentUserDep, session: DbSession, clock: ClockDep
+) -> CurrentUser:
+    """Step-up for the two actions that cannot be taken back or that read everything: the
+    password was entered within the last minute."""
+    now = await clock.now(session)
+    if current.reauthenticated_at is None or now - current.reauthenticated_at > FRESH_REAUTH_WINDOW:
+        raise ReauthRequired
+    return current
+
+
+FreshReauthUserDep = Annotated[CurrentUser, Depends(require_fresh_reauth)]
 
 
 _IDEMPOTENCY_KEY_RE: Final = re.compile(r"[A-Za-z0-9_.:-]{16,64}")

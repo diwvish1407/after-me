@@ -195,15 +195,31 @@ class AppLockController extends Notifier<AppLockState> {
     }
   }
 
+  /// How long a system dialog the app opened (a permission prompt, the contact picker,
+  /// the save dialog) may take without that counting as time in the background: long
+  /// enough to choose a folder, short enough that the lock is not held open by a dialog
+  /// somebody walked away from. The person's own timeout counts too, when it is longer.
+  static const Duration suspensionCap = Duration(minutes: 2);
+
   /// Runs [action] (a system permission dialog, the contact picker, ...) without the
-  /// resulting trip to the background locking the app.
+  /// resulting trip to the background locking the app. When [action] took longer than
+  /// [suspensionCap] it did count as time away: the app is locked when it returns.
   Future<T> runWithoutLocking<T>(Future<T> Function() action) async {
     _suspended++;
+    final startedAt = _now();
     try {
       return await action();
     } finally {
       _suspended--;
       _backgroundedAt = null;
+      if (ref.mounted && state.enabled && !state.locked) {
+        final allowed = state.timeout.duration > suspensionCap
+            ? state.timeout.duration
+            : suspensionCap;
+        if (_now().difference(startedAt) > allowed) {
+          state = state.copyWith(locked: true, clearOutcome: true);
+        }
+      }
     }
   }
 

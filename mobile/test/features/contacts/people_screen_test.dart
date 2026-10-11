@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:afterme/app/router.dart';
 import 'package:afterme/core/api/failures/app_failure.dart';
+import 'package:afterme/core/design_system/design_system.dart';
 import 'package:afterme/features/contacts/application/contacts_controller.dart';
 import 'package:afterme/features/contacts/data/contacts_repository.dart';
 import 'package:afterme/features/contacts/presentation/add_contact_screen.dart';
@@ -9,6 +10,7 @@ import 'package:afterme/features/contacts/presentation/contact_detail_screen.dar
 import 'package:afterme/features/contacts/presentation/people_screen.dart';
 import 'package:afterme/features/onboarding/application/setup_controller.dart';
 import 'package:afterme/features/plan/data/plan_repository.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -395,6 +397,101 @@ void main() {
         find.text('More trusted contacts are part of Premium'),
         findsOneWidget,
       );
+    });
+  });
+
+  group('People: a contact answers out of band', () {
+    // The invitation is answered on the web, where this app cannot see it. Home's counts
+    // said "1 of 1 accepted" while People kept saying "Pending".
+    Finder tab(String label) => find.descendant(
+      of: find.byType(NavigationBar),
+      matching: find.text(label),
+    );
+
+    List<TrustedContact> many() => [
+      for (var i = 1; i <= 8; i++)
+        testContact(
+          id: 'c$i',
+          name: 'Contact $i',
+          email: 'c$i@example.com',
+          priority: i,
+          status: VerificationStatus.pending,
+        ),
+    ];
+
+    testWidgets('the list is read again when the tab comes back: no spinner, '
+        'the scroll position stays, the new status shows', (tester) async {
+      final fakes = _fakes(many());
+      await openApp(tester, fakes: fakes, size: const Size(390, 600));
+      expect(find.text('Pending'), findsWidgets);
+
+      await tester.drag(find.byType(Scrollable).first, const Offset(0, -300));
+      await tester.pumpAndSettle();
+      double offset() => tester
+          .state<ScrollableState>(find.byType(Scrollable).first)
+          .position
+          .pixels;
+      final before = offset();
+      expect(before, greaterThan(0));
+
+      // Away to Home, and the contact accepts meanwhile.
+      await tester.tap(tab('Home'));
+      await tester.pumpAndSettle();
+      fakes.contacts.respond('c1', VerificationStatus.verified);
+      fakes.contacts.respond('c2', VerificationStatus.verified);
+
+      // Back, with the answer held: the old list is what is on screen meanwhile.
+      final gate = Completer<void>();
+      fakes.contacts.listGate = gate.future;
+      final calls = fakes.contacts.calls.where((c) => c == 'list').length;
+      await tester.tap(tab('People'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+      expect(find.byType(LoadingView), findsNothing);
+      expect(
+        fakes.contacts.calls.where((c) => c == 'list').length,
+        calls + 1,
+        reason: 'read again, once',
+      );
+
+      gate.complete();
+      await tester.pumpAndSettle();
+      expect(offset(), before, reason: 'it did not jump');
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(PeopleScreen)),
+      );
+      expect(
+        container
+            .read(contactsControllerProvider)
+            .value!
+            .where((c) => c.isAccepted)
+            .map((c) => c.id),
+        ['c1', 'c2'],
+      );
+    });
+
+    testWidgets('the first build does not read twice', (tester) async {
+      final fakes = _fakes(many());
+      await openApp(tester, fakes: fakes);
+      expect(fakes.contacts.calls.where((c) => c == 'list'), hasLength(1));
+    });
+
+    testWidgets('a status that changed while the tab was hidden is what the '
+        'chip says when it is back', (tester) async {
+      final fakes = _fakes([testContact(status: VerificationStatus.pending)]);
+      await openApp(tester, fakes: fakes);
+      expect(find.text('Pending'), findsWidgets);
+      expect(find.text('Accepted'), findsNothing);
+
+      await tester.tap(tab('Home'));
+      await tester.pumpAndSettle();
+      fakes.contacts.respond('c1', VerificationStatus.verified);
+      await tester.tap(tab('People'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Accepted'), findsWidgets);
+      expect(find.text('Pending'), findsNothing);
     });
   });
 }

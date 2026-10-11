@@ -11,7 +11,7 @@ from app.api.deps import (
     ContextDep,
     CurrentUserDep,
     DbSession,
-    ReauthUserDep,
+    FreshReauthUserDep,
     ServicesDep,
     ip_rate_limit,
 )
@@ -198,7 +198,7 @@ async def change_password(
 @router.post("/email/change/start", status_code=status.HTTP_202_ACCEPTED)
 async def email_change_start(
     body: EmailChangeStartRequest,
-    current: ReauthUserDep,
+    current: FreshReauthUserDep,
     service: AccountServiceDep,
     services: ServicesDep,
     background: BackgroundTasks,

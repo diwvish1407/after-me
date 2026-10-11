@@ -439,9 +439,14 @@ void main() {
         planFailureMessage(l10n, const ConflictFailure(code: 'incident_open')),
         l10n.errorIncidentOpen,
       );
+      // No answer is "not confirmed" (and the plan on screen is kept).
       expect(
         planFailureMessage(l10n, const NetworkFailure()),
-        l10n.errorNetwork,
+        l10n.errorUnconfirmedSave,
+      );
+      expect(
+        planFailureMessage(l10n, const ServerFailure(statusCode: 503)),
+        l10n.errorUnconfirmedSave,
       );
     });
   });

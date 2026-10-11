@@ -36,6 +36,8 @@ PHASE6_NOTES = (
     "While the check-in schedule is active, changing the plan and removing, switching off or "
     "re-addressing a contact who is in a stage answer 403 reauth_required until the password "
     "has been confirmed (POST /v1/auth/reauth, valid 5 minutes).",
+    "Reading an instruction (the list and one instruction) answers 403 reauth_required in the "
+    "same way: the text is decrypted for the response, and the password is asked for first.",
 )
 
 Conn = psycopg.Connection[dict[str, Any]]
@@ -84,6 +86,10 @@ async def _scenario(h: Harness, owner_db: Conn) -> Recorder:
     stages = put.json()["stages"]
 
     await call("categories_list", "GET", "/v1/instruction-categories", status=200)
+    await call(
+        "problem_reauth_instruction_read", "GET", "/v1/instructions", status=403, problem=True
+    )
+    assert (await h.reauth(tokens)).status_code == 204
     await call("instructions_list_empty", "GET", "/v1/instructions", status=200)
     await call(
         "problem_release_stage_too_early",
@@ -177,6 +183,9 @@ async def _scenario(h: Harness, owner_db: Conn) -> Recorder:
     )
 
     # --- the step-up once check-ins are on ----------------------------------------------------
+    # A new session: the password confirmed above (for reading) belongs to the old one, and the
+    # plan edit below must meet a person who has not just confirmed it.
+    tokens = await h.relogin(OWNER)
     await call("schedule_activate", "POST", "/v1/checkin/activate", status=200)
     await call(
         "problem_reauth_plan",
@@ -280,6 +289,7 @@ async def test_every_phase6_json_endpoint_has_a_contract(h: Harness, owner_db: C
         "problem_reauth_contact_delete",
         "problem_reauth_contact_off",
         "problem_reauth_instruction",
+        "problem_reauth_instruction_read",
     }
 
 

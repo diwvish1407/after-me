@@ -68,6 +68,16 @@ class FakeAuthRepository implements AuthRepository {
   /// Whether the session was "reauthenticated" (enables email change start).
   bool reauthenticated = false;
 
+  /// The test clock (set by `TestFakes`): the instant of the last successful re-auth,
+  /// for the routes that need the password to be **fresh** (the export and the account
+  /// deletion accept it for 60 seconds only).
+  DateTime Function()? clock;
+  DateTime? lastReauthAt;
+
+  /// How many passwords were accepted (a confirmation is spent once, even when the test
+  /// clock has not moved between two of them).
+  int reauthCount = 0;
+
   int _reauthFailures = 0;
 
   MeResponse _buildMe() => MeResponse(
@@ -220,6 +230,8 @@ class FakeAuthRepository implements AuthRepository {
       throw invalidCredentials();
     }
     reauthenticated = true;
+    lastReauthAt = clock?.call();
+    reauthCount++;
   }
 
   @override

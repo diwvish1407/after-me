@@ -117,7 +117,44 @@ def test_single_linear_history() -> None:
     heads = script.get_heads()
     assert len(heads) == 1
     revisions = list(script.walk_revisions())
-    assert [r.revision for r in revisions] == ["0006", "0005", "0004", "0003", "0002", "0001"]
+    assert [r.revision for r in revisions] == [
+        "0009",
+        "0008",
+        "0007",
+        "0006",
+        "0005",
+        "0004",
+        "0003",
+        "0002",
+        "0001",
+    ]
+
+
+def test_the_api_roles_notification_allow_list_matches_what_the_code_enqueues() -> None:
+    """Migration 0009 lists the (category, template) pairs the API role may insert. A template
+    the API process starts to enqueue without a line there would fail at run time, so the list
+    is compared with the code (and the dispatcher's own list of contact-facing 'other' kinds)."""
+    from importlib import util
+    from pathlib import Path
+
+    from app.engine.dispatcher import CONTACT_OTHER_TEMPLATES
+    from app.notifications import outbox
+
+    path = next(Path("migrations/versions").glob("*_0009_*.py"))
+    spec = util.spec_from_file_location("migration_0009", path)
+    assert spec is not None
+    assert spec.loader is not None
+    module = util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    assert set(module.API_CONTACT_TEMPLATES) == set(CONTACT_OTHER_TEMPLATES)
+    assert set(module.API_USER_TEMPLATES) == {
+        outbox.USER_ALL_CLEAR,
+        outbox.USER_ALERT_WITHDRAWN,
+        outbox.USER_HOLD_NOTICE,
+        outbox.USER_CONTACT_UNREACHABLE,
+    }
+    assert set(module.API_USER_TEMPLATES) <= set(outbox.USER_CHANNELS)
 
 
 def test_upgrade_downgrade_upgrade_and_no_drift(scratch_url: str, engine: Engine) -> None:
@@ -207,12 +244,13 @@ def test_migration_grants_runtime_roles(scratch_url: str, engine: Engine) -> Non
     assert grants.pop("escalation_incidents") == {"SELECT"}
     assert grants.pop("incident_actions") == {"SELECT"}
     assert grants.pop("notifications") == {"SELECT", "INSERT"}
-    assert grants.pop("notification_logs") == {"SELECT"}
+    assert grants.pop("notification_logs") == {"SELECT", "INSERT"}  # webhooks (Phase 8)
     assert grants.pop("system_holds") == {"SELECT"}
     assert grants.pop("ingestion_probes") == {"INSERT"}
     # Phase 6: the API serves the owner and the portal; it cannot create releases, portal
-    # access or link tokens (the engine's), and cannot modify or delete a wrapped key.
-    assert grants.pop("user_keys") == {"SELECT", "INSERT"}
+    # access or link tokens (the engine's), and cannot modify a wrapped key. Phase 7: it can
+    # delete one (account deletion destroys the key).
+    assert grants.pop("user_keys") == {"SELECT", "INSERT", "DELETE"}
     assert grants.pop("instruction_categories") == {"SELECT"}
     assert grants.pop("instructions") == {"SELECT", "INSERT", "UPDATE"}  # soft delete only
     assert grants.pop("instruction_recipients") == {"SELECT", "INSERT", "UPDATE", "DELETE"}
@@ -221,6 +259,8 @@ def test_migration_grants_runtime_roles(scratch_url: str, engine: Engine) -> Non
     assert grants.pop("portal_tokens") == {"SELECT"}
     assert grants.pop("portal_sessions") == {"SELECT", "INSERT"}
     assert grants.pop("portal_otp_challenges") == {"SELECT", "INSERT"}
+    # Phase 8: receipts of direct mail are append-only for the runtime roles.
+    assert grants.pop("email_receipts") == {"SELECT", "INSERT"}
     assert grants == {
         t: {"SELECT", "INSERT", "UPDATE", "DELETE"} for t in PHASE1_TABLES if t != "audit_logs"
     }

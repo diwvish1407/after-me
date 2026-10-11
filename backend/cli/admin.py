@@ -4,6 +4,8 @@
     python -m cli.admin hold status | enter --reason "..." | exit [--include-ingestion]
     python -m cli.admin incident void <incident-id>
     python -m cli.admin action retry <action-id>
+    python -m cli.admin email-test --to ADDRESS     # one message through the configured chain
+    python -m cli.admin push-test --token TOKEN     # one push through the configured provider
 
 Connects as the worker role; every command is audited with an operator actor.
 """
@@ -20,6 +22,10 @@ import uuid
 from app.api.container import build_worker_services
 from app.core.config import load_settings
 from app.core.logging import configure_logging
+from app.notifications.email import EmailMessage
+from app.notifications.errors import ProviderError
+from app.notifications.providers.factory import build_email_provider, build_push_provider
+from app.notifications.push import PushMessage
 from app.ops import admin
 
 
@@ -43,11 +49,61 @@ def _parser() -> argparse.ArgumentParser:
     action_sub = action.add_subparsers(dest="action_command", required=True)
     retry = action_sub.add_parser("retry", help="put a held action back to pending")
     retry.add_argument("action_id", type=uuid.UUID)
+    email = sub.add_parser(
+        "email-test", help="send one test message through the configured email provider(s)"
+    )
+    email.add_argument("--to", required=True)
+    push = sub.add_parser("push-test", help="send one test push through the configured provider")
+    push.add_argument("--token", required=True, help="an FCM registration token")
     return parser
+
+
+async def _provider_test(args: argparse.Namespace) -> int:
+    """Prove a provider configuration end to end (DNS, keys, project) without touching the
+    database or any account. Prints what happened by *kind*; secrets and addresses never go to
+    the log, only to the terminal that asked."""
+    settings = load_settings()
+    key = f"admin-test-{uuid.uuid4().hex[:12]}"
+    try:
+        if args.command == "email-test":
+            provider = build_email_provider(settings)
+            text = "This is a test message from AfterMe's operator tool. Nothing needs doing.\n"
+            result = await provider.send(
+                EmailMessage(
+                    to=args.to,
+                    subject="AfterMe test message",
+                    text=text,
+                    template="operator_test",
+                    sender=settings.email_from,
+                    html=None,
+                ),
+                idempotency_key=key,
+            )
+        else:
+            result = await build_push_provider(settings).send(
+                PushMessage(
+                    token=args.token,
+                    type="operator_test",
+                    title="AfterMe test",
+                    body="This is a test from the operator tool.",
+                ),
+                idempotency_key=key,
+            )
+    except ProviderError as exc:
+        print(f"failed: {type(exc).__name__} code={exc.code}")  # noqa: T201
+        return 1
+    except Exception as exc:
+        print(f"failed: {type(exc).__name__}")  # noqa: T201
+        return 1
+    print(f"ok: provider={result.provider} message_id={result.message_id}")  # noqa: T201
+    return 0
 
 
 async def run(argv: list[str]) -> int:
     args = _parser().parse_args(argv)
+    if args.command in ("email-test", "push-test"):
+        configure_logging(load_settings())
+        return await _provider_test(args)
     settings = load_settings()
     configure_logging(settings)
     services = build_worker_services(settings)

@@ -7,7 +7,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, Response, status
 
-from app.api.deps import ContextDep, CurrentUserDep, DbSession, ServicesDep
+from app.api.deps import ContextDep, CurrentUserDep, DbSession, ReauthUserDep, ServicesDep
 from app.instructions.schemas import (
     CategoryList,
     InstructionCreateRequest,
@@ -34,9 +34,12 @@ async def list_categories(current: CurrentUserDep, service: InstructionServiceDe
     return await service.categories()
 
 
+# Reading decrypts the content, so it asks for the password entered in the last five minutes, like
+# every other thing that exposes or changes what contacts will receive. Without it the export's
+# fresh-password rule would protect nothing: the same text is one GET per instruction away.
 @router.get("/instructions")
 async def list_instructions(
-    current: CurrentUserDep,
+    current: ReauthUserDep,
     service: InstructionServiceDep,
     category: Annotated[str | None, Query(pattern=r"^[a-z_]{2,32}$")] = None,
 ) -> InstructionList:
@@ -52,7 +55,7 @@ async def create_instruction(
 
 @router.get("/instructions/{instruction_id}")
 async def get_instruction(
-    instruction_id: uuid.UUID, current: CurrentUserDep, service: InstructionServiceDep
+    instruction_id: uuid.UUID, current: ReauthUserDep, service: InstructionServiceDep
 ) -> InstructionOut:
     return await service.get_instruction(current, instruction_id)
 

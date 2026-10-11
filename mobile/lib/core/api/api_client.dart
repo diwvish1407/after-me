@@ -1,6 +1,7 @@
 import 'dart:math';
 
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../auth/auth_controller.dart';
@@ -12,6 +13,8 @@ import 'interceptors/auth_interceptor.dart';
 import 'interceptors/client_info_interceptor.dart';
 import 'interceptors/idempotency_interceptor.dart';
 import 'interceptors/retry_interceptor.dart';
+import 'interceptors/upgrade_gate_interceptor.dart';
+import 'upgrade_gate.dart';
 
 /// Timeouts for API calls. Generous enough for slow mobile networks, short enough
 /// that a check-in quickly falls back to "Not received yet — retrying".
@@ -49,6 +52,9 @@ Dio createBaseDio(AppConfig config, {HttpClientAdapter? adapter}) {
 /// 2. [IdempotencyInterceptor]: one `Idempotency-Key` per request, kept on retries.
 /// 3. [AuthInterceptor]: bearer token, single-flight refresh on `token_expired`.
 /// 4. [RetryInterceptor]: backoff retries of safe/keyed requests.
+/// 5. [UpgradeGateInterceptor] (when [onUpgradeRequired] / [onAccepted] are given): sees
+///    the final outcome of every request and tells the app about a 426 and about the
+///    next success.
 ///
 /// The token refresh uses a separate Dio with only the client-info interceptor, so a
 /// refresh can never recurse into the auth interceptor.
@@ -61,6 +67,8 @@ Dio createApiClient({
   IdempotencyKeyGenerator? generateIdempotencyKey,
   RetryDelay? retryDelay,
   Random? random,
+  VoidCallback? onUpgradeRequired,
+  VoidCallback? onAccepted,
 }) {
   final refreshDio = createBaseDio(config, adapter: adapter)
     ..interceptors.add(ClientInfoInterceptor(clientInfo));
@@ -75,6 +83,11 @@ Dio createApiClient({
       onSessionEnded: onSessionEnded,
     ),
     RetryInterceptor(dio: dio, delay: retryDelay, random: random),
+    if (onUpgradeRequired != null || onAccepted != null)
+      UpgradeGateInterceptor(
+        onUpgradeRequired: onUpgradeRequired ?? () {},
+        onAccepted: onAccepted ?? () {},
+      ),
   ]);
   return dio;
 }
@@ -95,6 +108,18 @@ final apiClientProvider = Provider<Dio>((ref) {
       return ref.read(authControllerProvider.notifier).signOut();
     },
     adapter: ref.watch(apiHttpAdapterProvider),
+    // 426 from any request puts the app on the "Update AfterMe" screen; the next
+    // success takes it away. Nothing else is touched.
+    onUpgradeRequired: () {
+      if (ref.mounted) {
+        ref.read(upgradeGateProvider.notifier).raise();
+      }
+    },
+    onAccepted: () {
+      if (ref.mounted) {
+        ref.read(upgradeGateProvider.notifier).clear();
+      }
+    },
   );
   ref.onDispose(dio.close);
   return dio;

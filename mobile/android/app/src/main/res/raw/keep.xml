@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Resources the resource shrinker cannot see being used. The small notification icon is
+     named by a string in Dart (PluginLocalNotificationGateway.iconName) and looked up at
+     run time by the local-notifications plugin, which is not a reference the shrinker
+     follows; the manifest's default FCM icon names the same drawable. A notification whose
+     icon was removed does not show at all. -->
+<resources
+    xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@drawable/ic_stat_afterme" />

@@ -93,8 +93,8 @@ def test_maintenance_role_may_purge_audit_logs(owner_db: Conn) -> None:
 
     assert privilege("audit_logs", "DELETE")
     assert not privilege("audit_logs", "UPDATE")
-    assert not privilege("audit_logs", "INSERT")
-    assert not privilege("users", "DELETE")
+    # Phase 7: it may append (``account.purged``), never rewrite.
+    assert privilege("audit_logs", "INSERT")
     column = owner_db.execute(
         "SELECT has_column_privilege('afterme_maintenance', 'audit_logs', 'occurred_at', "
         "'SELECT') AS ok"
@@ -353,7 +353,11 @@ def test_the_api_role_cannot_rewrite_or_resend_a_notification(api: Conn) -> None
         assert not _column_privilege(api, "notifications", column, "UPDATE"), column
     for column in ("status", "cancelled_reason", "updated_at"):
         assert _column_privilege(api, "notifications", column, "UPDATE"), column
-    assert not _table_privilege(api, "notification_logs", "INSERT")
+    # Phase 8: the API receives provider webhooks and writes delivery events to the log, once
+    # each; it still cannot rewrite or delete a log row.
+    assert _table_privilege(api, "notification_logs", "INSERT")
+    for kind in ("UPDATE", "DELETE"):
+        assert not _table_privilege(api, "notification_logs", kind), kind
 
 
 def test_the_api_role_cannot_touch_hold_or_heartbeats(api: Conn) -> None:
@@ -402,3 +406,83 @@ def test_the_maintenance_role_purges_old_probes_and_notifications_only(owner_db:
         "AS ok"
     ).fetchone()
     assert params == {"ok": False}
+
+
+def test_the_maintenance_role_removes_deleted_accounts_and_nothing_it_can_read(
+    owner_db: Conn,
+) -> None:
+    """Phase 7 (DATABASE §4, §6): it hard-deletes ``pending_deletion`` users (the foreign keys
+    cascade) and scrubs the contacts of such an account. It cannot read credentials, addresses
+    or content, and it cannot rewrite a user."""
+
+    def table_privilege(table: str, kind: str) -> bool:
+        row = owner_db.execute(
+            "SELECT has_table_privilege('afterme_maintenance', %s, %s) AS ok", (table, kind)
+        ).fetchone()
+        assert row is not None
+        return bool(row["ok"])
+
+    def column_privilege(table: str, column: str, kind: str) -> bool:
+        row = owner_db.execute(
+            "SELECT has_column_privilege('afterme_maintenance', %s, %s, %s) AS ok",
+            (table, column, kind),
+        ).fetchone()
+        assert row is not None
+        return bool(row["ok"])
+
+    assert table_privilege("users", "DELETE")
+    assert not table_privilege("users", "UPDATE")
+    assert not table_privilege("users", "INSERT")
+    for column in ("id", "status", "deletion_requested_at"):
+        assert column_privilege("users", column, "SELECT"), column
+    for column in ("email", "email_normalized", "password_hash"):
+        assert not column_privilege("users", column, "SELECT"), column
+
+    assert not table_privilege("trusted_contacts", "DELETE")
+    assert not table_privilege("trusted_contacts", "INSERT")
+    assert column_privilege("trusted_contacts", "email", "UPDATE")
+    assert not column_privilege("trusted_contacts", "email", "SELECT")
+    assert not column_privilege("trusted_contacts", "user_id", "UPDATE")
+    assert not column_privilege("notifications", "params", "SELECT")
+
+    assert not table_privilege("user_keys", "SELECT")
+    assert not table_privilege("instructions", "SELECT")
+    assert not table_privilege("instructions", "UPDATE")
+    assert not table_privilege("audit_logs", "UPDATE")
+
+
+def test_the_api_may_delete_a_wrapped_key_but_not_rewrite_it(api: Conn) -> None:
+    assert _table_privilege(api, "user_keys", "DELETE")
+    assert not _table_privilege(api, "user_keys", "UPDATE")
+
+
+def test_the_api_role_cannot_write_the_dispatchers_attempt_log(api: Conn, owner_db: Conn) -> None:
+    """Webhook events carry a provider event id; an attempt (which the 24-hour give-up reads) is
+    the worker's, and a forged or back-dated one would end a message early or never."""
+    owner_db.execute(
+        "INSERT INTO users (email, email_normalized, password_hash, email_verified_at) "
+        "VALUES ('log@example.com', 'log@example.com', 'x', now())"
+    )
+    user = owner_db.execute("SELECT id FROM users WHERE email = 'log@example.com'").fetchone()
+    assert user is not None
+    owner_db.execute(
+        "INSERT INTO notifications (user_id, audience, category, channel, template_key, "
+        "send_after, dedupe_key) VALUES (%s, 'user', 'user', 'email', 'incident_missed', now(), "
+        "'log-guard-1')",
+        (user["id"],),
+    )
+    note = owner_db.execute(
+        "SELECT id FROM notifications WHERE dedupe_key = 'log-guard-1'"
+    ).fetchone()
+    assert note is not None
+    _denied(
+        api,
+        f"INSERT INTO notification_logs (notification_id, provider, outcome) "  # noqa: S608
+        f"VALUES ('{note['id']}', 'resend', 'accepted')",
+    )
+    api.execute(
+        f"INSERT INTO notification_logs (notification_id, provider, outcome, provider_event_id) "  # noqa: S608
+        f"VALUES ('{note['id']}', 'resend', 'delivered', 'evt-1')"
+    )
+    _denied(api, "UPDATE notification_logs SET outcome = 'bounced'")
+    _denied(api, "DELETE FROM notification_logs")

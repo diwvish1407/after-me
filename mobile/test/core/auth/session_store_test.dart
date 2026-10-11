@@ -25,12 +25,27 @@ void main() {
         SessionKeys.refreshToken: 'refresh-1',
         SessionKeys.sessionId: 'session-1',
         SessionKeys.deviceId: 'device-1',
+        // The account the session belongs to: what the pending check-in is bound to.
+        SessionKeys.userId: 'user-1',
       });
       expect(secure.values.values, isNot(contains('access-1')));
       expect(await store.hasPersistedSession(), isTrue);
       expect(await store.readRefreshToken(), 'refresh-1');
       expect(await store.readSessionId(), 'session-1');
       expect(await store.readDeviceId(), 'device-1');
+      expect(await store.readUserId(), 'user-1');
+    });
+
+    test('the account id is replaced at the next sign-in and removed with the '
+        'session', () async {
+      final secure = InMemorySecureStore();
+      final store = SessionStore(secure);
+      await store.saveSession(tokenResponse());
+      await store.clear();
+      expect(await store.readUserId(), isNull);
+
+      await store.saveSession(tokenResponse(userId: 'user-2'));
+      expect(await store.readUserId(), 'user-2');
     });
 
     test(

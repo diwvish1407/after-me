@@ -7,6 +7,9 @@ import '../../../app/repository_providers.dart';
 import '../../../core/api/failures/app_failure.dart';
 import '../../../core/api/failures/failure_mapper.dart';
 import '../../../core/design_system/design_system.dart';
+import '../../../l10n/gen/app_localizations.dart';
+import '../../auth/presentation/reauth_sheet.dart';
+import '../application/instructions_controller.dart';
 import '../data/instructions_repository.dart';
 
 /// What [InstructionByIdView] lets its content do with the loaded instruction.
@@ -20,6 +23,11 @@ abstract interface class InstructionHolder {
 
 /// Reads one instruction with `GET /instructions/{id}` and builds [builder] with it, with
 /// calm loading, error (retry) and "not found" pages around it.
+///
+/// The server answers 403 `reauth_required` unless the password was entered in the last 5
+/// minutes. The read goes through `withReauth`: the password sheet is shown once and the
+/// same read repeated once. When the sheet is closed the page says, calmly, that the
+/// instruction stays hidden, and one button asks again; nothing was changed.
 ///
 /// The body is held by this widget's state only, for as long as the screen is open, and
 /// is dropped with it: it is never kept in a provider, a cache or on disk
@@ -53,6 +61,9 @@ class _InstructionByIdViewState extends ConsumerState<InstructionByIdView>
   Instruction? _instruction;
   AppFailure? _failure;
 
+  /// The password sheet was closed (or the server still wanted it): nothing is shown yet.
+  bool _hidden = false;
+
   @override
   void initState() {
     super.initState();
@@ -67,6 +78,7 @@ class _InstructionByIdViewState extends ConsumerState<InstructionByIdView>
       setState(() {
         _instruction = null;
         _failure = null;
+        _hidden = false;
       });
       unawaited(reload());
     }
@@ -78,6 +90,7 @@ class _InstructionByIdViewState extends ConsumerState<InstructionByIdView>
       setState(() {
         _instruction = instruction;
         _failure = null;
+        _hidden = false;
       });
     }
   }
@@ -86,12 +99,32 @@ class _InstructionByIdViewState extends ConsumerState<InstructionByIdView>
   Future<void> reload() async {
     final repository = ref.read(instructionsRepositoryProvider);
     try {
-      final instruction = await repository.get(widget.id);
+      final instruction = await withReauth<Instruction>(
+        context,
+        () => repository.get(widget.id),
+        reason: ReauthReason.instructionRead,
+      );
+      if (instruction == null) {
+        // The sheet was closed: nothing was asked of the server again.
+        if (mounted) {
+          setState(() => _hidden = true);
+        }
+        return;
+      }
       replace(instruction);
     } on Object catch (error) {
-      if (mounted) {
-        setState(() => _failure = toAppFailure(error));
+      if (!mounted) {
+        return;
       }
+      final failure = toAppFailure(error);
+      setState(() {
+        // Still asked for after the password was accepted: say it as hidden, not broken.
+        if (isPasswordRequired(failure)) {
+          _hidden = true;
+        } else {
+          _failure = failure;
+        }
+      });
     }
   }
 
@@ -102,10 +135,25 @@ class _InstructionByIdViewState extends ConsumerState<InstructionByIdView>
       return widget.builder(context, instruction, this);
     }
     final failure = _failure;
+    final l10n = AppLocalizations.of(context);
     return FormPage(
       title: widget.title,
       children: [
-        if (failure != null)
+        if (_hidden)
+          EmptyState(
+            icon: Icons.lock_outline_rounded,
+            title: l10n.instructionsLockedTitle,
+            message: l10n.instructionDetailLockedBody,
+            action: AppButton.primary(
+              label: l10n.instructionShowOne,
+              icon: Icons.visibility_outlined,
+              onPressed: () {
+                setState(() => _hidden = false);
+                unawaited(reload());
+              },
+            ),
+          )
+        else if (failure != null)
           ErrorView(
             failure: failure,
             onRetry: () {

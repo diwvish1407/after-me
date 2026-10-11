@@ -320,6 +320,65 @@ void main() {
       });
     });
 
+    test('an action with no queue: no answer is "not confirmed", a real '
+        'answer keeps its own words', () {
+      const transient = <AppFailure>[
+        NetworkFailure(),
+        ServerFailure(statusCode: 503),
+        UnknownFailure(),
+      ];
+      for (final failure in transient) {
+        expect(
+          actionFailureMessage(l10n, failure, UnconfirmedAction.save),
+          l10n.errorUnconfirmedSave,
+          reason: '$failure',
+        );
+        expect(
+          actionFailureMessage(l10n, failure, UnconfirmedAction.safe),
+          l10n.errorUnconfirmedSafe,
+        );
+        expect(
+          actionFailureMessage(l10n, failure, UnconfirmedAction.export),
+          l10n.errorUnconfirmedExport,
+        );
+        expect(
+          actionFailureMessage(l10n, failure, UnconfirmedAction.delete),
+          l10n.errorUnconfirmedDelete,
+        );
+      }
+      const answers = <AppFailure>[
+        ForbiddenFailure(code: 'reauth_required'),
+        RateLimitedFailure(retryAfter: Duration(minutes: 10)),
+        ValidationFailure(),
+        UnauthorizedFailure(code: 'session_revoked'),
+        UpgradeRequiredFailure(),
+      ];
+      for (final failure in answers) {
+        for (final action in UnconfirmedAction.values) {
+          expect(
+            actionFailureMessage(l10n, failure, action),
+            failureMessage(l10n, failure),
+          );
+        }
+      }
+    });
+
+    test('the "not confirmed" sentences say nothing was done and keep the '
+        'tone', () {
+      for (final text in [
+        l10n.errorUnconfirmedSave,
+        l10n.errorUnconfirmedSafe,
+        l10n.errorUnconfirmedExport,
+        l10n.errorUnconfirmedDelete,
+      ]) {
+        expect(text, isNot(contains('!')));
+        expect(
+          text,
+          anyOf(contains("couldn't confirm"), contains("couldn't get")),
+        );
+      }
+    });
+
     test('a wrong password is not reported as an ended session', () {
       expect(
         failureMessage(

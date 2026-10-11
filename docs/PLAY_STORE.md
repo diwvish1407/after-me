@@ -48,11 +48,11 @@ The Play Store side has **long lead times that don't depend on code**. Start the
 | ABIs | arm64-v8a, armeabi-v7a, x86_64 (Flutter default); 64-bit required |
 | 16 KB memory page size | Required for apps targeting Android 15+. Verify with Android Studio's APK Analyzer / Play Console bundle explorer. All native libraries (Flutter engine, plugins) must be 16 KB-aligned. |
 | Signing | **Play App Signing** (Google holds the app key; we keep the upload key) |
-| Obfuscation | `--obfuscate --split-debug-info`; symbols kept privately |
-| Permissions | `INTERNET`, `POST_NOTIFICATIONS`, `USE_BIOMETRIC` (+ FCM-merged `WAKE_LOCK`, `RECEIVE_BOOT_COMPLETED` if added by the library). **Not used:** contacts, location, SMS, phone, exact alarms, foreground services, camera, storage. |
+| Obfuscation | `--obfuscate --split-debug-info`, enforced by `mobile/tool/build_release.sh`; symbols kept privately |
+| Permissions | `INTERNET`, `POST_NOTIFICATIONS`, `USE_BIOMETRIC` (+ `USE_FINGERPRINT` up to Android 8.1, and what the FCM SDK merges: `WAKE_LOCK`, `ACCESS_NETWORK_STATE`, `com.google.android.c2dm.permission.RECEIVE`; verified on the merged prod manifest in Phase 8, `tool/check_manifest_permissions.dart`). `VIBRATE` is removed (a channel vibrates for the app) and there is no `RECEIVE_BOOT_COMPLETED`. **Not used:** contacts, location, SMS, phone, exact alarms, foreground services, camera, storage. |
 | Advertising ID | **Not used.** Check the merged manifest to confirm no dependency adds `com.google.android.gms.permission.AD_ID`; remove it with `tools:node="remove"` if one does. Declare "no advertising ID" in Play Console. |
 | Backup | `android:allowBackup="false"` |
-| Network | `network_security_config`: cleartext disabled (prod/staging) |
+| Network | HTTPS only: enforced in the app (`AppConfig`, flavor/`APP_ENV` pairing, `allow_http` zone) and, for the platform stack, by `network_security_config` (cleartext disabled in prod/staging) |
 | Adaptive icon | Foreground + background layers + **monochrome** layer (themed icons) |
 | Splash | Android 12+ SplashScreen API (via `flutter_native_splash` or native config), calm and brief |
 

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:go_router/go_router.dart';
@@ -46,6 +47,39 @@ class AppShell extends StatelessWidget {
   static const double _maxLabelScale = 1.3;
   static const double _minLabelScale = 0.85;
 
+  /// A tab was tapped. Another tab shows its own stack as it was. The current tab again
+  /// returns to its first page (the usual tab-bar behaviour), **unless the page on top
+  /// guards something**: a page that asks "Leave without saving?" (the plan editor) must
+  /// be asked the same question as when Back is pressed, instead of being thrown away
+  /// with its draft. Then the tap does exactly what Back does there.
+  void _onSelected(int index) {
+    if (index != navigationShell.currentIndex) {
+      navigationShell.goBranch(index);
+      return;
+    }
+    final navigator =
+        navigationShell.route.branches[index].navigatorKey.currentState;
+    if (navigator != null && navigator.canPop() && _topPageGuards(navigator)) {
+      unawaited(navigator.maybePop());
+      return;
+    }
+    navigationShell.goBranch(index, initialLocation: true);
+  }
+
+  /// Whether the page on top of [navigator] refuses to be left without asking (it holds a
+  /// `PopScope` that does not allow popping right now).
+  static bool _topPageGuards(NavigatorState navigator) {
+    Route<dynamic>? top;
+    // Peeks at the top route; the predicate stops at once, so nothing is popped.
+    navigator.popUntil((route) {
+      top = route;
+      return true;
+    });
+    final route = top;
+    return route is ModalRoute &&
+        route.popDisposition == RoutePopDisposition.doNotPop;
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -63,11 +97,7 @@ class AppShell extends StatelessWidget {
           maxScaleFactor: labelScaleCap(context, labels, constraints.maxWidth),
           child: NavigationBar(
             selectedIndex: navigationShell.currentIndex,
-            onDestinationSelected: (index) => navigationShell.goBranch(
-              index,
-              // Tapping the current tab again returns to its first page.
-              initialLocation: index == navigationShell.currentIndex,
-            ),
+            onDestinationSelected: _onSelected,
             destinations: [
               NavigationDestination(
                 icon: const Icon(Icons.home_outlined),

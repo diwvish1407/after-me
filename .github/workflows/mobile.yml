@@ -69,6 +69,10 @@ jobs:
       - name: Analyze
         run: flutter analyze
 
+      # Package names and versions only go to the OSV database (SECURITY §15, T22).
+      - name: Dependency audit (OSV)
+        run: dart run tool/audit_deps.dart
+
       - name: Test with coverage
         run: flutter test --coverage
 
@@ -89,11 +93,19 @@ jobs:
       - name: Build staging APK (flavor compile check)
         run: flutter build apk --flavor staging --debug --dart-define-from-file=config/staging.json
 
-      # Release build with the debug-signing fallback (no key.properties in CI).
-      - name: Build prod release APK
-        run: flutter build apk --flavor prod --release --dart-define-from-file=config/prod.json
+      # The production release exactly as it is built for Play (tool/build_release.sh):
+      # `flutter build apk --flavor prod --release --dart-define-from-file=config/prod.json
+      # --obfuscate --split-debug-info=build/symbols`, after checking that config/prod.json
+      # says APP_ENV=prod with an https API, and followed by the merged-manifest check.
+      # CI has no upload key, so --allow-debug-signing (loud warning; the APK is signed
+      # with the debug key and is never distributed).
+      - name: Build prod release APK (obfuscated, split debug info)
+        run: tool/build_release.sh --apk --allow-debug-signing --symbols-dir=build/symbols
 
-      # Allowlist: INTERNET, POST_NOTIFICATIONS, USE_BIOMETRIC + app.afterme.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION
-      # (no AD_ID, no READ_CONTACTS).
-      - name: Check merged prod manifest permissions
+      # Permission allowlist (INTERNET, POST_NOTIFICATIONS, USE_BIOMETRIC, the FCM adds and
+      # app.afterme.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION; no AD_ID, no READ_CONTACTS),
+      # allowBackup=false, no cleartext/debuggable flag, flutter_deeplinking_enabled=false
+      # and exactly the documented exported components. build_release.sh ran it already;
+      # it is a step of its own so a failure here names itself in the job.
+      - name: Check merged prod manifest (permissions, hardening, exported components)
         run: dart run tool/check_manifest_permissions.dart

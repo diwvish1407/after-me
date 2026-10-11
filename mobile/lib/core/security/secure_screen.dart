@@ -92,10 +92,17 @@ final secureScreensProvider = Provider<SecureScreens>(
 /// navigator alive) and a page covered by another full-screen route. So leaving the
 /// Instructions area for Home, or replacing the page, lets go of the flag as well as
 /// removing the widget does.
+///
+/// With [enabled] false the flag is not held (Home holds it only while it shows an
+/// instruction's title); switching it on or off while the widget stays in the tree
+/// acquires or releases the flag at once.
 class SecureScreen extends ConsumerStatefulWidget {
-  const SecureScreen({required this.child, super.key});
+  const SecureScreen({required this.child, this.enabled = true, super.key});
 
   final Widget child;
+
+  /// Whether this screen needs the window to be secure right now.
+  final bool enabled;
 
   @override
   ConsumerState<SecureScreen> createState() => _SecureScreenState();
@@ -114,11 +121,21 @@ class _SecureScreenState extends ConsumerState<SecureScreen> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final shown = TickerMode.valuesOf(context).enabled;
-    if (shown && !_holding) {
+    _sync();
+  }
+
+  @override
+  void didUpdateWidget(covariant SecureScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _sync();
+  }
+
+  void _sync() {
+    final needed = widget.enabled && TickerMode.valuesOf(context).enabled;
+    if (needed && !_holding) {
       _holding = true;
       _screens.acquire();
-    } else if (!shown && _holding) {
+    } else if (!needed && _holding) {
       _holding = false;
       _screens.release();
     }

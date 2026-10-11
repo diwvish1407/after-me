@@ -6,6 +6,7 @@ import '../../../core/api/failures/app_failure.dart';
 import '../../../core/api/failures/failure_mapper.dart';
 import '../../../core/design_system/design_system.dart';
 import '../../../core/forms/validators.dart';
+import '../../../core/security/secure_screen.dart';
 import '../../../l10n/gen/app_localizations.dart';
 import '../../auth/application/me_controller.dart';
 import '../../auth/data/auth_repository.dart';
@@ -99,64 +100,66 @@ class _ChangePasswordScreenState extends ConsumerState<ChangePasswordScreen> {
     final strength = passwordStrength(_new.text, email: email);
     String? msg(FieldIssue? issue) =>
         issue == null ? null : issueMessage(l10n, issue);
-    return FormPage(
-      title: l10n.securityChangePassword,
-      children: [
-        BodyText(l10n.changePasswordIntro),
-        Gap.lg,
-        if (failure != null && serverNew == null) ...[
-          FailureNotice.of(context, failure),
+    return SecureScreen(
+      child: FormPage(
+        title: l10n.securityChangePassword,
+        children: [
+          BodyText(l10n.changePasswordIntro),
+          Gap.lg,
+          if (failure != null && serverNew == null) ...[
+            FailureNotice.of(context, failure),
+            Gap.md,
+          ],
+          AppTextField(
+            label: l10n.fieldCurrentPassword,
+            controller: _current,
+            obscureText: true,
+            errorText: _currentWrong
+                ? l10n.reauthWrongPassword
+                : msg(_currentIssue),
+            textInputAction: TextInputAction.next,
+            autofillHints: const [AutofillHints.password],
+            enabled: !_busy,
+            onChanged: (_) => setState(() {
+              _currentIssue = null;
+              _currentWrong = false;
+            }),
+          ),
           Gap.md,
+          AppTextField(
+            label: l10n.fieldNewPassword,
+            controller: _new,
+            obscureText: true,
+            errorText: msg(_newIssue ?? serverNew),
+            helperText: passwordStrengthHint(l10n, strength),
+            textInputAction: TextInputAction.next,
+            autofillHints: const [AutofillHints.newPassword],
+            enabled: !_busy,
+            onChanged: (_) => setState(() => _newIssue = null),
+          ),
+          Gap.md,
+          AppTextField(
+            label: l10n.fieldConfirmPassword,
+            controller: _confirm,
+            obscureText: true,
+            errorText: msg(_confirmIssue),
+            textInputAction: TextInputAction.done,
+            autofillHints: const [AutofillHints.newPassword],
+            enabled: !_busy,
+            onChanged: (_) => setState(() => _confirmIssue = null),
+            onSubmitted: (_) => _submit(),
+          ),
+          Gap.sm,
+          BodyText(l10n.changePasswordEffect),
+          Gap.lg,
+          AppButton.primary(
+            label: l10n.changePasswordSubmit,
+            isLoading: _busy,
+            onPressed: _submit,
+            expand: true,
+          ),
         ],
-        AppTextField(
-          label: l10n.fieldCurrentPassword,
-          controller: _current,
-          obscureText: true,
-          errorText: _currentWrong
-              ? l10n.reauthWrongPassword
-              : msg(_currentIssue),
-          textInputAction: TextInputAction.next,
-          autofillHints: const [AutofillHints.password],
-          enabled: !_busy,
-          onChanged: (_) => setState(() {
-            _currentIssue = null;
-            _currentWrong = false;
-          }),
-        ),
-        Gap.md,
-        AppTextField(
-          label: l10n.fieldNewPassword,
-          controller: _new,
-          obscureText: true,
-          errorText: msg(_newIssue ?? serverNew),
-          helperText: passwordStrengthHint(l10n, strength),
-          textInputAction: TextInputAction.next,
-          autofillHints: const [AutofillHints.newPassword],
-          enabled: !_busy,
-          onChanged: (_) => setState(() => _newIssue = null),
-        ),
-        Gap.md,
-        AppTextField(
-          label: l10n.fieldConfirmPassword,
-          controller: _confirm,
-          obscureText: true,
-          errorText: msg(_confirmIssue),
-          textInputAction: TextInputAction.done,
-          autofillHints: const [AutofillHints.newPassword],
-          enabled: !_busy,
-          onChanged: (_) => setState(() => _confirmIssue = null),
-          onSubmitted: (_) => _submit(),
-        ),
-        Gap.sm,
-        BodyText(l10n.changePasswordEffect),
-        Gap.lg,
-        AppButton.primary(
-          label: l10n.changePasswordSubmit,
-          isLoading: _busy,
-          onPressed: _submit,
-          expand: true,
-        ),
-      ],
+      ),
     );
   }
 }

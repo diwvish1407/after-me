@@ -8,7 +8,7 @@ from urllib.parse import parse_qsl
 
 from fastapi import Request, Response
 from jinja2 import Environment, FileSystemLoader, StrictUndefined, select_autoescape
-from starlette.responses import HTMLResponse
+from starlette.responses import HTMLResponse, RedirectResponse
 
 from app.web import security
 
@@ -37,6 +37,13 @@ def page(
         body,
         status_code=status_code,
         headers={**security.page_headers(nonce), **(extra_headers or {})},
+    )
+
+
+def redirect(location: str) -> RedirectResponse:
+    """A 303 that carries the same security headers as every page."""
+    return RedirectResponse(
+        location, status_code=303, headers=security.page_headers(security.new_nonce())
     )
 
 

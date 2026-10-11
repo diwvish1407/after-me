@@ -6,25 +6,38 @@ import 'package:afterme/app/repository_providers.dart';
 import 'package:afterme/app/router.dart';
 import 'package:afterme/core/api/failures/app_failure.dart';
 import 'package:afterme/core/api/models/api_problem.dart';
+import 'package:afterme/core/api/upgrade_gate.dart';
 import 'package:afterme/core/auth/auth_controller.dart';
 import 'package:afterme/core/design_system/check_in_button.dart';
+import 'package:afterme/core/permissions/notification_permission.dart';
+import 'package:afterme/core/platform/file_export.dart';
 import 'package:afterme/core/security/app_lock/local_auth_gateway.dart';
+import 'package:afterme/features/activity/application/activity_controller.dart';
+import 'package:afterme/features/auth/data/auth_repository.dart';
 import 'package:afterme/features/auth/presentation/reauth_sheet.dart';
 import 'package:afterme/features/checkin/application/pending_checkin_store.dart';
 import 'package:afterme/features/checkin/data/models/checkin_models.dart';
 import 'package:afterme/features/contacts/data/contacts_repository.dart';
 import 'package:afterme/features/home/application/home_controller.dart';
+import 'package:afterme/features/home/data/models/home_models.dart';
 import 'package:afterme/features/instructions/data/instructions_repository.dart';
 import 'package:afterme/features/onboarding/application/onboarding_controller.dart';
 import 'package:afterme/features/onboarding/application/setup_controller.dart';
 import 'package:afterme/features/plan/data/plan_repository.dart';
+import 'package:afterme/features/privacy/application/account_closed_notice.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 
+import '../helpers/fake_activity_server.dart';
+import '../helpers/fake_auth_repository.dart';
 import '../helpers/fake_checkin_server.dart';
+import '../helpers/fake_instructions_server.dart';
+import '../helpers/fake_plan_server.dart';
+import '../helpers/fake_privacy.dart';
 import '../helpers/in_memory_contacts_repository.dart';
+import '../helpers/incident_fixtures.dart';
 import '../helpers/pump_app.dart';
 import '../helpers/real_fonts.dart';
 import '../helpers/test_app.dart';
@@ -224,6 +237,68 @@ Future<void> _tick(WidgetTester tester, String name) async {
   await tester.pump();
 }
 
+/// Mom (accepted), Samantha (waiting), Dad (declined), Ann (opted out), Joe (bounced), and
+/// a plan that tells Mom and Samantha after 3 hours and Dad after 1 day. With
+/// [instruction] a "House emergency" instruction is set for the second stage; with
+/// [active] check-ins are on.
+void _editorWorld(
+  TestFakes fakes, {
+  String tier = 'premium',
+  bool active = false,
+  bool instruction = false,
+}) {
+  _withContacts(fakes, _everyone(), tier: tier);
+  fakes.plan.seed(
+    const PlanDraft(
+      graceMinutes: 180,
+      stages: [
+        PlanStageDraft(offsetMinutes: 180, contactIds: ['c1', 'c2']),
+        PlanStageDraft(offsetMinutes: 1440, contactIds: ['c3']),
+      ],
+    ),
+  );
+  if (instruction) {
+    fakes.instructions.seed(
+      title: 'House emergency',
+      recipients: {'c1': fakes.plan.stages.last.id},
+    );
+  }
+  if (active) {
+    fakes.server.activateNow();
+  }
+}
+
+/// A button of stage [stage] in the plan editor, found by the name a screen reader gives
+/// it ("Remove stage 2").
+Future<void> _stageButton(WidgetTester tester, String label, int stage) async {
+  final finder = find.byWidgetPredicate(
+    (w) => w is Semantics && w.properties.label == '$label $stage',
+  );
+  await tester.ensureVisible(finder);
+  await tester.pump();
+  await tester.tap(finder);
+  await tester.pumpAndSettle();
+}
+
+/// Taps a chip of the page (the first with that label), scrolled into view.
+Future<void> _chipOf(WidgetTester tester, String label) async {
+  final finder = find.widgetWithText(ChoiceChip, label).first;
+  await tester.ensureVisible(finder);
+  await tester.pump();
+  await tester.tap(finder);
+  await tester.pumpAndSettle();
+}
+
+/// Taps the filled button [label] (the editor's Save, a sheet's confirm) and lets it
+/// settle.
+Future<void> _filled(WidgetTester tester, String label) async {
+  final finder = find.widgetWithText(FilledButton, label);
+  await tester.ensureVisible(finder);
+  await tester.pump();
+  await tester.tap(finder);
+  await tester.pumpAndSettle();
+}
+
 /// Settles the scroll that follows typing (an animated scroll ignores taps) and goes
 /// back to the top.
 Future<void> _typed(WidgetTester tester) async {
@@ -247,6 +322,59 @@ void _activeHome(TestFakes fakes) {
   _withContacts(fakes, [testContact()]);
   fakes.plan.seedStandard(['c1']);
   fakes.server.activateNow();
+}
+
+/// Home with an open incident [incident] (an object as on the wire) at [now] (default:
+/// 8:00:21 PM in Asia/Kolkata on the day of the contract's example).
+void _incidentHome(
+  TestFakes fakes,
+  Map<String, dynamic> incident, {
+  DateTime? now,
+  List<TrustedContact>? contacts,
+}) {
+  fakes.clock.current = now ?? DateTime.utc(2026, 10, 9, 14, 30, 21);
+  _withContacts(fakes, contacts ?? [testContact()]);
+  fakes.plan.seedStandard(['c1']);
+  fakes.server.activateNow();
+  fakes.incidents.open(incident);
+}
+
+/// Contacts told, and one of them has opened an instruction; the clock is after stage 2.
+Map<String, dynamic> _viewedIncident({
+  String name = 'Brother',
+  String? title = 'House emergency',
+  bool revoked = false,
+}) => escalatedJson(
+  stage2Ran: true,
+  releases: [
+    releaseJson(
+      contactName: name,
+      title: title,
+      firstViewedAt: DateTime.utc(2026, 10, 10, 14, 50, 5),
+      lastViewedAt: DateTime.utc(2026, 10, 10, 14, 55),
+      viewCount: 3,
+      revokedAt: revoked ? DateTime.utc(2026, 10, 10, 14, 58) : null,
+      revokeReason: revoked ? 'instruction_removed' : null,
+    ),
+  ],
+);
+
+final _afterStageTwo = DateTime.utc(2026, 10, 10, 15);
+final _afterStageOne = DateTime.utc(2026, 10, 9, 17, 36, 20);
+
+/// The password for I'M SAFE, then the sheet that follows it.
+Future<void> _safePassword(WidgetTester tester) async {
+  await tapText(tester, "I'M SAFE");
+  await tester.pumpAndSettle();
+  expect(find.text("Confirm it's you"), findsOneWidget);
+}
+
+Future<void> _safeConfirmation(WidgetTester tester, String password) async {
+  await _safePassword(tester);
+  await typeInto(tester, 'Password', password);
+  await tapText(tester, 'Confirm');
+  await tester.pumpAndSettle();
+  expect(find.text("Confirm you're safe"), findsOneWidget);
 }
 
 /// Check-ins on and the plan has a hole: [contacts] and no stage, or with
@@ -317,6 +445,14 @@ Future<void> _frames(WidgetTester tester) async {
   for (var i = 0; i < 8; i++) {
     await tester.pump(const Duration(milliseconds: 200));
   }
+}
+
+/// Taps "Export my data" (at 2.0 text scale it is far below the first screen).
+Future<void> _tapExportButton(WidgetTester tester) async {
+  final button = find.widgetWithText(FilledButton, 'Export my data');
+  await tester.ensureVisible(button);
+  await tester.pump();
+  await tester.tap(button);
 }
 
 final _screens = <_Screen>[
@@ -674,6 +810,31 @@ final _screens = <_Screen>[
     route: AppRoutes.instructions,
     configure: (fakes) =>
         fakes.instructions.failures['list'] = [const NetworkFailure()],
+  ),
+  _Screen(
+    'instructions (hidden until the password is given)',
+    signedIn: true,
+    route: AppRoutes.instructions,
+    configure: (fakes) {
+      _instructionWorld(fakes);
+      _someInstructions(fakes);
+      fakes.instructions.readsNeedPassword = true;
+    },
+  ),
+  _Screen(
+    'instructions: password sheet (reading them)',
+    signedIn: true,
+    route: AppRoutes.instructions,
+    configure: (fakes) {
+      _instructionWorld(fakes);
+      _someInstructions(fakes);
+      fakes.instructions.readsNeedPassword = true;
+    },
+    prepare: (tester, _) async {
+      await tapText(tester, 'Show my instructions');
+      await tester.pumpAndSettle();
+      expect(find.text("Confirm it's you"), findsOneWidget);
+    },
   ),
   _Screen(
     'instructions: free-plan limit sheet',
@@ -1321,6 +1482,19 @@ final _screens = <_Screen>[
     ],
   ),
   _Screen(
+    'home (cannot load, the server refused, I\'M OK still works)',
+    signedIn: true,
+    route: AppRoutes.home,
+    configure: (fakes) => fakes.server.failures['home'] = [
+      const ForbiddenFailure(code: 'forbidden'),
+      const ForbiddenFailure(code: 'forbidden'),
+    ],
+    prepare: (tester, _) async {
+      expect(find.text("We can't show your latest status"), findsOneWidget);
+      expect(find.byType(CheckInButton), findsOneWidget);
+    },
+  ),
+  _Screen(
     'home (incident placeholder)',
     signedIn: true,
     route: AppRoutes.home,
@@ -1340,6 +1514,390 @@ final _screens = <_Screen>[
         ..contactsMessaged = true;
     },
     prepare: (tester, _) => _tapCheckIn(tester),
+  ),
+  _Screen(
+    'home (grace: who is told when, I\'M OK, what happens next)',
+    signedIn: true,
+    route: AppRoutes.home,
+    configure: (fakes) => _incidentHome(fakes, incidentJson()),
+    prepare: (tester, _) async => expect(
+      find.text('Mom will be notified at 11:00 PM unless you check in.'),
+      findsOneWidget,
+    ),
+  ),
+  _Screen(
+    'home (grace: two contacts, a stage put back, a contact that declined)',
+    signedIn: true,
+    route: AppRoutes.home,
+    configure: (fakes) => _incidentHome(
+      fakes,
+      incidentJson(
+        timeline: [
+          reminderJson('missed', anchor),
+          reminderJson(
+            'midpoint',
+            DateTime.utc(2026, 10, 9, 16, 0, 1),
+            status: 'cancelled',
+          ),
+          stageJson(
+            1,
+            DateTime.utc(2026, 10, 9, 18, 15, 1),
+            contacts: [
+              contactJson(momId, 'Samantha Rao-Whitfield'),
+              contactJson(brotherId, 'Brother'),
+            ],
+          ),
+        ],
+      ),
+      contacts: _everyone(),
+    ),
+  ),
+  _Screen(
+    'home (grace: the next step is on hold, offline, not received yet)',
+    signedIn: true,
+    route: AppRoutes.home,
+    configure: (fakes) {
+      _incidentHome(
+        fakes,
+        incidentJson(
+          timeline: [
+            reminderJson('missed', anchor),
+            stageJson(
+              1,
+              graceEnds,
+              status: 'held',
+              contacts: [contactJson(momId, 'Mom')],
+            ),
+          ],
+        ),
+      );
+      fakes.server.failures['checkIn'] = [const NetworkFailure()];
+    },
+    prepare: (tester, container) async {
+      await _tapCheckIn(tester);
+      final server =
+          container.read(checkInRepositoryProvider) as FakeCheckInServer;
+      server.failures['home'] = [const NetworkFailure()];
+      await container.read(homeControllerProvider.notifier).refresh();
+      await tester.pumpAndSettle();
+      await _toTop(tester);
+      expect(find.text('Offline — showing last known status'), findsOneWidget);
+      expect(find.text("Not received yet — we'll keep trying"), findsOneWidget);
+      expect(find.text('On hold'), findsOneWidget);
+    },
+  ),
+  _Screen(
+    'home (notified: who was told, what is next, I\'M SAFE)',
+    signedIn: true,
+    route: AppRoutes.home,
+    configure: (fakes) =>
+        _incidentHome(fakes, escalatedJson(), now: _afterStageOne),
+    prepare: (tester, _) async => expect(find.text("I'M SAFE"), findsOneWidget),
+  ),
+  _Screen(
+    'home (notified: every stage ran, a view, a long name and title)',
+    signedIn: true,
+    route: AppRoutes.home,
+    configure: (fakes) => _incidentHome(
+      fakes,
+      _viewedIncident(
+        name: 'Samantha Rao-Whitfield',
+        title: 'Where the original documents and the spare passport are kept at home',
+      ),
+      now: _afterStageTwo,
+    ),
+    prepare: (tester, _) async => expect(
+      find.textContaining('Samantha Rao-Whitfield viewed'),
+      findsOneWidget,
+    ),
+  ),
+  _Screen(
+    'home (notified: a release taken back, a held stage, a skipped contact)',
+    signedIn: true,
+    route: AppRoutes.home,
+    configure: (fakes) {
+      final json = _viewedIncident(revoked: true);
+      (json['timeline'] as List<Map<String, dynamic>>).addAll([
+        stageJson(
+          3,
+          DateTime.utc(2026, 10, 12, 14, 30, 1),
+          status: 'held',
+          contacts: [contactJson(momId, 'Mom')],
+          releaseCount: 2,
+        ),
+      ]);
+      _incidentHome(fakes, json, now: _afterStageTwo);
+    },
+  ),
+  _Screen(
+    'home (an incident this version cannot read, I\'M SAFE after safe_required)',
+    signedIn: true,
+    route: AppRoutes.home,
+    configure: (fakes) {
+      _activeHome(fakes);
+      fakes.server
+        ..openIncident(details: {'id': 'i-1'})
+        ..contactsMessaged = true;
+    },
+    prepare: (tester, _) async {
+      await _tapCheckIn(tester);
+      expect(find.text("I'M SAFE"), findsOneWidget);
+    },
+  ),
+  _Screen(
+    'home (an incident whose status and values this version does not know)',
+    signedIn: true,
+    route: AppRoutes.home,
+    configure: (fakes) => _incidentHome(
+      fakes,
+      incidentJson(
+        status: 'paused',
+        requires: 'review',
+        closedBy: 'robot',
+        timeline: [
+          {
+            ...reminderJson('missed', anchor),
+            'kind': 'push_nudge',
+            'variant': 'someday',
+            'status': 'snoozed',
+          },
+          stageJson(
+            1,
+            graceEnds,
+            contacts: [contactJson(momId, 'Mom', result: 'bounced')],
+          ),
+        ],
+      ),
+    ),
+  ),
+  _Screen(
+    'I\'M SAFE: password sheet',
+    signedIn: true,
+    route: AppRoutes.home,
+    configure: (fakes) =>
+        _incidentHome(fakes, _viewedIncident(), now: _afterStageTwo),
+    prepare: (tester, _) async => _safePassword(tester),
+  ),
+  _Screen(
+    'I\'M SAFE: confirmation (told, shared, seen, nothing can be undone)',
+    signedIn: true,
+    route: AppRoutes.home,
+    configure: (fakes) => _incidentHome(
+      fakes,
+      _viewedIncident(),
+      now: _afterStageTwo,
+      contacts: _everyone(),
+    ),
+    prepare: (tester, container) async {
+      await _safeConfirmation(tester, authOf(container).password);
+      expect(
+        find.text(
+          "Brother viewed “House emergency” at 8:20 PM. That can't be undone.",
+        ),
+        findsOneWidget,
+      );
+    },
+  ),
+  _Screen(
+    'I\'M SAFE: confirmation (long names, an untitled view, nothing shared)',
+    signedIn: true,
+    route: AppRoutes.home,
+    configure: (fakes) => _incidentHome(
+      fakes,
+      _viewedIncident(name: 'Samantha Rao-Whitfield', title: null),
+      now: _afterStageTwo,
+    ),
+    prepare: (tester, container) async =>
+        _safeConfirmation(tester, authOf(container).password),
+  ),
+  _Screen(
+    'I\'M SAFE: confirmation (sending)',
+    signedIn: true,
+    route: AppRoutes.home,
+    configure: (fakes) {
+      _incidentHome(fakes, _viewedIncident(), now: _afterStageTwo);
+      fakes.incidents.safeGate = Completer<void>().future;
+    },
+    prepare: (tester, container) async {
+      await _safeConfirmation(tester, authOf(container).password);
+      await tapText(tester, "Confirm I'm safe");
+      await tester.pump();
+    },
+  ),
+  _Screen(
+    'I\'M SAFE: marked safe',
+    signedIn: true,
+    route: AppRoutes.home,
+    configure: (fakes) =>
+        _incidentHome(fakes, _viewedIncident(), now: _afterStageTwo),
+    prepare: (tester, container) async {
+      await _safeConfirmation(tester, authOf(container).password);
+      await tapText(tester, "Confirm I'm safe");
+      await tester.pumpAndSettle();
+      expect(find.text("You're marked safe"), findsOneWidget);
+    },
+  ),
+  _Screen(
+    'I\'M SAFE: not confirmed',
+    signedIn: true,
+    route: AppRoutes.home,
+    configure: (fakes) {
+      _incidentHome(fakes, _viewedIncident(), now: _afterStageTwo);
+      fakes.incidents.failures['markSafe'] = [const NetworkFailure()];
+    },
+    prepare: (tester, container) async {
+      await _safeConfirmation(tester, authOf(container).password);
+      await tapText(tester, "Confirm I'm safe");
+      await tester.pumpAndSettle();
+      expect(find.text("We couldn't confirm that"), findsOneWidget);
+    },
+  ),
+  _Screen(
+    'I\'M SAFE: already closed',
+    signedIn: true,
+    route: AppRoutes.home,
+    configure: (fakes) {
+      _incidentHome(fakes, _viewedIncident(), now: _afterStageTwo);
+      fakes.incidents.failures['markSafe'] = [const InvalidStateFailure()];
+    },
+    prepare: (tester, container) async {
+      await _safeConfirmation(tester, authOf(container).password);
+      await tapText(tester, "Confirm I'm safe");
+      await tester.pumpAndSettle();
+      expect(find.text('This was already closed'), findsOneWidget);
+    },
+  ),
+  _Screen(
+    'I\'M SAFE: confirmation with a refusal above it',
+    signedIn: true,
+    route: AppRoutes.home,
+    configure: (fakes) {
+      _incidentHome(fakes, _viewedIncident(), now: _afterStageTwo);
+      fakes.incidents.failures['markSafe'] = [
+        const ForbiddenFailure(code: 'forbidden'),
+      ];
+    },
+    prepare: (tester, container) async {
+      await _safeConfirmation(tester, authOf(container).password);
+      await tapText(tester, "Confirm I'm safe");
+      await tester.pumpAndSettle();
+    },
+  ),
+  _Screen(
+    'timeline (grace)',
+    signedIn: true,
+    route: AppRoutes.homeIncident,
+    configure: (fakes) => _incidentHome(fakes, incidentJson()),
+  ),
+  _Screen(
+    'timeline (notified: views, a release taken back, what was shared)',
+    signedIn: true,
+    route: AppRoutes.homeIncident,
+    configure: (fakes) => _incidentHome(
+      fakes,
+      _viewedIncident(
+        name: 'Samantha Rao-Whitfield',
+        title: 'Where the original documents and the spare passport are kept at home',
+        revoked: true,
+      ),
+      now: _afterStageTwo,
+      contacts: _everyone(),
+    ),
+  ),
+  _Screen(
+    'timeline (a stage still to run shares an instruction)',
+    signedIn: true,
+    route: AppRoutes.homeIncident,
+    configure: (fakes) =>
+        _incidentHome(fakes, escalatedJson(), now: _afterStageOne),
+  ),
+  const _Screen(
+    'timeline (nothing open)',
+    signedIn: true,
+    route: AppRoutes.homeIncident,
+  ),
+  _Screen(
+    'timeline (cannot load)',
+    signedIn: true,
+    route: AppRoutes.homeIncident,
+    configure: (fakes) => fakes.server.failures['home'] = [
+      const NetworkFailure(),
+      const NetworkFailure(),
+    ],
+  ),
+  _Screen(
+    'settings > past incidents (every way one closes, Show more)',
+    signedIn: true,
+    route: AppRoutes.settingsIncidents,
+    configure: (fakes) {
+      for (var n = 1; n <= 22; n++) {
+        final due = DateTime.utc(
+          2026,
+          10,
+          9,
+          14,
+          30,
+        ).subtract(Duration(days: n));
+        final closedBy = const [
+          'user_checkin',
+          'user_safe',
+          'account_deleted',
+          'operator_void',
+          'from_the_future',
+        ][n % 5];
+        fakes.incidents.addClosed({
+          ...incidentJson(
+            id: '00000000-0000-4000-8000-${n.toString().padLeft(12, '0')}',
+            status: 'resolved',
+            requires: null,
+            contactsMessaged: n.isEven,
+            closedAt: due.add(const Duration(minutes: 20)),
+            closedBy: closedBy,
+          ),
+          'missed_due_at': iso(due),
+          'anchor_at': iso(due.add(const Duration(seconds: 1))),
+        });
+      }
+    },
+  ),
+  const _Screen(
+    'settings > past incidents (empty)',
+    signedIn: true,
+    route: AppRoutes.settingsIncidents,
+  ),
+  _Screen(
+    'settings > past incidents (error)',
+    signedIn: true,
+    route: AppRoutes.settingsIncidents,
+    configure: (fakes) =>
+        fakes.incidents.failures['list'] = [const NetworkFailure()],
+  ),
+  _Screen(
+    'settings > past incidents > one incident',
+    signedIn: true,
+    route: AppRoutes.incidentDetail('00000000-0000-4000-8000-000000000004'),
+    configure: (fakes) {
+      final closed = _viewedIncident();
+      fakes.incidents.addClosed({
+        ...closed,
+        'status': 'cancelled',
+        'requires': null,
+        'closed_at': iso(DateTime.utc(2026, 10, 10, 15)),
+        'closed_by': 'user_safe',
+      });
+    },
+  ),
+  _Screen(
+    'settings > past incidents > one incident (cannot load)',
+    signedIn: true,
+    route: AppRoutes.incidentDetail('00000000-0000-4000-8000-000000000004'),
+    configure: (fakes) =>
+        fakes.incidents.failures['get'] = [const NetworkFailure()],
+  ),
+  _Screen(
+    'settings > past incidents > one that is not there',
+    signedIn: true,
+    route: AppRoutes.incidentDetail('00000000-0000-4000-8000-0000000000aa'),
   ),
   _Screen(
     'home (status this version does not know)',
@@ -1562,6 +2120,237 @@ final _screens = <_Screen>[
     route: AppRoutes.plan,
     configure: (fakes) => fakes.plan.failures['get'] = [const NetworkFailure()],
   ),
+  const _Screen(
+    'plan editor',
+    signedIn: true,
+    route: AppRoutes.planEdit,
+    configure: _editorWorld,
+  ),
+  _Screen(
+    'plan editor (a stage shares an instruction)',
+    signedIn: true,
+    route: AppRoutes.planEdit,
+    configure: (fakes) => _editorWorld(fakes, instruction: true),
+  ),
+  _Screen(
+    'plan editor (free plan, no room for a stage)',
+    signedIn: true,
+    route: AppRoutes.planEdit,
+    configure: (fakes) => _editorWorld(fakes, tier: 'free'),
+  ),
+  const _Screen(
+    'plan editor (no stage yet)',
+    signedIn: true,
+    route: AppRoutes.planEdit,
+  ),
+  _Screen(
+    'plan editor (a time that does not fit, unsaved changes)',
+    signedIn: true,
+    route: AppRoutes.planEdit,
+    configure: _editorWorld,
+    prepare: (tester, _) async {
+      await _chipOf(tester, '1 day');
+      await _toTop(tester);
+    },
+  ),
+  _Screen(
+    'plan editor (nobody would be told)',
+    signedIn: true,
+    route: AppRoutes.planEdit,
+    configure: _editorWorld,
+    prepare: (tester, _) async {
+      await _stageButton(tester, 'Choose who is told at stage', 1);
+      await _tick(tester, 'Mom');
+      await _tick(tester, 'Samantha Rao-Whitfield');
+      await _filled(tester, 'Use these people');
+      await _stageButton(tester, 'Choose who is told at stage', 2);
+      await _tick(tester, 'Dad');
+      await _filled(tester, 'Use these people');
+      await _toTop(tester);
+    },
+  ),
+  _Screen(
+    'plan editor: time sheet',
+    signedIn: true,
+    route: AppRoutes.planEdit,
+    configure: _editorWorld,
+    prepare: (tester, _) async {
+      await _stageButton(tester, 'Change the time of stage', 2);
+    },
+  ),
+  _Screen(
+    'plan editor: time sheet (a custom time that is too close)',
+    signedIn: true,
+    route: AppRoutes.planEdit,
+    configure: _editorWorld,
+    prepare: (tester, _) async {
+      await _stageButton(tester, 'Change the time of stage', 2);
+      await tester.enterText(find.widgetWithText(TextField, 'Minutes'), '190');
+      await tester.pumpAndSettle();
+    },
+  ),
+  _Screen(
+    'plan editor: time sheet (free plan)',
+    signedIn: true,
+    route: AppRoutes.planEdit,
+    configure: (fakes) => _editorWorld(fakes, tier: 'free'),
+    prepare: (tester, _) async {
+      await _stageButton(tester, 'Change the time of stage', 2);
+    },
+  ),
+  _Screen(
+    'plan editor: who is told',
+    signedIn: true,
+    route: AppRoutes.planEdit,
+    configure: _editorWorld,
+    prepare: (tester, _) async {
+      await _stageButton(tester, 'Choose who is told at stage', 2);
+    },
+  ),
+  _Screen(
+    'plan editor: who is told (no trusted contacts)',
+    signedIn: true,
+    route: AppRoutes.planEdit,
+    configure: (fakes) {
+      _withContacts(fakes, const []);
+      fakes.plan.seed(
+        const PlanDraft(
+          graceMinutes: 180,
+          stages: [PlanStageDraft(offsetMinutes: 180, contactIds: [])],
+        ),
+      );
+    },
+    prepare: (tester, _) async {
+      await _stageButton(tester, 'Choose who is told at stage', 1);
+    },
+  ),
+  _Screen(
+    'plan editor: remove a stage',
+    signedIn: true,
+    route: AppRoutes.planEdit,
+    configure: _editorWorld,
+    prepare: (tester, _) async {
+      await _stageButton(tester, 'Remove stage', 1);
+    },
+  ),
+  _Screen(
+    'plan editor: a stage that shares instructions cannot be removed',
+    signedIn: true,
+    route: AppRoutes.planEdit,
+    configure: (fakes) => _editorWorld(fakes, instruction: true),
+    prepare: (tester, _) async {
+      await _stageButton(tester, 'Remove stage', 2);
+    },
+  ),
+  _Screen(
+    'plan editor (read-only, a check-in is overdue)',
+    signedIn: true,
+    route: AppRoutes.planEdit,
+    configure: (fakes) {
+      _editorWorld(fakes, active: true, instruction: true);
+      fakes.server.openIncident();
+    },
+  ),
+  _Screen(
+    'plan editor (changed somewhere else)',
+    signedIn: true,
+    route: AppRoutes.planEdit,
+    configure: _editorWorld,
+    prepare: (tester, container) async {
+      await _chipOf(tester, '6 hours');
+      // Changed on another device while this screen was open.
+      (container.read(planRepositoryProvider) as FakePlanServer).seedStandard([
+        'c1',
+      ], offsetMinutes: 720);
+      await _filled(tester, 'Save changes');
+      await _toTop(tester);
+    },
+  ),
+  _Screen(
+    'plan editor (the server refused the times)',
+    signedIn: true,
+    route: AppRoutes.planEdit,
+    configure: (fakes) {
+      _editorWorld(fakes);
+      fakes.plan.failures['save'] = [
+        const ValidationFailure(
+          code: 'validation_failed',
+          fieldErrors: [
+            ApiFieldError(
+              field: 'grace_minutes',
+              code: 'not_a_preset',
+              message: 'x',
+            ),
+            ApiFieldError(
+              field: 'stages[1].offset_minutes',
+              code: 'release_too_early',
+              message: 'x',
+            ),
+          ],
+          problem: ApiProblem(status: 422, code: 'validation_failed'),
+        ),
+      ];
+    },
+    prepare: (tester, _) async {
+      await _chipOf(tester, '6 hours');
+      await _filled(tester, 'Save changes');
+      await _toTop(tester);
+    },
+  ),
+  _Screen(
+    'plan editor (offline, nothing lost)',
+    signedIn: true,
+    route: AppRoutes.planEdit,
+    configure: (fakes) {
+      _editorWorld(fakes);
+      fakes.plan.failures['save'] = [const NetworkFailure()];
+    },
+    prepare: (tester, _) async {
+      await _chipOf(tester, '6 hours');
+      await _filled(tester, 'Save changes');
+      await _toTop(tester);
+    },
+  ),
+  _Screen(
+    'plan editor (a stage that shares instructions was put back)',
+    signedIn: true,
+    route: AppRoutes.planEdit,
+    configure: _editorWorld,
+    prepare: (tester, container) async {
+      // Made on another device after this screen was opened: the phone's own list does
+      // not know it, so the server is the one that says no.
+      final stage = (container.read(
+        planRepositoryProvider,
+      ) as FakePlanServer).stages.last.id;
+      (container.read(instructionsRepositoryProvider) as FakeInstructionsServer)
+          .seed(title: 'House emergency', recipients: {'c3': stage});
+      await _stageButton(tester, 'Remove stage', 2);
+      await _filled(tester, 'Remove stage');
+      await _filled(tester, 'Save changes');
+      await _toTop(tester);
+    },
+  ),
+  _Screen(
+    'plan editor: password sheet',
+    signedIn: true,
+    route: AppRoutes.planEdit,
+    configure: (fakes) => _editorWorld(fakes, active: true),
+    prepare: (tester, _) async {
+      await _chipOf(tester, '6 hours');
+      final finder = find.widgetWithText(FilledButton, 'Save changes');
+      await tester.ensureVisible(finder);
+      await tester.pump();
+      await tester.tap(finder);
+      await _frames(tester);
+      expect(find.text("Confirm it's you"), findsOneWidget);
+    },
+  ),
+  _Screen(
+    'plan editor (cannot load)',
+    signedIn: true,
+    route: AppRoutes.planEdit,
+    configure: (fakes) => fakes.plan.failures['get'] = [const NetworkFailure()],
+  ),
   const _Screen('settings', signedIn: true, route: AppRoutes.settings),
   const _Screen('profile', signedIn: true, route: AppRoutes.settingsProfile),
   _Screen(
@@ -1618,6 +2407,36 @@ final _screens = <_Screen>[
     signedIn: true,
     route: AppRoutes.settingsNotifications,
   ),
+  // Phase 8: what the screen says in each state of push.
+  _Screen(
+    'notifications (allowed, push set up)',
+    signedIn: true,
+    route: AppRoutes.settingsNotifications,
+    configure: (fakes) {
+      fakes.push.configured = true;
+      fakes.notifications.current = NotificationPermission.granted;
+    },
+  ),
+  _Screen(
+    'notifications (blocked in the phone\'s settings)',
+    signedIn: true,
+    route: AppRoutes.settingsNotifications,
+    configure: (fakes) {
+      fakes.push.configured = true;
+      fakes.notifications.current = NotificationPermission.permanentlyDenied;
+    },
+  ),
+  _Screen(
+    'notifications (allowed from the screen)',
+    signedIn: true,
+    route: AppRoutes.settingsNotifications,
+    configure: (fakes) => fakes.push.configured = true,
+    prepare: (tester, _) async {
+      await tapText(tester, 'Allow notifications');
+      await tester.pumpAndSettle();
+      expect(find.text('Notifications are on.'), findsOneWidget);
+    },
+  ),
   const _Screen('about', signedIn: true, route: AppRoutes.settingsAbout),
   _Screen(
     'timezone picker',
@@ -1644,6 +2463,297 @@ final _screens = <_Screen>[
     prepare: (tester, _) async {
       await tapText(tester, 'Sign out');
       await tester.pumpAndSettle();
+    },
+  ),
+  // --- Phase 7: activity, plan and limits, privacy and data, help, update gate ---------
+  const _Screen(
+    'settings > activity (empty)',
+    signedIn: true,
+    route: AppRoutes.settingsActivity,
+  ),
+  _Screen(
+    'settings > activity (days, a title, a null name, an unknown action, Show more)',
+    signedIn: true,
+    route: AppRoutes.settingsActivity,
+    configure: (fakes) {
+      fakes.activity.items = [
+        activityItem(
+          'release.viewed',
+          id: 30,
+          at: DateTime.utc(2026, 10, 8, 9),
+          params: {
+            'contact_display_name': 'Brother',
+            'instruction_titles': ['House emergency', 'Where the passport is'],
+            'release_count': 4,
+          },
+        ),
+        activityItem(
+          'brand.new.action',
+          id: 29,
+          at: DateTime.utc(2026, 10, 8, 8),
+          params: {'x': 1},
+        ),
+        activityItem(
+          'instruction.recipients_changed',
+          id: 28,
+          at: DateTime.utc(2026, 10, 7, 12),
+          params: {'instruction_title': null, 'added': 1, 'removed': 2},
+        ),
+        for (var i = 27; i >= 1; i--)
+          activityItem(
+            i.isEven ? 'plan.updated' : 'checkin.recorded',
+            id: i,
+            at: DateTime.utc(2026, 10, 6).subtract(Duration(hours: 27 - i)),
+            params: i.isEven
+                ? {'stages': 2, 'removed': 1}
+                : {'kind': 'ok', 'source': 'web'},
+          ),
+      ];
+    },
+  ),
+  _Screen(
+    'settings > activity (error)',
+    signedIn: true,
+    route: AppRoutes.settingsActivity,
+    configure: (fakes) => fakes.activity.failures.add(const NetworkFailure()),
+  ),
+  _Screen(
+    'settings > activity (last information we have)',
+    signedIn: true,
+    route: AppRoutes.settingsActivity,
+    configure: (fakes) {
+      fakes.activity.items = [activityItem('checkin.recorded')];
+    },
+    prepare: (tester, container) async {
+      (container.read(activityRepositoryProvider) as FakeActivityServer)
+          .failures
+          .add(const NetworkFailure());
+      // The refresh a pull would make (the same call, without the gesture).
+      await container.read(activityControllerProvider.notifier).reload();
+      await tester.pumpAndSettle();
+      expect(
+        find.textContaining('Showing the last information we have'),
+        findsOneWidget,
+      );
+    },
+  ),
+  _Screen(
+    'home with recent activity',
+    signedIn: true,
+    route: AppRoutes.home,
+    configure: (fakes) {
+      _activeHome(fakes);
+      fakes.server.recentActivity = [
+        RecentActivity(
+          action: 'checkin.recorded',
+          occurredAt: DateTime.utc(2026, 10, 8, 9),
+        ),
+        RecentActivity(
+          action: 'release.viewed',
+          occurredAt: DateTime.utc(2026, 10, 7, 9),
+        ),
+        RecentActivity(
+          action: 'something.new',
+          occurredAt: DateTime.utc(2026, 10, 6, 9),
+        ),
+      ];
+    },
+  ),
+  const _Screen(
+    'settings > your plan (free)',
+    signedIn: true,
+    route: AppRoutes.settingsYourPlan,
+    configure: _activeHome,
+  ),
+  _Screen(
+    'settings > your plan (premium)',
+    signedIn: true,
+    route: AppRoutes.settingsYourPlan,
+    configure: (fakes) =>
+        _withContacts(fakes, [testContact()], tier: 'premium'),
+  ),
+  _Screen(
+    'settings > your plan (error)',
+    signedIn: true,
+    route: AppRoutes.settingsYourPlan,
+    configure: (fakes) =>
+        fakes.contacts.failures['entitlements'] = [const NetworkFailure()],
+  ),
+  const _Screen(
+    'settings > what AfterMe keeps',
+    signedIn: true,
+    route: AppRoutes.settingsPrivacy,
+  ),
+  const _Screen(
+    'settings > export my data',
+    signedIn: true,
+    route: AppRoutes.settingsExport,
+  ),
+  _Screen(
+    'settings > export my data (password sheet)',
+    signedIn: true,
+    route: AppRoutes.settingsExport,
+    prepare: (tester, _) async {
+      await _tapExportButton(tester);
+      await _frames(tester);
+      expect(find.text("Confirm it's you"), findsOneWidget);
+    },
+  ),
+  _Screen(
+    'settings > export my data (saved)',
+    signedIn: true,
+    route: AppRoutes.settingsExport,
+    prepare: (tester, container) async {
+      final auth = container.read(authRepositoryProvider) as FakeAuthRepository;
+      await auth.reauth(password: auth.password);
+      await _tapExportButton(tester);
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Saved. The file is where you chose to put it.'),
+        findsOneWidget,
+      );
+      await _toTop(tester);
+    },
+  ),
+  _Screen(
+    'settings > export my data (not confirmed)',
+    signedIn: true,
+    route: AppRoutes.settingsExport,
+    prepare: (tester, container) async {
+      final auth = container.read(authRepositoryProvider) as FakeAuthRepository;
+      await auth.reauth(password: auth.password);
+      (container.read(
+        privacyRepositoryProvider,
+      ) as FakePrivacyRepository).failures['export'] = [
+        const NetworkFailure(),
+      ];
+      await _tapExportButton(tester);
+      await tester.pumpAndSettle();
+      expect(find.textContaining("We couldn't get your file"), findsOneWidget);
+      await _toTop(tester);
+    },
+  ),
+  _Screen(
+    'settings > export my data (cancelled, too large, no app)',
+    signedIn: true,
+    route: AppRoutes.settingsExport,
+    prepare: (tester, container) async {
+      final auth = container.read(authRepositoryProvider) as FakeAuthRepository;
+      await auth.reauth(password: auth.password);
+      (container.read(fileExportGatewayProvider) as FakeFileExportGateway)
+          .answers
+          .add(FileExportResult.cancelled);
+      await _tapExportButton(tester);
+      await tester.pumpAndSettle();
+      expect(find.textContaining("Nothing was saved"), findsOneWidget);
+      await _toTop(tester);
+    },
+  ),
+  const _Screen(
+    'settings > delete account',
+    signedIn: true,
+    route: AppRoutes.settingsDelete,
+  ),
+  _Screen(
+    'settings > delete account (typed, not confirmed)',
+    signedIn: true,
+    route: AppRoutes.settingsDelete,
+    prepare: (tester, container) async {
+      final auth = container.read(authRepositoryProvider) as FakeAuthRepository;
+      await auth.reauth(password: auth.password);
+      (container.read(
+        privacyRepositoryProvider,
+      ) as FakePrivacyRepository).failures['delete'] = [
+        const NetworkFailure(),
+      ];
+      final field = find.widgetWithText(TextField, 'Type DELETE to confirm');
+      await tester.ensureVisible(field);
+      await tester.enterText(field, 'DELETE');
+      await tester.pump();
+      final button = find.widgetWithText(FilledButton, 'Delete my account');
+      await tester.ensureVisible(button);
+      await tester.pump();
+      await tester.tap(button);
+      await tester.pumpAndSettle();
+      expect(find.textContaining("couldn't confirm"), findsOneWidget);
+      await _toTop(tester);
+    },
+  ),
+  _Screen(
+    'settings > delete account (password sheet)',
+    signedIn: true,
+    route: AppRoutes.settingsDelete,
+    prepare: (tester, _) async {
+      final field = find.widgetWithText(TextField, 'Type DELETE to confirm');
+      await tester.ensureVisible(field);
+      await tester.enterText(field, 'DELETE');
+      await tester.pump();
+      final button = find.widgetWithText(FilledButton, 'Delete my account');
+      await tester.ensureVisible(button);
+      await tester.pump();
+      await tester.tap(button);
+      await _frames(tester);
+      expect(find.text("Confirm it's you"), findsOneWidget);
+    },
+  ),
+  _Screen(
+    'your account has been closed',
+    route: AppRoutes.accountClosed,
+    prepare: (tester, container) async {
+      container
+          .read(accountClosedNoticeProvider.notifier)
+          .close(
+            AccountClosed(
+              purgeAfter: DateTime.utc(2026, 11, 7, 9, 2, 40),
+              timezone: 'Asia/Kolkata',
+            ),
+          );
+      await tester.pumpAndSettle();
+    },
+  ),
+  _Screen(
+    'your account could not be confirmed as closed',
+    route: AppRoutes.accountClosed,
+    prepare: (tester, container) async {
+      container
+          .read(accountClosedNoticeProvider.notifier)
+          .close(
+            const AccountClosed(timezone: 'Asia/Kolkata', confirmed: false),
+          );
+      await tester.pumpAndSettle();
+      expect(
+        find.text("We couldn't confirm that your account was closed"),
+        findsOneWidget,
+      );
+    },
+  ),
+  const _Screen(
+    'settings > if you lose your phone',
+    signedIn: true,
+    route: AppRoutes.settingsLostPhone,
+  ),
+  _Screen(
+    'update AfterMe (signed in)',
+    signedIn: true,
+    route: AppRoutes.home,
+    prepare: (tester, container) async {
+      container.read(upgradeGateProvider.notifier).raise();
+      await tester.pumpAndSettle();
+      expect(find.text('Update AfterMe'), findsOneWidget);
+    },
+  ),
+  _Screen(
+    'update AfterMe (signed out, store could not be opened)',
+    route: AppRoutes.signIn,
+    configure: (fakes) => fakes.urls.succeeds = false,
+    prepare: (tester, container) async {
+      container.read(upgradeGateProvider.notifier).raise();
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Update in Google Play'));
+      await tester.pump();
+      await tester.tap(find.text('Update in Google Play'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining("couldn't open Google Play"), findsOneWidget);
     },
   ),
   _Screen(

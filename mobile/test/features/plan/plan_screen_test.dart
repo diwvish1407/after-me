@@ -76,6 +76,36 @@ void main() {
       expect(find.text('Use this plan'), findsNothing);
     });
 
+    testWidgets('the way into the editor and the past incidents, and what '
+        'a stage shares', (tester) async {
+      final fakes = _fakes();
+      fakes.plan.seed(
+        const PlanDraft(
+          graceMinutes: 180,
+          stages: [
+            PlanStageDraft(offsetMinutes: 180, contactIds: ['c1']),
+            PlanStageDraft(offsetMinutes: 1440, contactIds: ['c2']),
+          ],
+        ),
+      );
+      fakes.instructions.seed(
+        title: 'House emergency',
+        recipients: {'c2': fakes.plan.stages.last.id},
+      );
+      await openApp(tester, fakes: fakes, route: AppRoutes.plan);
+
+      expect(find.text('Shares 1 instruction'), findsOneWidget);
+      expect(
+        find.text(
+          'At 8:00 PM the next day, Brother is notified. 1 instruction is also shared.',
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('Edit your plan'), findsOneWidget);
+      expect(find.text('Past incidents'), findsOneWidget);
+      expect(find.text('Missed check-ins and how they ended'), findsOneWidget);
+    });
+
     testWidgets('a contact that is not on the list is never shown by id', (
       tester,
     ) async {

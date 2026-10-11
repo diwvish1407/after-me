@@ -5,6 +5,7 @@ import 'package:material_ui/material_ui.dart';
 import '../core/auth/auth_controller.dart';
 import '../core/auth/session_ended_notice.dart';
 import '../core/config/app_config.dart';
+import '../features/activity/presentation/activity_screen.dart';
 import '../features/auth/presentation/create_account_screen.dart';
 import '../features/auth/presentation/enter_code_screen.dart';
 import '../features/auth/presentation/forgot_password_screen.dart';
@@ -17,6 +18,9 @@ import '../features/contacts/presentation/edit_contact_screen.dart';
 import '../features/contacts/presentation/people_screen.dart';
 import '../features/dev/presentation/design_gallery_screen.dart';
 import '../features/home/presentation/home_screen.dart';
+import '../features/incidents/presentation/incident_detail_screen.dart';
+import '../features/incidents/presentation/incident_history_screen.dart';
+import '../features/incidents/presentation/incident_timeline_screen.dart';
 import '../features/instructions/presentation/add_instruction_screen.dart';
 import '../features/instructions/presentation/edit_instruction_screen.dart';
 import '../features/instructions/presentation/instruction_detail_screen.dart';
@@ -30,16 +34,24 @@ import '../features/onboarding/presentation/protect_step_screen.dart';
 import '../features/onboarding/presentation/schedule_step_screen.dart';
 import '../features/onboarding/presentation/splash_screen.dart';
 import '../features/onboarding/presentation/welcome_screen.dart';
+import '../features/plan/presentation/plan_editor_screen.dart';
 import '../features/plan/presentation/plan_screen.dart';
+import '../features/privacy/application/account_closed_notice.dart';
+import '../features/privacy/presentation/account_closed_screen.dart';
+import '../features/privacy/presentation/delete_account_screen.dart';
+import '../features/privacy/presentation/export_data_screen.dart';
+import '../features/privacy/presentation/privacy_info_screen.dart';
 import '../features/settings/presentation/about_screen.dart';
 import '../features/settings/presentation/app_lock_settings_screen.dart';
 import '../features/settings/presentation/change_email_screen.dart';
 import '../features/settings/presentation/change_password_screen.dart';
+import '../features/settings/presentation/lost_phone_screen.dart';
 import '../features/settings/presentation/notifications_settings_screen.dart';
 import '../features/settings/presentation/profile_screen.dart';
 import '../features/settings/presentation/security_screen.dart';
 import '../features/settings/presentation/sessions_screen.dart';
 import '../features/settings/presentation/settings_screen.dart';
+import '../features/settings/presentation/your_plan_screen.dart';
 import '../features/shell/presentation/app_shell.dart';
 
 /// Route paths.
@@ -56,11 +68,17 @@ abstract final class AppRoutes {
   static const forgotPassword = '/forgot-password';
   static const devGallery = '/dev/gallery';
   static const home = '/home';
+
+  /// The open incident's timeline, opened from Home.
+  static const homeIncident = '/home/incident';
   static const people = '/people';
   static const peopleAdd = '/people/add';
   static const instructions = '/instructions';
   static const instructionNew = '/instructions/new';
   static const plan = '/plan';
+
+  /// The plan editor, opened from the Plan tab.
+  static const planEdit = '/plan/edit';
   static const settings = '/settings';
   static const settingsProfile = '/settings/profile';
   static const settingsSecurity = '/settings/security';
@@ -71,7 +89,27 @@ abstract final class AppRoutes {
   static const settingsNotifications = '/settings/notifications';
   static const settingsSchedule = '/settings/check-in-schedule';
   static const settingsCheckInHistory = '/settings/check-in-history';
+  static const settingsIncidents = '/settings/incidents';
   static const settingsAbout = '/settings/about';
+
+  /// The Activity feed (Phase 7).
+  static const settingsActivity = '/settings/activity';
+
+  /// The tier, its limits and what is used.
+  static const settingsYourPlan = '/settings/your-plan';
+
+  /// What AfterMe keeps (the privacy explanation), and under it the export and the
+  /// account deletion.
+  static const settingsPrivacy = '/settings/privacy';
+  static const settingsExport = '/settings/privacy/export';
+  static const settingsDelete = '/settings/privacy/delete';
+
+  /// Help for a lost phone: check in from any browser.
+  static const settingsLostPhone = '/settings/lost-phone';
+
+  /// The last screen after an account was closed. Reachable only signed out, only while
+  /// the deletion's notice is set (see [authRedirect]).
+  static const accountClosed = '/account-closed';
 
   /// A contact's detail page, `/people/<id>`.
   static String contactDetail(String id) =>
@@ -88,6 +126,19 @@ abstract final class AppRoutes {
   /// deep links exist); an unknown id shows a calm "not found" page.
   static bool isContactRoute(String location) =>
       _contactRoute.hasMatch(location);
+
+  /// A past incident's detail page, `/settings/incidents/<id>`.
+  static String incidentDetail(String id) =>
+      '$settingsIncidents/${Uri.encodeComponent(id)}';
+
+  static final RegExp _incidentRoute = RegExp(
+    r'^/settings/incidents/[A-Za-z0-9_-]{1,64}$',
+  );
+
+  /// Whether [location] is an incident's page. The id is only ever produced by the app
+  /// (no deep links exist); an unknown id shows a calm "not found" page.
+  static bool isIncidentRoute(String location) =>
+      _incidentRoute.hasMatch(location);
 
   /// An instruction's detail page, `/instructions/<id>`.
   static String instructionDetail(String id) =>
@@ -119,7 +170,14 @@ abstract final class AppRoutes {
     settingsNotifications,
     settingsSchedule,
     settingsCheckInHistory,
+    settingsIncidents,
     settingsAbout,
+    settingsActivity,
+    settingsYourPlan,
+    settingsPrivacy,
+    settingsExport,
+    settingsDelete,
+    settingsLostPhone,
   ];
 
   /// The onboarding steps after the account exists.
@@ -142,8 +200,10 @@ abstract final class AppRoutes {
   /// Routes reachable only with a session, once onboarding is done.
   static Set<String> signedInRoutes() => {
     ...shellTabs,
+    homeIncident,
     peopleAdd,
     instructionNew,
+    planEdit,
     ...settingsScreens,
     ...onboardingSteps,
   };
@@ -151,6 +211,7 @@ abstract final class AppRoutes {
   /// Every registered route for the given environment.
   static Set<String> knownRoutes({required bool isDev}) => {
     splash,
+    accountClosed,
     ...publicRoutes(isDev: isDev),
     ...neutralRoutes,
     ...signedInRoutes(),
@@ -160,6 +221,9 @@ abstract final class AppRoutes {
 /// The redirect rules, as a pure function (unit-tested for every state).
 ///
 /// * `unknown` (start-up): everything goes to `/splash` until the session is read.
+/// * `signedOut`, with [accountClosed] set (the server confirmed the deletion): the
+///   "Your account has been closed" screen and nothing else, until the person has read
+///   it.
 /// * `signedOut`: public and neutral routes only; anything else goes to `/welcome`.
 /// * `signedIn`, onboarding progress not read yet: stay on `/splash`.
 /// * `signedIn`, onboarding unfinished: the onboarding steps (and the neutral routes);
@@ -178,6 +242,7 @@ String? authRedirect({
   required bool isDev,
   OnboardingState onboarding = const OnboardingState(loaded: true),
   bool sessionEnded = false,
+  bool accountClosed = false,
 }) {
   final public = AppRoutes.publicRoutes(isDev: isDev);
   final neutral = AppRoutes.neutralRoutes;
@@ -185,6 +250,15 @@ String? authRedirect({
     case AuthStatus.unknown:
       return location == AppRoutes.splash ? null : AppRoutes.splash;
     case AuthStatus.signedOut:
+      if (accountClosed) {
+        return location == AppRoutes.accountClosed
+            ? null
+            : AppRoutes.accountClosed;
+      }
+      if (location == AppRoutes.accountClosed) {
+        // Nothing to say: this is not a place to arrive at.
+        return AppRoutes.welcome;
+      }
       if (public.contains(location) || neutral.contains(location)) {
         return null;
       }
@@ -205,7 +279,8 @@ String? authRedirect({
       }
       return AppRoutes.signedInRoutes().contains(location) ||
               AppRoutes.isContactRoute(location) ||
-              AppRoutes.isInstructionRoute(location)
+              AppRoutes.isInstructionRoute(location) ||
+              AppRoutes.isIncidentRoute(location)
           ? null
           : AppRoutes.home;
   }
@@ -222,18 +297,25 @@ final routerProvider = Provider<GoRouter>((ref) {
   void bump(Object? _, Object? _) => refresh.value++;
   ref
     ..listen<AuthStatus>(authControllerProvider, bump)
-    ..listen<OnboardingState>(onboardingControllerProvider, bump);
+    ..listen<OnboardingState>(onboardingControllerProvider, bump)
+    ..listen<AccountClosed?>(accountClosedNoticeProvider, bump);
 
   GoRoute simpleRoute(String path, WidgetBuilder builder) =>
       GoRoute(path: path, builder: (context, state) => builder(context));
 
   final router = GoRouter(
     initialLocation: AppRoutes.splash,
+    // The platform's default route is whatever another app put in an intent to the
+    // exported launcher activity (`route` extra or intent data). It is never used: the
+    // app always starts at its own splash and the redirect rules decide the rest
+    // (SECURITY.md §11). MainActivity.kt refuses the same extras natively.
+    overridePlatformDefaultLocation: true,
     refreshListenable: refresh,
     redirect: (context, state) => authRedirect(
       status: ref.read(authControllerProvider),
       onboarding: ref.read(onboardingControllerProvider),
       sessionEnded: ref.read(sessionEndedNoticeProvider),
+      accountClosed: ref.read(accountClosedNoticeProvider) != null,
       location: state.uri.path,
       isDev: config.isDev,
     ),
@@ -263,6 +345,10 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: AppRoutes.forgotPassword,
         builder: (context, state) =>
             ForgotPasswordScreen(initialEmail: _stringExtra(state.extra)),
+      ),
+      GoRoute(
+        path: AppRoutes.accountClosed,
+        builder: (context, state) => const AccountClosedScreen(),
       ),
       // Developer-only: not even registered outside dev builds.
       if (config.isDev)
@@ -298,6 +384,12 @@ final routerProvider = Provider<GoRouter>((ref) {
               GoRoute(
                 path: AppRoutes.home,
                 builder: (context, state) => const HomeScreen(),
+                routes: [
+                  simpleRoute(
+                    'incident',
+                    (_) => const IncidentTimelineScreen(),
+                  ),
+                ],
               ),
             ],
           ),
@@ -364,6 +456,7 @@ final routerProvider = Provider<GoRouter>((ref) {
               GoRoute(
                 path: AppRoutes.plan,
                 builder: (context, state) => const PlanScreen(),
+                routes: [simpleRoute('edit', (_) => const PlanEditorScreen())],
               ),
             ],
           ),
@@ -402,7 +495,30 @@ final routerProvider = Provider<GoRouter>((ref) {
                     'check-in-history',
                     (_) => const CheckInHistoryScreen(),
                   ),
+                  GoRoute(
+                    path: 'incidents',
+                    builder: (context, state) => const IncidentHistoryScreen(),
+                    routes: [
+                      GoRoute(
+                        path: ':id',
+                        builder: (context, state) => IncidentDetailScreen(
+                          incidentId: state.pathParameters['id'] ?? '',
+                        ),
+                      ),
+                    ],
+                  ),
                   simpleRoute('about', (_) => const AboutScreen()),
+                  simpleRoute('activity', (_) => const ActivityScreen()),
+                  simpleRoute('your-plan', (_) => const YourPlanScreen()),
+                  GoRoute(
+                    path: 'privacy',
+                    builder: (context, state) => const PrivacyInfoScreen(),
+                    routes: [
+                      simpleRoute('export', (_) => const ExportDataScreen()),
+                      simpleRoute('delete', (_) => const DeleteAccountScreen()),
+                    ],
+                  ),
+                  simpleRoute('lost-phone', (_) => const LostPhoneScreen()),
                 ],
               ),
             ],

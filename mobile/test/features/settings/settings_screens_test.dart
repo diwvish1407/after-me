@@ -2,11 +2,14 @@ import 'package:afterme/app/router.dart';
 import 'package:afterme/core/api/failures/app_failure.dart';
 import 'package:afterme/core/api/models/api_problem.dart';
 import 'package:afterme/core/auth/auth_controller.dart';
+import 'package:afterme/core/auth/session_ended_notice.dart';
 import 'package:afterme/core/permissions/notification_permission.dart';
 import 'package:afterme/core/security/app_lock/app_lock_controller.dart';
 import 'package:afterme/core/security/app_lock/local_auth_gateway.dart';
+import 'package:afterme/features/auth/application/account_session.dart';
 import 'package:afterme/features/auth/application/me_controller.dart';
 import 'package:afterme/features/auth/data/models/account_models.dart';
+import 'package:afterme/features/checkin/application/checkin_controller.dart';
 import 'package:afterme/features/home/application/home_controller.dart';
 import 'package:afterme/features/settings/presentation/settings_screen.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -14,6 +17,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../../helpers/fake_platform.dart';
+import '../../helpers/fakes.dart';
 import '../../helpers/in_memory_contacts_repository.dart';
 import '../../helpers/pump_app.dart';
 import '../../helpers/test_app.dart';
@@ -100,6 +104,76 @@ void main() {
       expect(container.read(authControllerProvider), AuthStatus.signedOut);
       expect(find.text('Get started'), findsOneWidget);
     });
+  });
+
+  group('sign out and a check-in that has not been received', () {
+    testWidgets(
+      'the dialog says an unsent I\'M OK is kept, and has not counted '
+      'yet',
+      (tester) async {
+        final fakes = TestFakes();
+        fakes.server.failures['checkIn'] = [const NetworkFailure()];
+        final container = await _open(tester, AppRoutes.settings, fakes: fakes);
+        await container.read(checkInControllerProvider.notifier).checkIn();
+        await tester.pumpAndSettle();
+        expect(
+          container.read(checkInControllerProvider).phase,
+          CheckInPhase.pending,
+        );
+
+        await tapText(tester, 'Sign out');
+        await tester.pumpAndSettle();
+        expect(find.text('Sign out of this phone?'), findsOneWidget);
+        expect(
+          find.textContaining("Your last I'M OK hasn't been received yet"),
+          findsOneWidget,
+        );
+        expect(
+          find.textContaining('sent after you sign in again'),
+          findsOneWidget,
+        );
+      },
+    );
+
+    testWidgets('and says nothing about it when nothing is waiting', (
+      tester,
+    ) async {
+      await _open(tester, AppRoutes.settings);
+      await tapText(tester, 'Sign out');
+      await tester.pumpAndSettle();
+      expect(find.text('Sign out of this phone?'), findsOneWidget);
+      expect(find.textContaining("hasn't been received yet"), findsNothing);
+    });
+
+    testWidgets(
+      'a request refused because of the sign-out is not "your session '
+      'ended"',
+      (tester) async {
+        // The person signs out; a request that was in flight is answered 401 (the server
+        // has already revoked the session) while the sign-out is still running.
+        final fakes = TestFakes();
+        final container = await pumpAfterMe(tester, fakes: fakes);
+        final auth = container.read(authControllerProvider.notifier);
+        await auth.restored;
+        await auth.signIn(tokenResponse());
+        await tester.pumpAndSettle();
+
+        final signOut = container.read(accountSessionProvider).signOut();
+        container.read(sessionEndedNoticeProvider.notifier).raise();
+        await signOut;
+        await tester.pumpAndSettle();
+
+        expect(container.read(authControllerProvider), AuthStatus.signedOut);
+        expect(container.read(sessionEndedNoticeProvider), isFalse);
+        expect(find.text('Please sign in again.'), findsNothing);
+
+        // A session that really is taken away still says so.
+        await auth.signIn(tokenResponse());
+        await tester.pumpAndSettle();
+        container.read(sessionEndedNoticeProvider.notifier).raise();
+        expect(container.read(sessionEndedNoticeProvider), isTrue);
+      },
+    );
   });
 
   group('profile', () {

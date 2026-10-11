@@ -749,7 +749,10 @@ void main() {
 
       testWidgets('offline is said and nothing is lost', (tester) async {
         final fakes = await filled(tester, failure: const NetworkFailure());
-        expect(find.textContaining("You're offline"), findsOneWidget);
+        expect(
+          find.textContaining("We couldn't confirm that this was saved"),
+          findsOneWidget,
+        );
         expect(_text(tester, 'Title'), 'House emergency');
         await tapText(tester, 'Save instruction');
         await tester.pumpAndSettle();
@@ -1003,7 +1006,10 @@ void main() {
       await tester.pumpAndSettle();
       await tapText(tester, 'Delete instruction');
       await tester.pumpAndSettle();
-      expect(find.textContaining("You're offline"), findsOneWidget);
+      expect(
+        find.textContaining("We couldn't confirm that this was saved"),
+        findsOneWidget,
+      );
       expect(fakes.instructions.liveCount, 1);
       expect(find.byType(InstructionDetailScreen), findsOneWidget);
     });

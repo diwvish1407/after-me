@@ -9,13 +9,20 @@ import '../../../app/theme/dimens.dart';
 import '../../../app/theme/tokens.dart';
 import '../../../core/api/failures/app_failure.dart';
 import '../../../core/design_system/design_system.dart';
+import '../../../core/security/secure_screen.dart';
 import '../../../core/time/clock.dart';
 import '../../../core/time/time_format.dart';
 import '../../../l10n/gen/app_localizations.dart';
+import '../../activity/presentation/recent_activity_card.dart';
 import '../../auth/application/me_controller.dart';
 import '../../checkin/application/checkin_controller.dart';
 import '../../checkin/data/models/checkin_models.dart';
+import '../../checkin/presentation/check_in_notices.dart';
 import '../../checkin/presentation/schedule_labels.dart';
+import '../../incidents/data/models/incident_models.dart';
+import '../../incidents/presentation/incident_headline.dart';
+import '../../incidents/presentation/incident_timeline_view.dart';
+import '../../incidents/presentation/safe_action_button.dart';
 import '../../onboarding/application/onboarding_controller.dart';
 import '../../onboarding/application/setup_controller.dart';
 import '../application/client_checks.dart';
@@ -47,14 +54,41 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   /// The deadline a "it has passed, read Home again" refresh was already made for.
   DateTime? _refreshedForDue;
 
+  /// The stage time a "it has arrived, read Home again" refresh was already made for.
+  DateTime? _refreshedForStage;
+
+  /// Ticks since the incident was last read again (it is read about once a minute while
+  /// one is open, so views and stages show without pulling).
+  int _incidentTicks = 0;
+
+  /// The app is in the foreground and this tab is the one on view. The ticker (and with
+  /// it the once-a-minute read of an open incident) runs only then: a phone in a pocket
+  /// or a tab nobody is looking at must not keep the server busy.
+  bool _foreground = true;
+  bool _onView = true;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    // Re-evaluates "due soon" as time passes; the decision itself always uses the
-    // clock plus the server offset, the timer only triggers a redraw.
-    _ticker = Timer.periodic(const Duration(seconds: 30), (_) => _tick());
+    _syncTicker();
     unawaited(Future.microtask(_readClientChecks));
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // The shell keeps every tab alive and switches off the animations of the hidden ones
+    // (and a page pushed above hides this one too).
+    final onView = TickerMode.valuesOf(context).enabled;
+    if (onView == _onView) {
+      return;
+    }
+    _onView = onView;
+    _syncTicker();
+    if (onView) {
+      _backOnView();
+    }
   }
 
   @override
@@ -62,6 +96,28 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     WidgetsBinding.instance.removeObserver(this);
     _ticker?.cancel();
     super.dispose();
+  }
+
+  /// Starts the ticker while the screen is on view in the foreground, stops it otherwise.
+  /// It re-evaluates "due soon" as time passes; the decision itself always uses the clock
+  /// plus the server offset, the timer only triggers a redraw.
+  void _syncTicker() {
+    final run = _foreground && _onView;
+    if (run && _ticker == null) {
+      _incidentTicks = 0;
+      _ticker = Timer.periodic(const Duration(seconds: 30), (_) => _tick());
+    } else if (!run) {
+      _ticker?.cancel();
+      _ticker = null;
+    }
+  }
+
+  /// The screen is on view again after being away (another tab, or the background): what
+  /// it shows may be old.
+  void _backOnView() {
+    if (mounted && _foreground) {
+      unawaited(ref.read(homeControllerProvider.notifier).refresh());
+    }
   }
 
   Future<void> _readClientChecks() async {
@@ -72,12 +128,23 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed && mounted) {
-      // A check-in that was not confirmed is sent again with its own key, and the
-      // aggregate is read again (the app may have been away for hours).
-      unawaited(ref.read(checkInControllerProvider.notifier).onResumed());
-      unawaited(ref.read(homeControllerProvider.notifier).refresh());
-      unawaited(_readClientChecks());
+    if (!mounted) {
+      return;
+    }
+    switch (state) {
+      case AppLifecycleState.paused || AppLifecycleState.hidden:
+        _foreground = false;
+        _syncTicker();
+      case AppLifecycleState.resumed:
+        _foreground = true;
+        _syncTicker();
+        // A check-in that was not confirmed is sent again with its own key, and the
+        // aggregate is read again (the app may have been away for hours).
+        unawaited(ref.read(checkInControllerProvider.notifier).onResumed());
+        unawaited(ref.read(homeControllerProvider.notifier).refresh());
+        unawaited(_readClientChecks());
+      case AppLifecycleState.inactive || AppLifecycleState.detached:
+        break;
     }
   }
 
@@ -95,8 +162,33 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         _refreshedForDue = due;
         unawaited(ref.read(homeControllerProvider.notifier).refresh());
       }
+      if (status == HomeStatus.incident) {
+        _tickIncident(data.snapshot.incidentDetails, now);
+      } else {
+        _incidentTicks = 0;
+      }
     }
     setState(() {});
+  }
+
+  /// While an incident is open: reads Home again once a stage's time has arrived (it may
+  /// have run), and otherwise about once a minute, so a stage that ran or an instruction
+  /// that was viewed shows up without pulling. The server's times are only ever compared
+  /// with now.
+  void _tickIncident(Incident? incident, DateTime now) {
+    final stage = incident?.nextStage;
+    final at = stage?.scheduledFor;
+    if (at != null && !at.isAfter(now) && at != _refreshedForStage) {
+      _refreshedForStage = at;
+      _incidentTicks = 0;
+      unawaited(ref.read(homeControllerProvider.notifier).refresh());
+      return;
+    }
+    _incidentTicks++;
+    if (_incidentTicks >= 2) {
+      _incidentTicks = 0;
+      unawaited(ref.read(homeControllerProvider.notifier).refresh());
+    }
   }
 
   Future<void> _pullToRefresh() async {
@@ -141,17 +233,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     if (data != null) {
       content = _loaded(context, data, checkIn);
     } else if (failure != null) {
+      // Whatever the reason, I'M OK and a tap that is still waiting stay within reach: a
+      // status that cannot be read must never take the check-in away.
       final problem = failure is AppFailure
           ? failure
           : UnknownFailure(cause: failure);
-      content = problem.isTransient
-          ? _unavailable(context, problem, checkIn)
-          : ErrorView(
-              failure: problem,
-              onRetry: () => unawaited(
-                ref.read(homeControllerProvider.notifier).refresh(),
-              ),
-            );
+      content = _unavailable(context, problem, checkIn);
     } else {
       content = const LoadingView();
     }
@@ -176,8 +263,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
   // --- Home could not be loaded at all --------------------------------------------
 
-  /// No status is known (a cold start while offline). I'M OK still works: it queues as
-  /// a pending check-in and is sent when the connection is back.
+  /// No status is known (a cold start while offline, or the aggregate was refused). I'M
+  /// OK still works: it queues as a pending check-in and is sent when it can be, and a
+  /// tap that is already waiting is shown.
   Widget _unavailable(
     BuildContext context,
     AppFailure failure,
@@ -186,19 +274,30 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     final l10n = AppLocalizations.of(context);
     final timezone = _timezone(null);
     final now = ref.read(clockProvider)();
+    // Offline or server trouble is worded as before; any other answer is worded as what
+    // it is, never as "offline".
+    final offline = failure.isTransient;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        StatusBanner(
-          kind: StatusBannerKind.attention,
-          title: l10n.homeOfflineBanner,
-          message: l10n.homeUnavailableBody,
+        Semantics(
+          liveRegion: true,
+          container: true,
+          child: StatusBanner(
+            kind: StatusBannerKind.attention,
+            title: offline ? l10n.homeOfflineBanner : l10n.homeUnavailableTitle,
+            message: offline
+                ? l10n.homeUnavailableBody
+                : failureMessage(l10n, failure),
+          ),
         ),
         Gap.md,
-        // A tap that was too old to send is most likely found right here: the app was
-        // opened again after a long time without a connection.
-        if (checkIn.phase == CheckInPhase.expired) ...[
-          _expiredNotice(context, checkIn, timezone, now),
+        // What the last tap came to: not received yet, refused, or too old to send (most
+        // likely found right here: the app was opened again after a long time without a
+        // connection).
+        if (_incidentPhaseBanner(context, checkIn, timezone, now)
+            case final notice?) ...[
+          notice,
           Gap.md,
         ],
         ..._checkInSection(
@@ -207,6 +306,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           buttonState: null,
           timezone: timezone,
           now: now,
+          // With a tap already waiting, its notice above says what is going on.
+          caption: offline || checkIn.isUnconfirmed
+              ? null
+              : l10n.homeUnavailableTapNote,
         ),
         Gap.md,
         AppButton.secondary(
@@ -253,33 +356,152 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       HomeStatus.overdue => pickSafetyNetGap(snapshot.readiness),
       _ => null,
     };
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        if (data.stale) ...[
-          StatusBanner(
-            kind: StatusBannerKind.info,
-            message: l10n.homeOfflineBanner,
-          ),
-          Gap.md,
+    // The typed incident drives the real incident experience; one this app version
+    // cannot read keeps the neutral placeholder (and I'M OK within reach).
+    final incident = status == HomeStatus.incident
+        ? snapshot.incidentDetails
+        : null;
+    // Instruction titles are content: the window is secure while one is on screen.
+    final showsTitles =
+        incident?.releases.any((r) => (r.instructionTitle ?? '').isNotEmpty) ??
+        false;
+    return SecureScreen(
+      enabled: showsTitles,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (data.stale) ...[
+            StatusBanner(
+              kind: StatusBannerKind.info,
+              message: l10n.homeOfflineBanner,
+            ),
+            Gap.md,
+          ],
+          if (name.isNotEmpty && incident == null) ...[
+            Text(
+              l10n.homeGreeting(name),
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            Gap.md,
+          ],
+          if (gap != null) ...[
+            // The banner is only judged while check-ins are on (see `gap` above).
+            _SafetyNetGapBanner(
+              gap: gap,
+              checkInsOn: status != HomeStatus.notActive,
+            ),
+            Gap.md,
+          ],
+          if (banner != null) ...[_ReadinessBannerView(banner: banner), Gap.md],
+          if (incident != null)
+            ..._incidentSection(context, incident, checkIn, now, timezone)
+          else ...[
+            _statusHeader(context, data, checkIn, status, now, timezone),
+            if (status == HomeStatus.notActive)
+              ..._notActive(context, snapshot, checkIn, timezone, now)
+            else
+              ..._running(context, data, checkIn, status, now, timezone),
+          ],
         ],
-        if (name.isNotEmpty) ...[
-          Text(
-            l10n.homeGreeting(name),
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
-          Gap.md,
-        ],
-        if (gap != null) ...[_SafetyNetGapBanner(gap: gap), Gap.md],
-        if (banner != null) ...[_ReadinessBannerView(banner: banner), Gap.md],
-        _statusHeader(context, data, checkIn, status, now, timezone),
-        if (status == HomeStatus.notActive)
-          ..._notActive(context, snapshot, checkIn, timezone, now)
-        else
-          ..._running(context, data, checkIn, status, now, timezone),
-      ],
+      ),
     );
   }
+
+  // --- An incident is open ------------------------------------------------------------
+
+  /// Grace (nobody told) and Notified (contacts told) as USER_FLOWS.md §4 describes them:
+  /// the headline, the main action (I'M OK, or I'M SAFE once contacts were told), and the
+  /// timeline. The aggregate says which action stops it (`requires`); a check-in that the
+  /// server answered with `safe_required` moves to I'M SAFE at once, before Home has read
+  /// the aggregate again.
+  List<Widget> _incidentSection(
+    BuildContext context,
+    Incident incident,
+    CheckInState checkIn,
+    DateTime now,
+    String? timezone,
+  ) {
+    final l10n = AppLocalizations.of(context);
+    // The tap's `safe_required` answer counts only for the incident it named: one that
+    // outlived its incident must not turn this one (nobody told yet) into "contacts have
+    // been notified".
+    final needsSafe =
+        incident.needsSafe || checkIn.safeRequiredApplies(incident.id);
+    // And without it, no part of that answer is left on this incident's screen (the
+    // I'M OK button would otherwise stay off).
+    final tap = !needsSafe && checkIn.phase == CheckInPhase.safeRequired
+        ? const CheckInState()
+        : checkIn;
+    final headline = incidentHeadline(
+      context,
+      incident,
+      now: now,
+      needsSafe: needsSafe,
+      timezone: timezone,
+    );
+    final phase = _incidentPhaseBanner(context, tap, timezone, now);
+    final behind = incidentIsBehind(incident, needsSafe: needsSafe);
+    return [
+      if (phase != null) ...[phase, Gap.md],
+      Semantics(
+        liveRegion: true,
+        container: true,
+        child: StatusBanner(
+          kind: headline.kind,
+          title: headline.title,
+          message: headline.body,
+        ),
+      ),
+      const SizedBox(height: AppSpacing.xl),
+      if (needsSafe)
+        SafeActionButton(incidentId: incident.id, incident: incident)
+      else
+        ..._checkInSection(
+          context,
+          tap,
+          buttonState: null,
+          timezone: timezone,
+          now: now,
+        ),
+      // Until Home has read the aggregate again, the timeline on hand would contradict
+      // the headline.
+      if (!behind) ...[
+        const SizedBox(height: AppSpacing.xl),
+        IncidentTimelineView(
+          incident: incident,
+          now: now,
+          timezone: timezone,
+          heading: needsSafe
+              ? l10n.incidentTimelineHeadingAll
+              : l10n.incidentTimelineHeadingNext,
+        ),
+        Gap.sm,
+        AppButton.secondary(
+          label: l10n.incidentSeeTimeline,
+          onPressed: () => context.push(AppRoutes.homeIncident),
+          expand: true,
+        ),
+      ],
+    ];
+  }
+
+  /// What an unconfirmed or refused I'M OK says during an incident: the same words as the
+  /// header on any other state (and on the timeline screen). Null when the tap is idle,
+  /// in its first attempt, recorded (the incident is then over) or answered with
+  /// `safe_required` (the incident headline and I'M SAFE say that).
+  Widget? _incidentPhaseBanner(
+    BuildContext context,
+    CheckInState checkIn,
+    String? timezone,
+    DateTime now,
+  ) => incidentCheckInNotice(
+    context,
+    ref,
+    checkIn,
+    now: now,
+    deviceNow: ref.read(clockProvider)(),
+    timezone: timezone,
+  );
 
   /// The header: what a pending check-in says takes precedence over the schedule.
   Widget _statusHeader(
@@ -376,26 +598,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     BuildContext context,
     CheckInState checkIn,
     String? timezone,
-  ) {
-    final l10n = AppLocalizations.of(context);
-    switch (checkIn.phase) {
-      case CheckInPhase.rateLimited:
-        final retryAt = checkIn.retryAt;
-        final wait = retryAt == null
-            ? Duration.zero
-            : retryAt.difference(ref.read(clockProvider)());
-        return l10n.homeRateLimitedBody(formatUntil(l10n, wait));
-      case CheckInPhase.signInRequired:
-        return l10n.homeSignInRequiredBody;
-      case _:
-        final tapped = checkIn.tappedAt;
-        return tapped == null
-            ? l10n.homePendingBody('')
-            : l10n.homePendingBody(
-                formatClockTime(context, tapped, timezone: timezone),
-              );
-    }
-  }
+  ) => checkInPendingBody(
+    context,
+    checkIn,
+    deviceNow: ref.read(clockProvider)(),
+    timezone: timezone,
+  );
 
   /// "Your earlier check-in wasn't received": the tap was too old to be sent and was
   /// dropped. Read out when it appears; "Got it" dismisses it, and so does a new tap.
@@ -404,32 +612,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     CheckInState checkIn,
     String? timezone,
     DateTime now,
-  ) {
-    final l10n = AppLocalizations.of(context);
-    return Semantics(
-      liveRegion: true,
-      container: true,
-      child: StatusBanner(
-        kind: StatusBannerKind.attention,
-        title: l10n.homeExpiredTitle,
-        message: l10n.homeExpiredBody(
-          formatSpokenDayTime(
-            context,
-            l10n,
-            checkIn.tappedAt!,
-            now: now,
-            timezone: timezone,
-          ),
-        ),
-        action: AppButton.text(
-          label: l10n.homeExpiredDismiss,
-          onPressed: ref
-              .read(checkInControllerProvider.notifier)
-              .dismissExpiredNotice,
-        ),
-      ),
-    );
-  }
+  ) =>
+      expiredCheckInNotice(context, ref, checkIn, now: now, timezone: timezone);
 
   // --- Not active -------------------------------------------------------------------
 
@@ -517,6 +701,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         now: now,
         caption: l10n.homeCheckInUnavailable,
       ),
+      if (snapshot.recentActivity.isNotEmpty) ...[
+        const SizedBox(height: AppSpacing.xl),
+        RecentActivityCard(
+          items: snapshot.recentActivity,
+          now: now,
+          timezone: timezone,
+        ),
+      ],
     ];
   }
 
@@ -534,6 +726,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     final snapshot = data.snapshot;
     final next = snapshot.checkin.nextDueAt;
     final last = snapshot.checkin.lastCheckinAt;
+    // The server said contacts were told but this screen has no readable incident (or
+    // has not read it again yet): I'M SAFE is still the way out, with the incident id the
+    // server gave in the same answer.
+    final safeIncidentId = checkIn.phase == CheckInPhase.safeRequired
+        ? _incidentIdFor(snapshot, checkIn)
+        : null;
     return [
       const SizedBox(height: AppSpacing.xl),
       ..._checkInSection(
@@ -545,6 +743,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         timezone: timezone,
         now: now,
       ),
+      if (safeIncidentId != null) ...[
+        Gap.md,
+        SafeActionButton(incidentId: safeIncidentId),
+      ],
       const SizedBox(height: AppSpacing.xl),
       Card(
         margin: EdgeInsets.zero,
@@ -584,7 +786,24 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       ),
       Gap.md,
       _PlanCard(summary: snapshot.planSummary),
+      if (snapshot.recentActivity.isNotEmpty) ...[
+        Gap.md,
+        RecentActivityCard(
+          items: snapshot.recentActivity,
+          now: now,
+          timezone: timezone,
+        ),
+      ],
     ];
+  }
+
+  /// The id of the open incident: the aggregate's, else the one `safe_required` named.
+  String? _incidentIdFor(HomeSnapshot snapshot, CheckInState checkIn) {
+    final raw = snapshot.incident?['id'];
+    if (raw is String && raw.isNotEmpty) {
+      return raw;
+    }
+    return checkIn.failure?.problem?.incidentId;
   }
 
   // --- The check-in button and what it just did ------------------------------------
@@ -749,40 +968,47 @@ class _PlanCard extends StatelessWidget {
 /// the last onboarding step. Kept short on purpose: it sits above I'M OK, which must stay
 /// within reach on a small phone.
 class _SafetyNetGapBanner extends StatelessWidget {
-  const _SafetyNetGapBanner({required this.gap});
+  const _SafetyNetGapBanner({required this.gap, required this.checkInsOn});
 
   final SafetyNetGap gap;
+
+  /// Check-ins are already on: the plan is fixed in the plan editor, not in the
+  /// onboarding step (which would walk the person through setting the plan up again).
+  final bool checkInsOn;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final (String message, String action, String path) = switch (gap) {
+    final (String message, String action) = switch (gap) {
       SafetyNetGap.noContacts => (
         l10n.homeGapNoContacts,
         l10n.checklistContact,
-        OnboardingStep.contact.path,
       ),
-      SafetyNetGap.noStages => (
-        l10n.homeGapNoStages,
-        l10n.checklistPlan,
-        OnboardingStep.plan.path,
-      ),
-      SafetyNetGap.stageEmpty => (
-        l10n.homeGapStageEmpty,
-        l10n.checklistPlan,
-        OnboardingStep.plan.path,
-      ),
+      SafetyNetGap.noStages => (l10n.homeGapNoStages, l10n.checklistPlan),
+      SafetyNetGap.stageEmpty => (l10n.homeGapStageEmpty, l10n.checklistPlan),
     };
     return StatusBanner(
       kind: StatusBannerKind.attention,
       message: message,
       action: AppButton.text(
         label: action,
-        onPressed: () => context.push(path),
+        onPressed: () =>
+            context.push(safetyNetGapPath(gap, checkInsOn: checkInsOn)),
       ),
     );
   }
 }
+
+/// Where the action of the safety-net banner leads (USER_FLOWS.md §4): a missing contact
+/// is fixed in the contact step; a plan with no stage, or a stage that tells nobody, is
+/// fixed in the **plan editor** when check-ins are already on, and in the onboarding plan
+/// step for an account that is still setting up.
+String safetyNetGapPath(SafetyNetGap gap, {required bool checkInsOn}) =>
+    switch (gap) {
+      SafetyNetGap.noContacts => OnboardingStep.contact.path,
+      SafetyNetGap.noStages || SafetyNetGap.stageEmpty =>
+        checkInsOn ? AppRoutes.planEdit : OnboardingStep.plan.path,
+    };
 
 /// One readiness banner with the action that leads to the fix.
 class _ReadinessBannerView extends StatelessWidget {

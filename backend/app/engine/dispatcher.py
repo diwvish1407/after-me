@@ -13,6 +13,7 @@ check-in that committed first cancels them, and one that arrives later finds
 
 from __future__ import annotations
 
+import asyncio
 import secrets
 import time
 import uuid
@@ -35,8 +36,13 @@ from app.engine.gate import ContactFacts, contact_problem
 from app.engine.store import EngineStore
 from app.incidents.models import OPEN_STATUSES, EscalationIncident, IncidentAction
 from app.incidents.snapshot import SnapshotError, parse_snapshot
-from app.notifications import outbox
+from app.notifications import outbox, unreachable
 from app.notifications.email import EmailMessage, ProviderResult
+from app.notifications.errors import (
+    InvalidPushTokenError,
+    PermanentDeliveryError,
+    TransientProviderError,
+)
 from app.notifications.mailer import EmailTemplate
 from app.notifications.models import Notification, NotificationLog
 from app.notifications.push import PushMessage, PushProvider
@@ -56,6 +62,21 @@ from app.users.models import UserProfile
 _log = get_logger("afterme.dispatch")
 
 BATCH: Final = 100
+# Providers are called concurrently (a slow one must not hold every other message behind it),
+# every call has a deadline, and a pass stops starting new sends after a while, so that the
+# engine's tick (incidents, stages, Hold) always runs again soon.
+CONCURRENCY: Final = 8
+SEND_DEADLINE_SECONDS: Final = 25.0
+PASS_BUDGET_SECONDS: Final = 60.0
+# A contact-facing message must not wait an hour because a provider asked for it.
+MAX_RETRY_AFTER_CONTACT: Final = timedelta(minutes=5)
+# A reminder that is no longer true is dropped, not delivered late and confusing.
+STALE_AFTER: Final[dict[str, timedelta]] = {
+    outbox.USER_PRE_REMINDER: timedelta(minutes=60),
+    outbox.USER_MIDPOINT: timedelta(minutes=60),
+    outbox.USER_LAST_CHANCE: timedelta(minutes=20),
+    outbox.USER_FINAL_WARNING: timedelta(minutes=60),
+}
 STUCK_AFTER: Final = timedelta(minutes=5)
 GIVE_UP_AFTER: Final = timedelta(hours=24)
 BACKOFF_MINUTES: Final = (1, 2, 4, 8, 16, 32, 60)  # then hourly (§8.3)
@@ -63,6 +84,11 @@ BACKOFF_MINUTES: Final = (1, 2, 4, 8, 16, 32, 60)  # then hourly (§8.3)
 # come from the engine and is never sent (Phase 6 adds the release message here).
 ESCALATION_TEMPLATES: Final = frozenset(
     {outbox.CONTACT_ALERT, outbox.CONTACT_ALERT_WITH_RELEASE, outbox.CONTACT_RELEASE}
+)
+# What the API role itself enqueues for a contact: the all-clear, its sibling that withdraws an
+# alert without claiming the person is safe, and a fresh link to a release that is still open.
+CONTACT_OTHER_TEMPLATES: Final = frozenset(
+    {outbox.CONTACT_ALL_CLEAR, outbox.CONTACT_ALERT_WITHDRAWN, outbox.CONTACT_RELEASE}
 )
 LINK_LIFETIME: Final = timedelta(days=30)
 LINK_PREFIX: Final = "rt_"
@@ -108,6 +134,12 @@ class _Outgoing:
     user_id: uuid.UUID
     incident_id: uuid.UUID | None
     template_key: str
+    contact_id: uuid.UUID | None = None
+    device_id: uuid.UUID | None = None
+    # The address and the push token this message was built for: an outcome is applied only to
+    # the contact (or device) that still has them.
+    recipient: str | None = None
+    push_token: str | None = None
 
 
 class Dispatcher:
@@ -132,13 +164,55 @@ class Dispatcher:
             # batch (oldest first) and starve the user messages and all-clears behind them.
             escalation = contact_facing and await EngineStore.open_hold(session) is None
             candidates = await self._candidates(session, now, escalation=escalation)
-        for notification_id in candidates:
-            try:
-                await self._deliver(notification_id, report)
-            except Exception as exc:  # one message must never stop the others
-                report.errors += 1
-                _log.error("dispatch.unit_failed", error_class=type(exc).__name__)
+        gate = asyncio.Semaphore(CONCURRENCY)
+        started = time.monotonic()
+
+        async def one(notification_id: uuid.UUID) -> None:
+            async with gate:
+                if time.monotonic() - started > PASS_BUDGET_SECONDS:
+                    report.left_queued += 1  # the next pass takes it; the tick runs first
+                    return
+                try:
+                    await self._deliver(notification_id, report)
+                except Exception as exc:  # one message must never stop the others
+                    report.errors += 1
+                    _log.error(
+                        "dispatch.unit_failed",
+                        notification_id=str(notification_id),
+                        error_class=type(exc).__name__,
+                    )
+                    await self._back_off(notification_id)
+
+        await asyncio.gather(*(one(n) for n in candidates))
         return report
+
+    async def _back_off(self, notification_id: uuid.UUID) -> None:
+        """A row whose processing raised (a template that no longer exists, a bug) would be
+        picked first on every pass, and a hundred of them would keep every real message out of
+        the batch. Count the attempt and put it back later, with the usual backoff. It is never
+        marked failed here: an error that comes from the database being briefly away must not
+        end a message, and a row that is truly unprocessable is logged on every attempt."""
+        try:
+            async with self.db.sessionmaker() as session, session.begin():
+                now = await self.clock.now(session)
+                row = (
+                    await session.execute(
+                        select(Notification)
+                        .where(Notification.id == notification_id, Notification.status == "queued")
+                        .with_for_update(skip_locked=True)
+                    )
+                ).scalar_one_or_none()
+                if row is None:
+                    return
+                row.attempt_count = min(row.attempt_count + 1, 30)
+                row.next_attempt_at = now + retry_delay(row.attempt_count)
+                row.updated_at = now
+        except Exception as exc:  # the next pass tries again; nothing more can be done here
+            _log.error(
+                "dispatch.back_off_failed",
+                notification_id=str(notification_id),
+                error_class=type(exc).__name__,
+            )
 
     async def _recover_stuck(self, session: AsyncSession, now: datetime) -> int:
         """A worker that died between tx A and tx B left a row in ``sending``. It is put back
@@ -182,20 +256,24 @@ class Dispatcher:
             return
         started = time.monotonic()
         result: ProviderResult | None = None
-        error_class: str | None = None
+        failure: Exception | None = None
         try:  # outside any transaction
             if outgoing.email is not None:
-                result = await self.email.send(
-                    outgoing.email, idempotency_key=str(outgoing.notification_id)
+                result = await asyncio.wait_for(
+                    self.email.send(outgoing.email, idempotency_key=str(outgoing.notification_id)),
+                    SEND_DEADLINE_SECONDS,
                 )
             elif outgoing.push is not None:
-                result = await self.push.send(
-                    outgoing.push, idempotency_key=str(outgoing.notification_id)
+                result = await asyncio.wait_for(
+                    self.push.send(outgoing.push, idempotency_key=str(outgoing.notification_id)),
+                    SEND_DEADLINE_SECONDS,
                 )
+        except TimeoutError:
+            failure = TransientProviderError("deadline")
         except Exception as exc:
-            error_class = type(exc).__name__
+            failure = exc
         latency_ms = int((time.monotonic() - started) * 1000)
-        await self._settle(outgoing, result, error_class, latency_ms, report)  # tx B
+        await self._settle(outgoing, result, failure, latency_ms, report)  # tx B
 
     async def _claim(self, notification_id: uuid.UUID, report: DispatchReport) -> _Outgoing | None:
         async with self.db.sessionmaker() as session, session.begin():
@@ -216,7 +294,15 @@ class Dispatcher:
             ):
                 return None
 
-            if row.category == outbox.CATEGORY_ESCALATION:
+            verdict = self._shape_problem(row)
+            if verdict is not None:
+                _log.error(
+                    "dispatch.unexpected_row",
+                    notification_id=str(row.id),
+                    category=row.category,
+                    template=row.template_key,
+                )
+            elif row.category == outbox.CATEGORY_ESCALATION:
                 verdict = await self._recheck_escalation(session, row, now)
             elif row.category == outbox.CATEGORY_USER:
                 verdict = await self._recheck_user(session, row, now)
@@ -257,6 +343,54 @@ class Dispatcher:
     # ------------------------------------------------------------------ re-checks
 
     @staticmethod
+    def _shape_problem(row: Notification) -> str | None:
+        """The API role may insert rows (it enqueues all-clears and the person's own messages),
+        so a row's own word for what kind of message it is is not enough: the audience,
+        category, channel and template must be a combination that someone really writes. An
+        escalation message in the "user" or "contact_other" category would otherwise skip the
+        gate, the settle delay, the Hold and the suppression list (T2, DATABASE §6)."""
+        if row.category == outbox.CATEGORY_ESCALATION:
+            ok = (
+                row.audience == "contact"
+                and row.channel == "email"
+                and row.template_key in ESCALATION_TEMPLATES
+            )
+        elif row.category == outbox.CATEGORY_USER:
+            channels = outbox.USER_CHANNELS.get(row.template_key)
+            ok = row.audience == "user" and channels is not None and row.channel in channels
+        elif row.category == outbox.CATEGORY_CONTACT_OTHER:
+            ok = (
+                row.audience == "contact"
+                and row.channel == "email"
+                and row.template_key in CONTACT_OTHER_TEMPLATES
+            )
+        else:
+            ok = False
+        return None if ok else "unexpected_shape"
+
+    @staticmethod
+    async def _was_messaged(session: AsyncSession, row: Notification) -> bool:
+        """An all-clear is owed only to a contact an escalation message was attempted for (the
+        same definition as ``IncidentRepository.messaged_contact_ids``)."""
+        if row.incident_id is None or row.contact_id is None:
+            return False
+        found = await session.execute(
+            select(Notification.id)
+            .where(
+                Notification.user_id == row.user_id,
+                Notification.incident_id == row.incident_id,
+                Notification.contact_id == row.contact_id,
+                Notification.category == outbox.CATEGORY_ESCALATION,
+                or_(
+                    Notification.status.in_(("sending", "sent", "failed")),
+                    Notification.attempt_count > 0,
+                ),
+            )
+            .limit(1)
+        )
+        return found.first() is not None
+
+    @staticmethod
     def _cancel(row: Notification, reason: str, now: datetime) -> None:
         row.status = "cancelled"
         row.cancelled_reason = reason
@@ -268,6 +402,9 @@ class Dispatcher:
         user = await EngineStore.user(session, row.user_id)
         if user is None or user.status != "active":
             return "account_inactive"
+        stale = STALE_AFTER.get(row.template_key)
+        if stale is not None and now - row.send_after > stale:
+            return "expired"
         if row.template_key == outbox.USER_PRE_REMINDER:
             config = await _config(session, row.user_id)
             due = row.params.get("due_at")
@@ -301,6 +438,10 @@ class Dispatcher:
         """All-clears and similar: no Hold, no settle delay, no open incident required. They are
         still not sent to someone who has since asked not to be contacted."""
         is_link = row.template_key in outbox.RELEASE_TEMPLATES
+        if row.template_key in outbox.UNDOING_TEMPLATES and not await self._was_messaged(
+            session, row
+        ):
+            return "not_messaged"  # there is nothing to take back
         if is_link and await EngineStore.open_hold(session) is not None:
             return "wait"  # content-bearing links wait out a Hold like every escalation message
         problem = await self._contact_problem(session, row, require_verified=is_link)
@@ -515,6 +656,10 @@ class Dispatcher:
             user_id=row.user_id,
             incident_id=row.incident_id,
             template_key=row.template_key,
+            contact_id=row.contact_id,
+            device_id=row.device_id,
+            recipient=email.to.strip().lower() if email is not None else None,
+            push_token=push.token if push is not None else None,
         )
 
     async def _build(
@@ -528,7 +673,7 @@ class Dispatcher:
         timezone = profile.timezone if profile else "UTC"
 
         if row.channel == "push":
-            token = await _push_token(session, row.device_id)
+            token = await _push_token(session, row.device_id, row.user_id)
             if token is None:
                 return None
             incident_id = str(row.incident_id) if row.incident_id else None
@@ -569,6 +714,7 @@ class Dispatcher:
             contact_context["checked_in_at"] = (
                 day_time(datetime.fromisoformat(at), timezone) if at else "just now"
             )
+            contact_context["reason"] = str(row.params.get("reason", ""))
         if row.template_key in outbox.RELEASE_TEMPLATES:
             release_link = await self._mint_link(session, row, now)
             if release_link is None:
@@ -649,7 +795,12 @@ class Dispatcher:
                 join_names(await _names(session, row.user_id, ids)) or "your contacts"
             )
             context["release_count"] = params.get("release_count", 0)
-        elif key == outbox.USER_ALL_CLEAR:
+        elif key == outbox.USER_CONTACT_UNREACHABLE:
+            ids = [uuid.UUID(str(params["contact_id"]))] if params.get("contact_id") else []
+            names = await _names(session, row.user_id, ids)
+            context["contact_name"] = names[0] if names else "a contact"
+            context["reason"] = str(params.get("reason", ""))
+        elif key in (outbox.USER_ALL_CLEAR, outbox.USER_ALERT_WITHDRAWN):
             ids = [uuid.UUID(c) for c in params.get("contact_ids", [])]
             names = await _names(session, row.user_id, ids)
             context["names"] = join_names(names) or "Your contacts"
@@ -666,10 +817,13 @@ class Dispatcher:
         self,
         out: _Outgoing,
         result: ProviderResult | None,
-        error_class: str | None,
+        failure: Exception | None,
         latency_ms: int,
         report: DispatchReport,
     ) -> None:
+        error_class = type(failure).__name__ if failure is not None else None
+        # A short provider code (never an address or a token) when the adapter gave one.
+        code = str(getattr(failure, "code", "") or error_class or "")[:64] or None
         async with self.db.sessionmaker() as session, session.begin():
             now = await self.clock.now(session)
             row = (
@@ -687,14 +841,15 @@ class Dispatcher:
                 if result
                 else (self.email.name if out.email is not None else self.push.name)
             )
+            permanent = isinstance(failure, PermanentDeliveryError)
             session.add(
                 NotificationLog(
                     notification_id=row.id,
                     attempted_at=now,
                     provider=provider,
-                    outcome="accepted" if result else "error",
+                    outcome=("accepted" if result else ("rejected" if permanent else "error")),
                     provider_message_id=result.message_id if result else None,
-                    error_code=error_class,
+                    error_code=code,
                     latency_ms=min(latency_ms, 32_000),
                 )
             )
@@ -706,6 +861,36 @@ class Dispatcher:
                 report.sent += 1
                 if out.contact_facing:
                     await self._audit(session, audit.NOTIFICATION_SENT, out, now, {})
+                return
+            if isinstance(failure, InvalidPushTokenError):
+                # The phone's registration is gone (the app was removed). Forget *that* token so
+                # nothing else is sent to it; the same reminder still reaches the person by email.
+                await self._side_effect(self._forget_token, session, out, now)
+                row.status = "cancelled"
+                row.cancelled_reason = "push_token_invalid"
+                report.cancelled += 1
+                report.why("push_token_invalid")
+                return
+            if permanent:
+                row.status = "failed"
+                report.failed += 1
+                _log.error(
+                    "dispatch.rejected",
+                    notification_id=str(row.id),
+                    category=row.category,
+                    template=row.template_key,
+                    code=code,
+                )
+                await self._audit(
+                    session, audit.NOTIFICATION_FAILED, out, now, {"error_class": code or ""}
+                )
+                if out.contact_facing:
+                    # Every provider asked refused this address: the contact is marked, the
+                    # person told. The address is not suppressed for everyone: a refusal is a
+                    # provider's list, not a fact about the mailbox (a bounce webhook is).
+                    await self._side_effect(
+                        self._tell_owner, session, out, unreachable.REFUSED, now
+                    )
                 return
             # Counted from the first attempt, not from creation: a message that waited out a
             # Hold must not fail for good on its very first transient error.
@@ -726,18 +911,71 @@ class Dispatcher:
                     template=row.template_key,
                     error_class=error_class,
                 )
+                await self._audit(
+                    session, audit.NOTIFICATION_FAILED, out, now, {"error_class": code or ""}
+                )
                 if out.contact_facing:
-                    await self._audit(
-                        session,
-                        audit.NOTIFICATION_FAILED,
-                        out,
-                        now,
-                        {"error_class": error_class or ""},
+                    await self._side_effect(
+                        self._tell_owner, session, out, unreachable.UNDELIVERABLE, now
                     )
                 return
+            delay = retry_delay(row.attempt_count)
+            hint = getattr(failure, "retry_after", None)
+            if isinstance(hint, (int, float)) and hint > 0:
+                asked = timedelta(seconds=float(hint))
+                if out.contact_facing:
+                    asked = min(asked, MAX_RETRY_AFTER_CONTACT)
+                delay = max(delay, asked)
             row.status = "queued"
-            row.next_attempt_at = now + retry_delay(row.attempt_count)
+            row.next_attempt_at = now + delay
             report.retried += 1
+
+    async def _side_effect(
+        self, effect: Any, session: AsyncSession, out: _Outgoing, *args: Any
+    ) -> None:
+        """What a failure leads to (forgetting a token, telling the person) is secondary to
+        recording the failure itself: it runs in a savepoint, and if it cannot be done the
+        message's own state still commits, so it is never sent again for want of a bookkeeping
+        statement."""
+        try:
+            async with session.begin_nested():
+                await effect(session, out, *args)
+        except Exception as exc:
+            _log.error(
+                "dispatch.side_effect_failed",
+                notification_id=str(out.notification_id),
+                error_class=type(exc).__name__,
+            )
+
+    async def _forget_token(self, session: AsyncSession, out: _Outgoing, now: datetime) -> None:
+        if out.device_id is None or out.push_token is None:
+            return
+        await session.execute(
+            update(Device)
+            .where(
+                Device.id == out.device_id,
+                Device.user_id == out.user_id,
+                Device.push_token == out.push_token,  # not a newer one registered meanwhile
+            )
+            .values(push_token=None, push_token_updated_at=now)
+        )
+
+    async def _tell_owner(
+        self, session: AsyncSession, out: _Outgoing, reason: str, now: datetime
+    ) -> None:
+        """The person depends on this contact: say so when a message to them cannot be
+        delivered (given up on, or refused by the provider)."""
+        if out.contact_id is None or out.template_key == outbox.USER_CONTACT_UNREACHABLE:
+            return
+        await unreachable.contact_unreachable(
+            session,
+            self.services,
+            owner_id=out.user_id,
+            contact_id=out.contact_id,
+            reason=reason,
+            now=now,
+            expected_address=out.recipient,
+        )
 
     async def _audit(
         self,
@@ -786,12 +1024,16 @@ async def _profile(session: AsyncSession, user_id: uuid.UUID) -> Any:
     ).scalar_one_or_none()
 
 
-async def _push_token(session: AsyncSession, device_id: uuid.UUID | None) -> str | None:
+async def _push_token(
+    session: AsyncSession, device_id: uuid.UUID | None, user_id: uuid.UUID
+) -> str | None:
     if device_id is None:
         return None
     return (
         await session.execute(
-            select(Device.push_token).where(Device.id == device_id, Device.revoked_at.is_(None))
+            select(Device.push_token).where(
+                Device.id == device_id, Device.user_id == user_id, Device.revoked_at.is_(None)
+            )
         )
     ).scalar_one_or_none()
 

@@ -45,10 +45,14 @@ abstract class ApiProblem with _$ApiProblem {
   /// Parses a response body into a problem, or returns null when the body is not a
   /// problem document (for example an HTML error page from a proxy).
   ///
-  /// [data] may be an already-decoded map or a JSON string. When the body has no
-  /// `status`, [httpStatus] is used.
+  /// [data] may be an already-decoded map, a JSON string or the raw bytes of one (a
+  /// request made with `ResponseType.bytes`, such as the data export, delivers its error
+  /// bodies undecoded). When the body has no `status`, [httpStatus] is used.
   static ApiProblem? tryParse(Object? data, {required int httpStatus}) {
     Object? decoded = data;
+    if (decoded is List<int>) {
+      decoded = utf8.decode(decoded, allowMalformed: true);
+    }
     if (decoded is String) {
       if (decoded.trim().isEmpty) {
         return null;

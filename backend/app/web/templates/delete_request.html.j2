@@ -1,0 +1,15 @@
+{% extends "base.html.j2" %}
+{% block title %}Delete your account · AfterMe{% endblock %}
+{% block content %}
+<h1>Delete your AfterMe account</h1>
+<p>Enter the email address of your account. If it matches an account, we send a link to that address. You confirm with your password on the next page.</p>
+<p>Deleting an account switches off your check-ins, removes everything you saved, including your instructions, and signs you out everywhere. This cannot be undone.</p>
+{% if message %}<p class="notice" role="alert">{{ message }}</p>{% endif %}
+<form method="post" action="/a/delete" autocomplete="off">
+<input type="hidden" name="csrf" value="{{ csrf }}">
+<label for="email">Email address</label>
+<input type="email" name="email" id="email" autocomplete="email" maxlength="254" required>
+<button type="submit">Send me the link</button>
+</form>
+<p class="hint">You can also delete your account in the app: Settings, Privacy and data, Delete account.</p>
+{% endblock %}

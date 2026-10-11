@@ -148,6 +148,25 @@ class DeviceRepository:
             .values(app_version=app_version, os_version=os_version, locale=locale, last_seen_at=now)
         )
 
+    async def set_push_token(
+        self, *, owner_id: uuid.UUID, device_id: uuid.UUID, token: str, now: datetime
+    ) -> None:
+        await self._session.execute(
+            update(Device)
+            .where(Device.id == device_id, Device.user_id == owner_id, Device.revoked_at.is_(None))
+            .values(push_token=token, push_token_updated_at=now)
+        )
+
+    async def detach_token_elsewhere(self, *, token: str, keep: uuid.UUID, now: datetime) -> None:
+        """A registration token has one holder. The device that presents it now takes it from
+        whoever had it (any account): the token is the credential, and a phone that changed
+        hands must stop receiving the previous owner's pushes."""
+        await self._session.execute(
+            update(Device)
+            .where(Device.push_token == token, Device.id != keep)
+            .values(push_token=None, push_token_updated_at=now)
+        )
+
     async def clear_push_token(
         self, *, owner_id: uuid.UUID, device_id: uuid.UUID, now: datetime
     ) -> None:
@@ -207,6 +226,17 @@ class SessionRepository:
         row = (await self._session.execute(stmt)).one_or_none()
         return None if row is None else (row[0], row[1])
 
+    async def get_by_web_token(self, token_hash: bytes) -> tuple[AuthSession, User] | None:
+        """The ``web`` session whose cookie hashes to ``token_hash`` (the secret is the
+        credential), with its user."""
+        stmt = (
+            select(AuthSession, User)
+            .join(User, User.id == AuthSession.user_id)
+            .where(AuthSession.web_token_hash == token_hash, AuthSession.kind == "web")
+        )
+        row = (await self._session.execute(stmt)).one_or_none()
+        return None if row is None else (row[0], row[1])
+
     async def create(
         self,
         *,
@@ -217,10 +247,15 @@ class SessionRepository:
         now: datetime,
         idle_expires_at: datetime,
         absolute_expires_at: datetime,
+        kind: str = "app",
+        web_token_hash: bytes | None = None,
+        reauthenticated_at: datetime | None = None,
     ) -> AuthSession:
         auth_session = AuthSession(
             user_id=owner_id,
-            kind="app",
+            kind=kind,
+            web_token_hash=web_token_hash,
+            reauthenticated_at=reauthenticated_at,
             device_id=device_id,
             auth_method="password",
             created_at=now,
@@ -299,6 +334,14 @@ class SessionRepository:
             .values(last_used_at=now)
         )
 
+    async def clear_reauthenticated(self, *, owner_id: uuid.UUID, session_id: uuid.UUID) -> None:
+        """The confirmation was spent (an export): the next sensitive action asks again."""
+        await self._session.execute(
+            update(AuthSession)
+            .where(AuthSession.id == session_id, AuthSession.user_id == owner_id)
+            .values(reauthenticated_at=None)
+        )
+
     async def set_reauthenticated(
         self, *, owner_id: uuid.UUID, session_id: uuid.UUID, now: datetime
     ) -> None:
@@ -373,6 +416,13 @@ class AuthTokenRepository:
             .limit(1)
         )
         return (await self._session.execute(stmt)).scalar_one_or_none()
+
+    async def clear_payloads(self, *, owner_id: uuid.UUID) -> None:
+        """Drop what a pending token carried (the new address of an email change): account
+        deletion keeps no personal data that nothing needs."""
+        await self._session.execute(
+            update(AuthToken).where(AuthToken.user_id == owner_id).values(payload=None)
+        )
 
     async def invalidate_unused(self, *, owner_id: uuid.UUID, purpose: str, now: datetime) -> None:
         """Supersede every unused code: only the newest code can ever be accepted."""

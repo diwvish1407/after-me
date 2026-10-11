@@ -198,7 +198,8 @@ async def test_a_message_waits_while_the_user_lock_is_busy(world: World) -> None
     from tests.support import conninfo
 
     person = await _escalated(world)
-    holder = psycopg.connect(conninfo("afterme_owner", "afterme_owner_dev", "afterme_test"))
+    # (the suite's own test database: the default of ``conninfo``)
+    holder = psycopg.connect(conninfo("afterme_owner", "afterme_owner_dev"))
     try:
         holder.execute(
             "SELECT 1 FROM checkin_configurations WHERE user_id = %s FOR UPDATE",

@@ -82,8 +82,22 @@ def test_client_ip_uses_trusted_hops_from_the_right() -> None:
     assert client_ip(_scope("10.0.0.1", "6.6.6.6, 1.2.3.4"), 1) == "1.2.3.4"
     assert client_ip(_scope("10.0.0.1", "6.6.6.6, 1.2.3.4, 10.0.0.2"), 2) == "1.2.3.4"
     assert client_ip(_scope("10.0.0.1", "6.6.6.6", "1.2.3.4"), 1) == "1.2.3.4"
-    # Fewer entries than hops: the leftmost known entry.
-    assert client_ip(_scope("10.0.0.1", "1.2.3.4"), 3) == "1.2.3.4"
+    # Fewer entries than hops: the request did not pass through every proxy, so even the first
+    # entry may have been written by the client. Only the peer is not (Phase 9, F10).
+    assert client_ip(_scope("10.0.0.1", "1.2.3.4"), 3) == "10.0.0.1"
+    assert client_ip(_scope("10.0.0.1", "6.6.6.6"), 2) == "10.0.0.1"
+
+
+def test_an_ipv4_mapped_ipv6_address_is_the_ipv4_client() -> None:
+    """A dual-stack listener reports 1.2.3.4 as ::ffff:1.2.3.4; keyed as an IPv6 /64 every IPv4
+    client would share one rate-limit bucket (Phase 9, F7)."""
+    from app.core.net import rate_limit_subject
+
+    assert client_ip(_scope("::ffff:203.0.113.9"), 0) == "203.0.113.9"
+    assert client_ip(_scope("10.0.0.1", "::ffff:198.51.100.7"), 1) == "198.51.100.7"
+    assert rate_limit_subject("::ffff:203.0.113.9") == "203.0.113.9"
+    assert rate_limit_subject("::ffff:198.51.100.7") != rate_limit_subject("::ffff:203.0.113.9")
+    assert rate_limit_subject("2001:db8::1") == "2001:db8::/64"
 
 
 def test_client_ip_falls_back_on_garbage() -> None:

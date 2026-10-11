@@ -198,24 +198,35 @@ void main() {
       },
     );
 
-    test(
-      'server trouble marks stale; a non-transient failure does not',
-      () async {
-        final fakes = TestFakes();
-        final container = _container(fakes);
-        await _home(container);
-        fakes.server.failures['home'] = [const ServerFailure(statusCode: 500)];
-        await container.read(homeControllerProvider.notifier).refresh();
-        expect(container.read(homeControllerProvider).value!.stale, isTrue);
+    test('server trouble marks stale, and so does a refusal: either way the status '
+        'on screen is no longer confirmed', () async {
+      final fakes = TestFakes();
+      final container = _container(fakes);
+      await _home(container);
+      fakes.server.failures['home'] = [const ServerFailure(statusCode: 500)];
+      await container.read(homeControllerProvider.notifier).refresh();
+      expect(container.read(homeControllerProvider).value!.stale, isTrue);
 
+      // A good answer clears it ...
+      await container.read(homeControllerProvider.notifier).refresh();
+      expect(container.read(homeControllerProvider).value!.stale, isFalse);
+
+      // ... and a 403 or a 404 must not look like one (they used to clear the mark).
+      for (final refusal in <AppFailure>[
+        const ForbiddenFailure(code: 'forbidden'),
+        const NotFoundFailure(),
+      ]) {
+        fakes.server.failures['home'] = [refusal];
         await container.read(homeControllerProvider.notifier).refresh();
-        fakes.server.failures['home'] = [
-          const ForbiddenFailure(code: 'forbidden'),
-        ];
+        expect(
+          container.read(homeControllerProvider).value!.stale,
+          isTrue,
+          reason: '${refusal.runtimeType}',
+        );
         await container.read(homeControllerProvider.notifier).refresh();
         expect(container.read(homeControllerProvider).value!.stale, isFalse);
-      },
-    );
+      }
+    });
 
     test('the first load failing is an error with the failure', () async {
       final fakes = TestFakes();
@@ -477,6 +488,56 @@ void main() {
       await pumpEventQueue();
       await container.read(homeControllerProvider.notifier).refresh();
       expect(gap(), SafetyNetGap.noContacts);
+    });
+
+    test('a contact who accepted out of band: the aggregate\'s counts bring '
+        'the contacts list up to date', () async {
+      // The invitation is answered on the web. Home read "1 of 1 accepted"; the list
+      // on hand (read before) still said pending, and the People tab kept it.
+      final fakes = TestFakes();
+      fakes.contacts = InMemoryContactsRepository(
+        initial: [testContact(status: VerificationStatus.pending)],
+      );
+      final container = _container(fakes);
+      container.listen(contactsControllerProvider, (_, _) {});
+      await container.read(contactsControllerProvider.future);
+      await _home(container);
+      expect(
+        container.read(contactsControllerProvider).value!.single.isAccepted,
+        isFalse,
+      );
+      final listCalls = fakes.contacts.calls.where((c) => c == 'list').length;
+
+      fakes.contacts.respond('c1', VerificationStatus.verified);
+      await container.read(homeControllerProvider.notifier).refresh();
+      await pumpEventQueue();
+
+      expect(
+        container
+            .read(homeControllerProvider)
+            .value!
+            .snapshot
+            .planSummary
+            .contactsVerified,
+        1,
+      );
+      expect(
+        container.read(contactsControllerProvider).value!.single.isAccepted,
+        isTrue,
+      );
+      expect(
+        fakes.contacts.calls.where((c) => c == 'list').length,
+        listCalls + 1,
+        reason: 'one more read, not a loop',
+      );
+
+      // Counts that agree cost nothing.
+      await container.read(homeControllerProvider.notifier).refresh();
+      await pumpEventQueue();
+      expect(
+        fakes.contacts.calls.where((c) => c == 'list').length,
+        listCalls + 1,
+      );
     });
 
     test('signing out empties it', () async {

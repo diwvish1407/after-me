@@ -26,7 +26,7 @@ def _errors(**overrides: Any) -> list[tuple[str, str]]:
 
 def test_valid_request_is_normalised() -> None:
     body = RegisterStartRequest(**BASE, locale="EN-in", country_code="in")
-    assert body.email == "Diwakar@Example.com"
+    assert body.email == "Diwakar@example.com"  # the domain is case-insensitive; the rest is kept
     assert body.email_normalized == "diwakar@example.com"
     assert body.locale == "en-IN"
     assert body.country_code == "IN"
@@ -62,6 +62,11 @@ def test_invalid_emails(email: object) -> None:
         ("After Me Team", "display_name_reserved"),
         ("AFT3R-ME", "display_name_reserved"),
         ("\u0410fter\u041ce", "display_name_reserved"),  # Cyrillic A and M
+        # Phase 9: spellings that read as the same thing to a person
+        ("example.\u0440\u0444", "display_name_link"),  # a Cyrillic top-level domain
+        ("evil\u3002com", "display_name_link"),  # ideographic full stop
+        ("evil\uff0ecom", "display_name_link"),  # fullwidth full stop
+        ("\u00c1fter M\u00e9", "display_name_reserved"),  # accented
         (123, "invalid_display_name"),
     ],
 )
@@ -69,7 +74,10 @@ def test_display_name_rules(name: object, code: str) -> None:
     assert ("display_name", code) in _errors(display_name=name)
 
 
-@pytest.mark.parametrize("name", ["Diwakar", "José Ñúñez", "李小龍", "Mary-Kate O'Neil", "Dr. Who"])
+@pytest.mark.parametrize(
+    "name",
+    ["Diwakar", "José Ñúñez", "李小龍", "Mary-Kate O'Neil", "Dr. Who", "Zoë Renée", "А. Б. Иванов"],
+)
 def test_display_name_accepts_real_names(name: str) -> None:
     assert RegisterStartRequest(**{**BASE, "display_name": f" {name} "}).display_name == name
 
@@ -134,3 +142,19 @@ def test_device_rules() -> None:
         device={**DEVICE, "id": "6c1e5bd0-7c0c-4b77-9a4a-1d2c3b4a5f60"},
     )
     assert request.device.id is not None
+
+
+# --- one spelling per mailbox (Phase 9, F6) ------------------------------------------------------
+
+
+def test_two_spellings_of_one_mailbox_are_one_address() -> None:
+    from app.core.validation import clean_email, normalize_email
+
+    # an internationalised domain and its punycode form, composed and decomposed accents
+    assert normalize_email("Bob@Bücher.de") == normalize_email("bob@xn--bcher-kva.de")
+    assert normalize_email("José@example.com") == normalize_email("José@example.com")
+    assert clean_email("  Bob@Bücher.DE ") == "Bob@xn--bcher-kva.de"
+    # case: the domain is case-insensitive, and the lookup key lower-cases the rest
+    assert normalize_email("A.B@EXAMPLE.com") == "a.b@example.com"
+    # a string that is not an address is still keyed, so a form field cannot raise
+    assert normalize_email("  Not An Address ") == "not an address"

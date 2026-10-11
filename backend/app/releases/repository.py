@@ -13,6 +13,8 @@ from sqlalchemy import func, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.contacts.models import TrustedContact
+from app.plans.models import EscalationStep
 from app.releases.models import PortalAccess, ReleaseEvent
 
 
@@ -104,6 +106,16 @@ class ReleaseRepository:
         )
         return len(revoked)
 
+    async def revoke_for_owner(self, *, owner_id: uuid.UUID, reason: str, now: datetime) -> int:
+        """Everything this account ever released, and every portal access (account deletion)."""
+        revoked = await self._revoke(ReleaseEvent.user_id == owner_id, reason=reason, now=now)
+        await self._session.execute(
+            update(PortalAccess)
+            .where(PortalAccess.user_id == owner_id, PortalAccess.revoked_at.is_(None))
+            .values(revoked_at=now)
+        )
+        return len(revoked)
+
     # ------------------------------------------------------------------ the engine's side
 
     async def create(
@@ -165,6 +177,20 @@ class ReleaseRepository:
             )
         ).scalar_one()
         return row
+
+    async def for_owner_view(
+        self, *, owner_id: uuid.UUID, incident_id: uuid.UUID
+    ) -> list[tuple[ReleaseEvent, str, int | None]]:
+        """The incident's releases for its owner: the event, the contact's display name and the
+        stage position, oldest first. (The title is opened by the caller, for the owner.)"""
+        stmt = (
+            select(ReleaseEvent, TrustedContact.display_name, EscalationStep.position)
+            .join(TrustedContact, TrustedContact.id == ReleaseEvent.contact_id)
+            .outerjoin(EscalationStep, EscalationStep.id == ReleaseEvent.step_id)
+            .where(ReleaseEvent.user_id == owner_id, ReleaseEvent.incident_id == incident_id)
+            .order_by(ReleaseEvent.released_at, ReleaseEvent.id)
+        )
+        return [(row[0], row[1], row[2]) for row in (await self._session.execute(stmt)).all()]
 
     async def live_counts_for_action(
         self, *, owner_id: uuid.UUID, action_id: uuid.UUID

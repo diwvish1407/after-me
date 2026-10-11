@@ -8,6 +8,7 @@ import '../../../core/api/failures/app_failure.dart';
 import '../../../core/api/failures/failure_mapper.dart';
 import '../../../core/design_system/design_system.dart';
 import '../../../core/forms/validators.dart';
+import '../../../core/security/secure_screen.dart';
 import '../../../l10n/gen/app_localizations.dart';
 import '../application/me_controller.dart';
 import '../data/auth_repository.dart';
@@ -46,6 +47,22 @@ enum ReauthReason {
   /// Saving an instruction whose time the plan has no stage for yet: the plan gets the
   /// stage (`PUT /plan`) and the instruction its recipients, under one password.
   instructionNewTime,
+
+  /// Confirming I'M SAFE after contacts were told (`POST /incidents/{id}/safe`).
+  incidentSafe,
+
+  /// Exporting the account's data (`POST /me/export`): the password must have been
+  /// entered in the last 60 seconds, and the export spends it.
+  exportData,
+
+  /// Closing the account (`DELETE /me`): the password must have been entered in the last
+  /// 60 seconds.
+  deleteAccount,
+
+  /// Reading the instructions (`GET /instructions`, `GET /instructions/{id}`): the text
+  /// is the most sensitive thing the app holds, so the server asks for a password entered
+  /// in the last 5 minutes before it answers.
+  instructionRead,
 }
 
 /// The sentence of [reason] in the sheet's body.
@@ -60,6 +77,10 @@ String reauthReasonText(AppLocalizations l10n, ReauthReason reason) =>
         l10n.reauthReasonInstructionRecipients,
       ReauthReason.instructionOff => l10n.reauthReasonInstructionOff,
       ReauthReason.instructionNewTime => l10n.reauthReasonInstructionNewTime,
+      ReauthReason.incidentSafe => l10n.reauthReasonIncidentSafe,
+      ReauthReason.exportData => l10n.reauthReasonExportData,
+      ReauthReason.deleteAccount => l10n.reauthReasonDeleteAccount,
+      ReauthReason.instructionRead => l10n.reauthReasonInstructionRead,
     };
 
 /// Asks for the password again before a sensitive action (USER_FLOWS.md §7). Returns
@@ -175,68 +196,75 @@ class _ReauthSheetState extends ConsumerState<ReauthSheet> {
     final failure = _failure;
     final wrongPassword =
         failure is UnauthorizedFailure && failure.code == 'invalid_credentials';
-    return Padding(
-      padding: EdgeInsets.fromLTRB(
-        AppSpacing.page,
-        0,
-        AppSpacing.page,
-        MediaQuery.viewInsetsOf(context).bottom + AppSpacing.lg,
-      ),
-      child: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            PageHeading(l10n.reauthTitle),
-            Gap.xs,
-            BodyText(
-              widget.reason == null
-                  ? l10n.reauthBody
-                  : reauthReasonText(l10n, widget.reason!),
-            ),
-            Gap.md,
-            if (failure != null && !wrongPassword) ...[
-              FailureNotice.of(context, failure),
+    // The password is typed here: no screenshot, no screen recording and nothing in the
+    // recents card while the sheet is open (FLAG_SECURE, reference counted with the
+    // screen underneath).
+    return SecureScreen(
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(
+          AppSpacing.page,
+          0,
+          AppSpacing.page,
+          MediaQuery.viewInsetsOf(context).bottom + AppSpacing.lg,
+        ),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              PageHeading(l10n.reauthTitle),
+              Gap.xs,
+              BodyText(
+                widget.reason == null
+                    ? l10n.reauthBody
+                    : reauthReasonText(l10n, widget.reason!),
+              ),
               Gap.md,
+              if (failure != null && !wrongPassword) ...[
+                FailureNotice.of(context, failure),
+                Gap.md,
+              ],
+              AppTextField(
+                label: l10n.fieldPassword,
+                controller: _password,
+                obscureText: true,
+                autofocus: true,
+                enabled: !_busy,
+                errorText: wrongPassword
+                    ? l10n.reauthWrongPassword
+                    : (_issue == null ? null : issueMessage(l10n, _issue!)),
+                textInputAction: TextInputAction.done,
+                autofillHints: const [AutofillHints.password],
+                onChanged: (_) => setState(() {
+                  _issue = null;
+                  if (wrongPassword) {
+                    _failure = null;
+                  }
+                }),
+                onSubmitted: (_) => _confirm(),
+              ),
+              Gap.md,
+              AppButton.primary(
+                label: l10n.reauthConfirm,
+                isLoading: _busy,
+                onPressed: _confirm,
+                expand: true,
+              ),
+              Gap.xs,
+              AppButton.text(
+                label: l10n.signInForgot,
+                onPressed: _busy ? null : _forgot,
+                expand: true,
+              ),
+              AppButton.text(
+                label: l10n.cancel,
+                onPressed: _busy
+                    ? null
+                    : () => Navigator.of(context).pop(false),
+                expand: true,
+              ),
             ],
-            AppTextField(
-              label: l10n.fieldPassword,
-              controller: _password,
-              obscureText: true,
-              autofocus: true,
-              enabled: !_busy,
-              errorText: wrongPassword
-                  ? l10n.reauthWrongPassword
-                  : (_issue == null ? null : issueMessage(l10n, _issue!)),
-              textInputAction: TextInputAction.done,
-              autofillHints: const [AutofillHints.password],
-              onChanged: (_) => setState(() {
-                _issue = null;
-                if (wrongPassword) {
-                  _failure = null;
-                }
-              }),
-              onSubmitted: (_) => _confirm(),
-            ),
-            Gap.md,
-            AppButton.primary(
-              label: l10n.reauthConfirm,
-              isLoading: _busy,
-              onPressed: _confirm,
-              expand: true,
-            ),
-            Gap.xs,
-            AppButton.text(
-              label: l10n.signInForgot,
-              onPressed: _busy ? null : _forgot,
-              expand: true,
-            ),
-            AppButton.text(
-              label: l10n.cancel,
-              onPressed: _busy ? null : () => Navigator.of(context).pop(false),
-              expand: true,
-            ),
-          ],
+          ),
         ),
       ),
     );

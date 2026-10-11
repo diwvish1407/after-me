@@ -18,6 +18,7 @@ from app.auth.repository import (
     SessionRepository,
     UserRepository,
 )
+from app.core.net import rate_limit_subject
 from app.notifications.email import EmailMessage
 from app.security.rate_limit import RateLimit
 from app.users.repository import ProfileRepository
@@ -45,6 +46,21 @@ class AuthServiceBase:
 
     async def _limit(self, rule: RateLimit, subject: str, now: datetime) -> None:
         result = await self.services.limiter.enforce([(rule, subject)], now=now)
+        self.ctx.note_rate_limit(result)
+
+    def _budget_subject(self, email_norm: str) -> str:
+        """An address and the network the caller is on: what a *hard* per-address budget is
+        keyed on, so that a stranger cannot spend the owner's (Phase 9, F1)."""
+        return f"{email_norm}|{rate_limit_subject(self.ctx.client_ip)}"
+
+    async def _limit_email(
+        self, per_network: RateLimit, ceiling: RateLimit, email_norm: str, now: datetime
+    ) -> None:
+        """The per-address budgets of the public routes that send mail: one per (address,
+        network), and a higher one across networks that only stops a flood."""
+        result = await self.services.limiter.enforce(
+            [(per_network, self._budget_subject(email_norm)), (ceiling, email_norm)], now=now
+        )
         self.ctx.note_rate_limit(result)
 
     def _event(

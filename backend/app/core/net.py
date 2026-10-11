@@ -17,9 +17,18 @@ from starlette.types import Scope
 UNKNOWN_IP = "0.0.0.0"  # noqa: S104 - a placeholder value, never bound
 
 
+def _unmapped(address: ipaddress.IPv4Address | ipaddress.IPv6Address) -> str:
+    """``::ffff:1.2.3.4`` is the IPv4 client 1.2.3.4 that arrived on a dual-stack socket (or in a
+    proxy's header): it is the same person and must be keyed as one, not as the ``::ffff:0:0/64``
+    that every IPv4 client would otherwise share."""
+    if isinstance(address, ipaddress.IPv6Address) and address.ipv4_mapped is not None:
+        return str(address.ipv4_mapped)
+    return str(address)
+
+
 def _valid_ip(value: str) -> str | None:
     try:
-        return str(ipaddress.ip_address(value.strip()))
+        return _unmapped(ipaddress.ip_address(value.strip()))
     except ValueError:
         return None
 
@@ -31,9 +40,12 @@ def rate_limit_subject(ip: str) -> str:
         address = ipaddress.ip_address(ip)
     except ValueError:
         return ip
+    unmapped = _unmapped(address)
+    if unmapped != str(address):
+        return unmapped
     if isinstance(address, ipaddress.IPv6Address):
         return str(ipaddress.ip_network(f"{address}/64", strict=False))
-    return ip
+    return unmapped
 
 
 def client_ip(scope: Scope, trusted_proxy_hops: int) -> str:
@@ -49,7 +61,9 @@ def client_ip(scope: Scope, trusted_proxy_hops: int) -> str:
             forwarded.extend(
                 part.strip() for part in value.decode("latin-1").split(",") if part.strip()
             )
-    if not forwarded:
+    if len(forwarded) < trusted_proxy_hops:
+        # Fewer entries than proxies: the request did not pass through all of them, so even the
+        # first entry may have been written by the client. The peer is the only address that
+        # was not.
         return fallback
-    index = max(len(forwarded) - trusted_proxy_hops, 0)
-    return _valid_ip(forwarded[index]) or fallback
+    return _valid_ip(forwarded[len(forwarded) - trusted_proxy_hops]) or fallback

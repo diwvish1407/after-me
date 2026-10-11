@@ -15,7 +15,7 @@ from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass
 from typing import Final
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -120,6 +120,16 @@ class InstructionVault:
     async def _row(session: AsyncSession, user_id: uuid.UUID) -> UserKey | None:
         stmt = select(UserKey).where(UserKey.user_id == user_id)
         return (await session.execute(stmt)).scalar_one_or_none()
+
+    async def destroy(self, session: AsyncSession, *, user_id: uuid.UUID) -> bool:
+        """Delete the user's wrapped key (account deletion). Whatever was sealed with it, in a
+        backup or anywhere else, can no longer be opened by anyone. Returns whether a key row
+        existed."""
+        self.forget(user_id)
+        result = await session.execute(
+            delete(UserKey).where(UserKey.user_id == user_id).returning(UserKey.user_id)
+        )
+        return result.first() is not None
 
     # ------------------------------------------------------------------ content
 

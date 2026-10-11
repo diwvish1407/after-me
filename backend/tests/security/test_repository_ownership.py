@@ -22,6 +22,11 @@ EXEMPT: dict[tuple[str, str], str] = {
     ("UserRepository", "record_failed_login"): "login bookkeeping on the owner row",
     ("AuthTokenRepository", "find_link"): "lookup by SHA-256 of the presented link secret",
     ("RefreshTokenRepository", "find_owner"): "lookup by SHA-256 of the presented secret",
+    (
+        "DeviceRepository",
+        "detach_token_elsewhere",
+    ): "a registration token has one holder: the presenting device takes it from any account",
+    ("SessionRepository", "get_by_web_token"): "lookup by SHA-256 of the presented web cookie",
     ("RefreshTokenRepository", "lock_by_hash"): "secret hash within a session already resolved",
     ("RefreshTokenRepository", "lock_in_session"): "session_id resolved by an owner-scoped query",
     ("RefreshTokenRepository", "create"): "session_id resolved by an owner-scoped query",
@@ -39,6 +44,10 @@ EXEMPT: dict[tuple[str, str], str] = {
         "InstructionRepository",
         "category_exists",
     ): "reference data: the categories are the same for everyone",
+    (
+        "SuppressionRepository",
+        "mark_bounced_with_email",
+    ): "a hard bounce of an address is true for every account that lists it; webhook-verified",
     ("SuppressionRepository", "is_suppressed"): "the suppression list is global by design",
     ("SuppressionRepository", "add"): "the suppression list is global by design",
     ("SuppressionRepository", "lock_address"): "advisory lock keyed by an address hash, no rows",

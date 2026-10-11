@@ -11,6 +11,9 @@ dependencies = [
     "cryptography>=50.0.2",
     "email-validator>=2.3.0",
     "fastapi>=0.142.4",
+    # The FCM and email provider adapters import httpx at start-up: a runtime dependency, not a
+    # test one (an image built without the dev group must still be able to start).
+    "httpx>=0.28.1",
     "jinja2>=3.1.6",
     "psycopg[binary]>=3.3.6",
     "pydantic>=2.13.5",
@@ -24,7 +27,6 @@ dependencies = [
 
 [dependency-groups]
 dev = [
-    "httpx>=0.28.1",
     "hypothesis>=6.150",
     "mypy>=2.4.0",
     "pip-audit>=2.10.1",

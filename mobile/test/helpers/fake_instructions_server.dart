@@ -47,6 +47,17 @@ class FakeInstructionsServer implements InstructionsRepository {
   /// Whether the session entered its password recently. Null counts as yes.
   final bool Function()? reauthenticated;
 
+  /// The server asks for the password before it shows instruction content: `GET
+  /// /v1/instructions` and `GET /v1/instructions/{id}` answer 403 `reauth_required`
+  /// unless the session entered its password in the last 5 minutes ([reauthenticated],
+  /// SECURITY.md §7). Off by default, so the many tests of other behaviour read freely;
+  /// the tests of the password rule switch it on (and set `auth.reauthenticated` back to
+  /// false to let the "5 minutes" run out).
+  bool readsNeedPassword = false;
+
+  /// How many reads were answered 403 `reauth_required`.
+  int readReauthAsked = 0;
+
   /// Told the name of every call (`instructions.create`, ...), so a test can see the
   /// order of calls across several "servers".
   final void Function(String call)? onCall;
@@ -216,9 +227,18 @@ class FakeInstructionsServer implements InstructionsRepository {
     ];
   }
 
+  /// 403 `reauth_required` while the password rule is on and the password is not fresh.
+  void _readStepUp() {
+    if (readsNeedPassword && !(reauthenticated?.call() ?? true)) {
+      readReauthAsked++;
+      throw const ForbiddenFailure(code: 'reauth_required');
+    }
+  }
+
   @override
   Future<List<InstructionSummary>> list({InstructionCategory? category}) async {
     _enter('list');
+    _readStepUp();
     await listGate;
     final rows = [
       for (final row in _rows)
@@ -238,6 +258,7 @@ class FakeInstructionsServer implements InstructionsRepository {
   @override
   Future<Instruction> get(String id) async {
     _enter('get');
+    _readStepUp();
     return _full(_find(id));
   }
 

@@ -48,6 +48,9 @@ make run                                   # uv run uvicorn app.main:app --reloa
 make check                                 # format, lint, mypy, tests, dependency audit
 make migrate-check                         # migration round trip on a throwaway database (CI runs it too)
 # Worker (Phase 5+): uv run python -m workers.engine in a second terminal
+# Retention (Phase 7): make maintenance   # finishes account deletions; run every ~15 minutes
+# Integration tests (Phase 7): AFTERME_TEST_SUPPORT_ENABLED=true AFTERME_TEST_SUPPORT_TOKEN=<32+ bytes>
+#   for BOTH `make run` and the worker (they must share the test clock); see backend/README.md
 
 # Mobile
 cd mobile
@@ -84,28 +87,34 @@ All configuration comes from environment variables (prefix `AFTERME_`), validate
 
 | Variable | Notes |
 |---|---|
-| `APP_ENV` | `dev` · `test` · `staging` · `prod` |
+| `APP_ENV` | `dev` · `test` · `staging` · `prod`. **Must be set** (a process with neither this nor a `.env` file refuses to start). Staging and prod also refuse: `LOG_LEVEL=DEBUG`; any of the three database URLs without `sslmode=require` (or stronger) unless it points at a loopback proxy; a Postmark webhook password under 32 characters |
 | `PUBLIC_BASE_URL`, `API_BASE_URL` | HTTPS required outside dev |
 | `DATABASE_URL` **(S)** | `afterme_api` role |
 | `WORKER_DATABASE_URL` **(S)** | `afterme_worker` role |
+| `MAINTENANCE_DATABASE_URL` **(S)** | `afterme_maintenance` role (the retention job, Phase 7); required in staging and production |
+| `ACCOUNT_DELETION_DAYS` | How long a closed account's remaining rows are kept before the hard delete; default 30 |
+| `TEST_SUPPORT_ENABLED`, `TEST_SUPPORT_TOKEN` **(S)** | Movable clock and mail reader for integration tests. **Never in production** (refused). In staging only for the end-to-end suite, with the token. |
 | `MIGRATION_DATABASE_URL` **(S)** | `afterme_owner` role (migration job only) |
 | `DB_POOL_SIZE`, `DB_STATEMENT_TIMEOUT_MS`, `API_LOCK_TIMEOUT_MS` | |
 | `JWT_SIGNING_KEYS` **(S)**, `JWT_ACTIVE_KID`, `JWT_ISSUER`, `JWT_AUDIENCE` | Ed25519 keys as JSON `{kid: pem}` |
 | `HMAC_PEPPER` **(S)**, `HMAC_PEPPER_PREVIOUS` **(S)** | Dual-check during rotation |
 | `KMS_PROVIDER`, `KMS_KEY_NAME` | `local` is refused in prod |
 | `LOCAL_KEK` **(S, dev/test only)** | |
-| `EMAIL_PROVIDER`, `EMAIL_API_KEY` **(S)**, `EMAIL_FROM`, `EMAIL_WEBHOOK_SECRET` **(S)** | `console` is refused in prod |
-| `EMAIL_FALLBACK_PROVIDER`, `EMAIL_FALLBACK_API_KEY` **(S)** | Optional |
-| `FCM_PROJECT_ID` | Service identity via Workload Identity on GCP (no key file) |
+| `EMAIL_PROVIDER` (`resend`, `postmark`, `smtp`; `console` and `recording` are refused in prod), `EMAIL_API_KEY` **(S)**, `EMAIL_FROM` (an address on the verified sending domain), `EMAIL_WEBHOOK_SECRET` **(S)** | Resend: the signing secret `whsec_…` of the webhook; Postmark: the password of the webhook URL's Basic auth. Required in staging/prod for `resend` and `postmark` |
+| `EMAIL_FALLBACK_PROVIDER` (a different provider), `EMAIL_FALLBACK_API_KEY` **(S)**, `EMAIL_FALLBACK_WEBHOOK_SECRET` **(S)** | Optional (FR-NOT-06); `afterme-admin status` warns when absent |
+| `POSTMARK_MESSAGE_STREAM` | Default `outbound` (use a transactional stream) |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD` **(S)**, `SMTP_IMPLICIT_TLS` | Only for `smtp`; STARTTLS by default |
+| `PUSH_PROVIDER` (`fcm` in staging/prod; `log`, `noop` for dev/tests), `FCM_PROJECT_ID` | Service identity via Workload Identity on GCP (no key file) |
+| `FCM_CREDENTIALS_JSON` **(S)** | A service-account key, only where Workload Identity is not available (staging on a laptop-sized host, CI) |
 | `PROBE_TOKEN` **(S)** | Uptime-check header |
 | `SENTRY_DSN`, `SENTRY_TRACES_SAMPLE_RATE` | |
 | `TRUSTED_PROXY_HOPS` | For client IP extraction |
 | `TICK_SECONDS`, `SETTLE_DELAY_SECONDS`, `INGESTION_STALE_SECONDS`, `HOLD_*`, `ANOMALY_FLOOR_PER_HOUR`, `ACTION_MAX_ATTEMPTS`, … | All parameters in [ESCALATION_ENGINE §13](ESCALATION_ENGINE.md#13-configuration) (prefix `AFTERME_`); unsafe values refused at startup (`SETTLE_DELAY_SECONDS` must exceed `INGESTION_STALE_SECONDS`; in prod `MIN_RELEASE_OFFSET_MINUTES >= 1440` and `SETTLE_DELAY_SECONDS >= 300`). `WORKER_DATABASE_URL` and `PROBE_TOKEN` are required in staging and prod. |
-| `TEST_ROUTER_ENABLED` | Staging only; startup fails if set in prod |
+| `TEST_SUPPORT_ENABLED` / `TEST_SUPPORT_TOKEN` | Development and CI only (API_SPEC §17). Refused in production, **and unusable in staging**: it needs a development email provider, and staging refuses those, because moving the clock opens incidents and alerts contacts for every account in the database. End-to-end tests in staging therefore run in real time with real providers and short stage offsets, not with the test clock (Phase 9, F-19; a Phase 10 planning item) |
 | `GOOGLE_PLAY_PACKAGE_NAME` | Billing (later) |
 | `LOG_LEVEL` | Default `INFO` |
 
-The mobile app has **no secrets**. `config/<env>.json` holds only the API base URL, environment name and the (public) Sentry DSN. Firebase `google-services.json` files are per flavor; they are public identifiers, but the repo is still kept private.
+The mobile app has **no secrets**. `config/<env>.json` holds only the API base URL, environment name and the (public) Sentry DSN. Firebase is configured from the four public `FIREBASE_*` keys in each `config/<env>.json` (API key, app id, sender id, project id: one Android app per flavor id; **no** `google-services.json` and no Google Services Gradle plugin); they are public identifiers, but the repo is still kept private.
 
 ## 5. CI/CD
 
@@ -124,14 +133,15 @@ mobile tag ─▶ flutter build appbundle (prod) ─▶ upload symbols ─▶ Pl
 ### 5.1 Mobile build and signing
 
 ```bash
-flutter build appbundle --flavor prod --release \
-  --obfuscate --split-debug-info=build/symbols \
-  --dart-define-from-file=config/prod.json
+cd mobile && tool/build_release.sh            # an .aab; --apk for an APK
 ```
+
+`tool/build_release.sh` builds the prod flavor with `--obfuscate --split-debug-info`, refuses to run without `android/key.properties` (CI passes `--allow-debug-signing` and gets a loud warning), requires `APP_ENV=prod` and an https API URL in `config/prod.json`, and runs the merged-manifest check afterwards. Do not run `flutter build` by hand for a store upload.
 
 - **Play App Signing**: Google holds the app signing key; we hold the **upload key**.
 - The upload keystore lives in a password manager **plus** an offline backup. CI receives it as an encrypted secret. Losing it is recoverable via a Play support reset, but slowly.
 - Versioning: `versionName` = semver; `versionCode` = monotonically increasing build number.
+- Build-time defines (`mobile/config/*.json`): `API_BASE_URL`, `PUBLIC_BASE_URL` and, since Phase 7, `PLAY_STORE_URL` (an `https` link used by the blocking *Update AfterMe* screen; defaults to the app's Play page, so the prod value must be checked once the application ID is final).
 - Obfuscation symbols are uploaded to error monitoring and stored privately.
 
 ## 6. Backups and recovery
@@ -183,10 +193,14 @@ Dashboards: check-ins/hour, incidents opened/resolved/escalated/cancelled, messa
 | **Hold entered (ingestion)** | Check the uptime-check status and ingress; check the API health/logs; fix. Hold exits automatically after 10 min of fresh probes; verify `system.hold_exited` and the shift counts. |
 | **Hold entered (anomaly)** | Inspect recent incidents (counts by app version, region, time); look for a bad app release or a push/email outage. If it's a bug: `afterme-admin incident void <incident-id>` for each affected incident (audited; the person's schedule restarts a full interval from then and they are told). Otherwise `afterme-admin hold exit` (shift applied; it will not re-enter over the same burst). |
 | **Page: hold evaluation failing** | The worker ticks but cannot evaluate Hold, so it is treating the state as a Hold: no incidents open and no contact-facing message leaves; user reminders still go. Read `engine.hold_failed` (error class only) and fix the cause (a bad watermark row, a statement timeout, a missing grant). It clears by itself on the next good evaluation. |
-| **Page: messages given up on** | A contact-facing message failed for 24 h from its first attempt. Find it with the audit event `notification.failed`; the person is not told automatically (Phase 8). Decide with the owner whether to contact the person or the contact another way. |
+| **Page: messages given up on** | A contact-facing message failed for 24 h from its first attempt. Find it with the audit event `notification.failed`; the person is told by the `contact_unreachable` notice (Phase 8). Decide with the owner whether to contact the person or the contact another way. |
+| **Account deletions are not finishing** | The retention job (`python -m workers.maintenance`, scheduled about every 15 minutes) scrubs the contacts of closed accounts once their all-clear has left and hard-deletes accounts 30 days after the request. Run it by hand (`make maintenance`); read `maintenance.failed` (error class only). A missing grant shows as a permission error: the role needs migration `0007`. Nothing safety-relevant waits on it: contact-facing effects of a closed account stopped in the request itself. |
 | **Worker down** | Restart; check heartbeats; confirm the catch-up behaviour (anchor rule) in logs; check for held actions. |
-| **Email provider outage** | Confirm the fallback switched; if there is no fallback, consider entering operator Hold *only* if alerts would arrive misleadingly late. Communicate via status page. |
-| **Push outage** | No action needed for safety (email in parallel); monitor reminder delivery. |
+| **Email provider outage** | `afterme-admin status` shows `provider_errors_15m` and warns "the fallback email provider is carrying messages" / "provider error rate above 5%". The fallback takes over by itself (a provider that failed twice is skipped for 60 s). Without a fallback, messages retry with backoff for 24 h and a **paging** "queued message past send_after for 5 minutes" appears: consider operator Hold *only* if alerts would arrive misleadingly late. Communicate via status page. |
+| **Provider credentials invalid** (OPS-03) | Adapters answer `ProviderUnavailableError` (`resend_401`, `postmark_10`, `smtp_auth`, `fcm_unauthenticated`): messages are retried, the fallback carries them, the status warns. Fix the secret in the secret manager and restart; nothing is lost. Prove it with `afterme-admin email-test`. |
+| **Bounce or complaint spike** | `bounces_24h` / `complaints_24h` in `afterme-admin status`. A hard bounce marks the contact `bounced` and tells its owner; a complaint suppresses the address everywhere. A spike usually means a mass-invited list: check invitation volume in the audit log and the provider dashboard before the sender reputation suffers. |
+| **Push outage** | No action needed for safety (email in parallel); monitor reminder delivery. A token FCM reports as unregistered is removed by the dispatcher by itself. |
+| **A webhook is rejected (`401`)** | The signing secret or Basic-auth password in the provider and in `EMAIL_WEBHOOK_SECRET` differ, or the host clock is more than 5 minutes off (Svix). Bounces are not applied until fixed: events are retried by the provider for a while. |
 | **Held action / consistency violation** | Never "force execute". Investigate the data and fix the root cause. An action that failed only for its own reasons can be put back with `afterme-admin action retry <action-id>` (audited): it goes through the whole safety gate again and a stage that is by then overdue by more than the limit is held again rather than run. Infrastructure errors (connection loss, lock timeouts) never hold an action. |
 | **A contact says the link doesn't work** | Links last 30 days and stop working when the person checks in, the contact is removed or opted out, or the release is taken back. The contact can ask for a new link from the page itself (sent only to their verified address). Look at `release_events.revoke_reason` and `portal_access.revoked_at` for the incident; never re-enable a revoked release by hand. |
 | **Key management** | `KMS_PROVIDER=local` (dev, test) is refused in staging and production; a cloud KMS adapter must exist before the first production start (ROADMAP). To rotate a local KEK: set the new key as `KMS_LOCAL_KEY` and the old one as `KMS_LOCAL_KEY_PREVIOUS`; wrapped keys carry the KEK id, so both work until they are rewrapped. Losing every KEK makes all instruction content unreadable by design. |
@@ -196,6 +210,15 @@ Dashboards: check-ins/hour, incidents opened/resolved/escalated/cancelled, messa
 | **Database restore** | Restore to a new instance → point staging at it for verification → switch → **operator Hold** → review → exit. |
 
 ## 10. Domain and email deliverability
+
+**Owner checklist for Phase 8** (nothing below can be done by the build; each unlocks the E2E tests of [TEST_PLAN §7](TEST_PLAN.md#7-end-to-end-and-operational-tests-staging)):
+
+1. **Choose the email provider and a fallback** (PRD D13). The code supports Resend, Postmark and plain SMTP (SES, Mailgun, SendGrid through their SMTP relays), any two different ones. Recommendation: one API provider as primary and a different one as fallback; Resend gives a native idempotency key, Postmark a strong transactional reputation with separate message streams.
+2. **Sending domain**: a subdomain such as `mail.<domain>`; add the provider's SPF and DKIM records; DMARC `p=quarantine` with a report address, then `p=reject` after a clean fortnight; keep marketing mail off it.
+3. **Webhooks**: in each provider add `https://api.<domain>/webhooks/email/resend` (or `/postmark`) for *delivered, bounced, complained* **and failed / suppressed** events (a message the provider accepted and then could not deliver is otherwise silent); **turn open and click tracking off** (the release link is in the body: tracking would rewrite it and tell the provider who opened it); put the signing secret (Resend) or a password in the URL's Basic auth (Postmark) into `EMAIL_WEBHOOK_SECRET`.
+4. **Firebase projects** `afterme-dev`, `afterme-staging`, `afterme-prod` (DEPLOYMENT §3): enable Cloud Messaging (HTTP v1), register the Android app (`app.afterme` flavors), copy API key, app id, sender id and project id into `mobile/config/*.json` (`FIREBASE_*`; not secrets), and give the backend's service account the *Firebase Cloud Messaging API Admin* role (or set `FCM_CREDENTIALS_JSON`).
+5. **A minimal staging environment** with the real providers and `TEST_SUPPORT_*` **off** (configuration refuses test support with a real email provider; E2E-01 uses the staging clock router only on an isolated database with a development email provider, or is driven in real time with a short schedule).
+6. **Verify** before any user: `afterme-admin email-test --to you@…` and `afterme-admin push-test --token <token of your phone>` print `ok: provider=… message_id=…` or the failure *kind*.
 
 - Register the product domain (PRD D1). Use subdomains: `api.<domain>`, `<domain>` (web), `mail.<domain>` or `notify.<domain>` (sending).
 - Email authentication: SPF, DKIM (provider keys), **DMARC** starting at `p=quarantine` with reporting, moving to `p=reject`.

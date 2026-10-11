@@ -1,0 +1,29 @@
+{
+  "items": [
+    {
+      "id": 8,
+      "action": "checkin.recorded",
+      "occurred_at": "2026-10-08T09:00:00Z",
+      "params": {
+        "kind": "ok",
+        "source": "app"
+      }
+    },
+    {
+      "id": 7,
+      "action": "schedule.activated",
+      "occurred_at": "2026-10-08T09:00:00Z",
+      "params": {}
+    },
+    {
+      "id": 5,
+      "action": "plan.updated",
+      "occurred_at": "2026-10-08T09:00:00Z",
+      "params": {
+        "stages": 1,
+        "removed": 0
+      }
+    }
+  ],
+  "next_cursor": "cursor_example_0001"
+}

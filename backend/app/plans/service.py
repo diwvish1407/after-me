@@ -16,6 +16,7 @@ from app.api.container import AppServices
 from app.api.deps import CurrentUser, RequestContext, has_fresh_reauth
 from app.audit import writer as audit
 from app.auth.base import AuthServiceBase
+from app.auth.guards import ensure_owner_active
 from app.checkins.repository import CheckinConfigRepository
 from app.contacts.repository import ContactRepository
 from app.core.errors import (
@@ -124,6 +125,7 @@ class PlanService(AuthServiceBase):
         config = await self.configs.get(owner_id=current.user_id, for_update=True)
         if config is None:  # pragma: no cover - created at signup verification
             raise NotFound
+        await ensure_owner_active(self.session, current.user_id)
         await self.plans.ensure(owner_id=current.user_id, now=now)
         plan = await self.plans.get(owner_id=current.user_id, for_update=True)
         if plan is None:  # pragma: no cover

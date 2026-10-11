@@ -230,7 +230,10 @@ void main() {
       await _confirmPassword(tester, fakes.auth.password);
       await tester.pumpAndSettle();
       expect(find.text("Confirm it's you"), findsNothing);
-      expect(find.textContaining("You're offline"), findsOneWidget);
+      expect(
+        find.textContaining("We couldn't confirm that this was saved"),
+        findsOneWidget,
+      );
       expect(fakes.instructions.liveCount, 0);
     });
 

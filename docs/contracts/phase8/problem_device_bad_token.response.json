@@ -1,0 +1,15 @@
+{
+  "type": "https://afterme.test/problems/validation-failed",
+  "title": "Some fields are invalid",
+  "status": 422,
+  "code": "validation_failed",
+  "detail": "Check the highlighted fields and try again.",
+  "request_id": "req_0123456789abcdef0123456789abcdef",
+  "errors": [
+    {
+      "field": "push_token",
+      "code": "invalid_format",
+      "message": "String should match pattern '^[\\x21-\\x7e]{20,4096}$'"
+    }
+  ]
+}

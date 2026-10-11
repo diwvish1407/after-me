@@ -128,11 +128,16 @@ async def test_f01_a_void_after_contacts_were_told_clears_them_and_restarts_the_
         world.engine.services, operator="alex", incident_id=incident["id"]
     )
     await world.tick()
-    assert len(world.mail.to(address(person, "Mom"), "contact_all_clear")) == 1
+    assert world.mail.to(address(person, "Mom"), "contact_all_clear") == []
+    assert len(world.mail.to(address(person, "Mom"), "contact_alert_withdrawn")) == 1
     config = world.config(person)
     assert config["status"] == "active"
     assert config["next_due_at"] > world.clock.current
-    # the all-clear confirmation already reaches the person: no second, contradictory notice
+    # the person is told the alert was withdrawn (not that "all clear" went out: nobody said
+    # they are safe), and gets no second, contradictory service-interruption notice
+    [notice] = world.mail.to(person.email, "alert_withdrawn_notice")
+    assert "did not tell them that you are safe" in notice.text
+    assert world.mail.to(person.email, "all_clear_confirmation") == []
     assert world.mail.to(person.email, "service_interruption") == []
 
 
@@ -256,7 +261,7 @@ async def test_f04_a_row_with_a_template_the_engine_never_writes_is_cancelled(
     forged = forge(world, person, template_key="contact_all_clear")
     await world.dispatch()
     row = status_of(world, forged)
-    assert (row["status"], row["cancelled_reason"]) == ("cancelled", "unexpected_template")
+    assert (row["status"], row["cancelled_reason"]) == ("cancelled", "unexpected_shape")
 
 
 # --- F-07: a Hold must not starve the messages that continue ----------------------------------

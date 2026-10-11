@@ -12,6 +12,7 @@ import '../../../core/design_system/design_system.dart';
 import '../../../core/device/device_info_source.dart';
 import '../../../core/forms/validators.dart';
 import '../../../core/pickers/pickers.dart';
+import '../../../core/security/secure_screen.dart';
 import '../../../l10n/gen/app_localizations.dart';
 import '../application/signup_controller.dart';
 import 'legal_links.dart';
@@ -155,103 +156,105 @@ class _CreateAccountScreenState extends ConsumerState<CreateAccountScreen> {
       return issue == null ? null : issueMessage(l10n, issue);
     }
 
-    return FormPage(
-      title: l10n.createAccountTitle,
-      children: [
-        PageHeading(l10n.createAccountHeading),
-        Gap.xs,
-        BodyText(l10n.createAccountIntro),
-        Gap.lg,
-        if (failure != null && !handledByField) ...[
-          FailureNotice.of(context, failure),
-          Gap.md,
-        ],
-        AppTextField(
-          label: l10n.fieldName,
-          controller: _name,
-          errorText: errorOf(_nameIssue, serverName),
-          textInputAction: TextInputAction.next,
-          autofillHints: const [AutofillHints.givenName],
-          textCapitalization: TextCapitalization.words,
-          enabled: !state.busy,
-          onChanged: (_) => setState(() => _nameIssue = null),
-        ),
-        Gap.md,
-        AppTextField(
-          label: l10n.fieldEmail,
-          controller: _email,
-          errorText: errorOf(_emailIssue, serverEmail),
-          keyboardType: TextInputType.emailAddress,
-          textInputAction: TextInputAction.next,
-          autofillHints: const [AutofillHints.email],
-          enabled: !state.busy,
-          onChanged: (_) => setState(() => _emailIssue = null),
-        ),
-        Gap.md,
-        AppTextField(
-          label: l10n.fieldPassword,
-          controller: _password,
-          obscureText: true,
-          errorText: errorOf(_passwordIssue, serverPassword),
-          helperText: passwordStrengthHint(l10n, strength),
-          textInputAction: TextInputAction.done,
-          autofillHints: const [AutofillHints.newPassword],
-          enabled: !state.busy,
-          onChanged: (_) => setState(() => _passwordIssue = null),
-          onSubmitted: (_) => _submit(),
-        ),
-        Gap.md,
-        _TimezoneRow(
-          timezone: _timezone,
-          onChange: state.busy ? null : _changeTimezone,
-        ),
-        Gap.sm,
-        CheckboxListTile(
-          contentPadding: EdgeInsets.zero,
-          controlAffinity: ListTileControlAffinity.leading,
-          value: _adult,
-          onChanged: state.busy
-              ? null
-              : (value) => setState(() => _adult = value ?? false),
-          title: Text(l10n.consentAdult),
-        ),
-        CheckboxListTile(
-          contentPadding: EdgeInsets.zero,
-          controlAffinity: ListTileControlAffinity.leading,
-          value: _agreed,
-          onChanged: state.busy
-              ? null
-              : (value) => setState(() => _agreed = value ?? false),
-          title: Text(l10n.consentTerms),
-        ),
-        const LegalLinks(),
-        if (_submitted && (!_adult || !_agreed)) ...[
+    return SecureScreen(
+      child: FormPage(
+        title: l10n.createAccountTitle,
+        children: [
+          PageHeading(l10n.createAccountHeading),
           Gap.xs,
-          Semantics(
-            liveRegion: true,
-            child: Text(
-              l10n.consentRequired,
-              style: Theme.of(context).textTheme.bodySmall
-                  ?.copyWith(color: t.escalation),
-            ),
+          BodyText(l10n.createAccountIntro),
+          Gap.lg,
+          if (failure != null && !handledByField) ...[
+            FailureNotice.of(context, failure),
+            Gap.md,
+          ],
+          AppTextField(
+            label: l10n.fieldName,
+            controller: _name,
+            errorText: errorOf(_nameIssue, serverName),
+            textInputAction: TextInputAction.next,
+            autofillHints: const [AutofillHints.givenName],
+            textCapitalization: TextCapitalization.words,
+            enabled: !state.busy,
+            onChanged: (_) => setState(() => _nameIssue = null),
           ),
+          Gap.md,
+          AppTextField(
+            label: l10n.fieldEmail,
+            controller: _email,
+            errorText: errorOf(_emailIssue, serverEmail),
+            keyboardType: TextInputType.emailAddress,
+            textInputAction: TextInputAction.next,
+            autofillHints: const [AutofillHints.email],
+            enabled: !state.busy,
+            onChanged: (_) => setState(() => _emailIssue = null),
+          ),
+          Gap.md,
+          AppTextField(
+            label: l10n.fieldPassword,
+            controller: _password,
+            obscureText: true,
+            errorText: errorOf(_passwordIssue, serverPassword),
+            helperText: passwordStrengthHint(l10n, strength),
+            textInputAction: TextInputAction.done,
+            autofillHints: const [AutofillHints.newPassword],
+            enabled: !state.busy,
+            onChanged: (_) => setState(() => _passwordIssue = null),
+            onSubmitted: (_) => _submit(),
+          ),
+          Gap.md,
+          _TimezoneRow(
+            timezone: _timezone,
+            onChange: state.busy ? null : _changeTimezone,
+          ),
+          Gap.sm,
+          CheckboxListTile(
+            contentPadding: EdgeInsets.zero,
+            controlAffinity: ListTileControlAffinity.leading,
+            value: _adult,
+            onChanged: state.busy
+                ? null
+                : (value) => setState(() => _adult = value ?? false),
+            title: Text(l10n.consentAdult),
+          ),
+          CheckboxListTile(
+            contentPadding: EdgeInsets.zero,
+            controlAffinity: ListTileControlAffinity.leading,
+            value: _agreed,
+            onChanged: state.busy
+                ? null
+                : (value) => setState(() => _agreed = value ?? false),
+            title: Text(l10n.consentTerms),
+          ),
+          const LegalLinks(),
+          if (_submitted && (!_adult || !_agreed)) ...[
+            Gap.xs,
+            Semantics(
+              liveRegion: true,
+              child: Text(
+                l10n.consentRequired,
+                style: Theme.of(context).textTheme.bodySmall
+                    ?.copyWith(color: t.escalation),
+              ),
+            ),
+          ],
+          Gap.lg,
+          AppButton.primary(
+            label: l10n.createAccountSubmit,
+            isLoading: state.busy,
+            onPressed: _submit,
+            expand: true,
+          ),
+          Gap.xs,
+          AppButton.text(
+            label: l10n.createAccountHaveAccount,
+            onPressed: () => context.push(AppRoutes.signIn),
+            expand: true,
+          ),
+          Gap.md,
+          _PrivacyNote(text: l10n.createAccountPasswordNote),
         ],
-        Gap.lg,
-        AppButton.primary(
-          label: l10n.createAccountSubmit,
-          isLoading: state.busy,
-          onPressed: _submit,
-          expand: true,
-        ),
-        Gap.xs,
-        AppButton.text(
-          label: l10n.createAccountHaveAccount,
-          onPressed: () => context.push(AppRoutes.signIn),
-          expand: true,
-        ),
-        Gap.md,
-        _PrivacyNote(text: l10n.createAccountPasswordNote),
-      ],
+      ),
     );
   }
 }

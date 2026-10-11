@@ -7,7 +7,8 @@
     "Title and body exist only as ciphertext on the server; the list never carries a body.",
     "A recipient is a contact of yours and a stage of yours whose offset is at least 1440 minutes; anything else owned by someone else is 404.",
     "A stage that holds an instruction cannot be removed: 409 stage_in_use with the IDs.",
-    "While the check-in schedule is active, changing the plan and removing, switching off or re-addressing a contact who is in a stage answer 403 reauth_required until the password has been confirmed (POST /v1/auth/reauth, valid 5 minutes)."
+    "While the check-in schedule is active, changing the plan and removing, switching off or re-addressing a contact who is in a stage answer 403 reauth_required until the password has been confirmed (POST /v1/auth/reauth, valid 5 minutes).",
+    "Reading an instruction (the list and one instruction) answers 403 reauth_required in the same way: the text is decrypted for the response, and the password is asked for first."
   ],
   "endpoints": [
     {
@@ -120,6 +121,15 @@
     }
   ],
   "problems": [
+    {
+      "name": "problem_reauth_instruction_read",
+      "method": "GET",
+      "path": "/v1/instructions",
+      "auth": "bearer",
+      "status": 403,
+      "request": null,
+      "response": "problem_reauth_instruction_read.response.json"
+    },
     {
       "name": "problem_release_stage_too_early",
       "method": "POST",

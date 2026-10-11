@@ -4,6 +4,8 @@ import '../../../app/repository_providers.dart';
 import '../../../core/api/failures/app_failure.dart';
 import '../../../core/api/failures/failure_mapper.dart';
 import '../../../core/auth/auth_controller.dart';
+import '../../../core/auth/session_epoch.dart';
+import '../../../core/freshness/stale_data.dart';
 import '../data/contacts_repository.dart';
 
 /// Orders contacts like the server does: priority, then creation time.
@@ -34,8 +36,15 @@ List<TrustedContact> sortContacts(Iterable<TrustedContact> contacts) {
 /// successful delete. Every method throws an `AppFailure` on error. The plan limits are
 /// re-read after a change to the number of contacts ([entitlementsProvider]).
 class ContactsController extends AsyncNotifier<List<TrustedContact>> {
+  /// A read or a change that was started for the account that signed out must never
+  /// land in the one that signed in after it.
+  final SessionEpoch _session = SessionEpoch();
+
+  bool _alive(int session) => ref.mounted && _session.isCurrent(session);
+
   @override
   Future<List<TrustedContact>> build() async {
+    _session.next();
     if (ref.watch(authControllerProvider) != AuthStatus.signedIn) {
       return const [];
     }
@@ -60,17 +69,29 @@ class ContactsController extends AsyncNotifier<List<TrustedContact>> {
   }
 
   /// Reads the list again and returns the failure, or null. The list already on screen
-  /// stays when the refresh fails; with no list yet, the failure becomes the state.
+  /// stays when the refresh fails (and People says it is the last information we have);
+  /// with no list yet, the failure becomes the state.
   Future<AppFailure?> reload() async {
+    final session = _session.current;
     if (!state.hasValue) {
       state = const AsyncLoading<List<TrustedContact>>();
     }
     try {
-      state = AsyncData(sortContacts(await _run(_repository.list)));
+      final contacts = sortContacts(await _run(_repository.list));
+      if (!_alive(session)) {
+        return null;
+      }
+      state = AsyncData(contacts);
+      ref.read(staleDataProvider.notifier).clear(DataArea.contacts);
       return null;
     } on AppFailure catch (failure) {
+      if (!_alive(session)) {
+        return null;
+      }
       if (!state.hasValue) {
         state = AsyncError<List<TrustedContact>>(failure, StackTrace.current);
+      } else {
+        ref.read(staleDataProvider.notifier).mark(DataArea.contacts);
       }
       return failure;
     }
@@ -78,9 +99,12 @@ class ContactsController extends AsyncNotifier<List<TrustedContact>> {
 
   /// Adds a contact and queues the invitation.
   Future<TrustedContact> addContact(ContactDraft draft) async {
+    final session = _session.current;
     final contact = await _run(() => _repository.create(draft));
-    state = AsyncData(sortContacts([..._current, contact]));
-    ref.invalidate(entitlementsProvider);
+    if (_alive(session)) {
+      state = AsyncData(sortContacts([..._current, contact]));
+      ref.invalidate(entitlementsProvider);
+    }
     return contact;
   }
 
@@ -92,8 +116,11 @@ class ContactsController extends AsyncNotifier<List<TrustedContact>> {
   /// `withReauth`. The list is left as it was, so the same call can be made again. Other
   /// edits never ask.
   Future<TrustedContact> updateContact(String id, ContactPatch patch) async {
+    final session = _session.current;
     final contact = await _run(() => _repository.update(id, patch));
-    _replace(contact);
+    if (_alive(session)) {
+      _replace(contact);
+    }
     return contact;
   }
 
@@ -103,7 +130,11 @@ class ContactsController extends AsyncNotifier<List<TrustedContact>> {
   /// as it was, so the same call can be made again. Someone who is in no stage and
   /// receives nothing never asks.
   Future<void> removeContact(String id) async {
+    final session = _session.current;
     await _run(() => _repository.delete(id));
+    if (!_alive(session)) {
+      return;
+    }
     state = AsyncData([
       for (final contact in _current)
         if (contact.id != id) contact,
@@ -114,9 +145,13 @@ class ContactsController extends AsyncNotifier<List<TrustedContact>> {
   /// Queues the invitation again, then reads the contact so the history is current.
   /// A failed re-read is ignored: the invitation was queued.
   Future<void> resendInvitation(String id) async {
+    final session = _session.current;
     await _run(() => _repository.resendInvitation(id));
     try {
-      _replace(await _repository.get(id));
+      final contact = await _repository.get(id);
+      if (_alive(session)) {
+        _replace(contact);
+      }
     } on Object {
       // The invitation is queued; the history catches up on the next refresh.
     }

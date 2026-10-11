@@ -2,11 +2,15 @@ import 'package:afterme/app/repository_providers.dart';
 import 'package:afterme/app/theme/app_theme.dart';
 import 'package:afterme/core/api/client_info.dart';
 import 'package:afterme/core/auth/auth_controller.dart';
+import 'package:afterme/core/auth/session_store.dart';
 import 'package:afterme/core/config/app_config.dart';
 import 'package:afterme/core/device/device_info_source.dart';
 import 'package:afterme/core/links/url_opener.dart';
 import 'package:afterme/core/permissions/notification_permission.dart';
 import 'package:afterme/core/platform/contact_picker.dart';
+import 'package:afterme/core/platform/file_export.dart';
+import 'package:afterme/core/push/local_notification_gateway.dart';
+import 'package:afterme/core/push/push_gateway.dart';
 import 'package:afterme/core/security/app_lock/local_auth_gateway.dart';
 import 'package:afterme/core/security/screen_privacy.dart';
 import 'package:afterme/core/security/secure_screen.dart';
@@ -16,6 +20,8 @@ import 'package:afterme/core/time/clock.dart';
 import 'package:afterme/features/auth/data/auth_repository.dart';
 import 'package:afterme/features/checkin/application/checkin_controller.dart';
 import 'package:afterme/features/checkin/data/models/checkin_models.dart';
+import 'package:afterme/features/incidents/application/safe_controller.dart';
+import 'package:afterme/features/notifications/application/push_coordinator.dart';
 import 'package:afterme/l10n/gen/app_localizations.dart';
 import 'package:flutter_riverpod/misc.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -24,11 +30,15 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shared_preferences_platform_interface/in_memory_shared_preferences_async.dart';
 import 'package:shared_preferences_platform_interface/shared_preferences_async_platform_interface.dart';
 
+import 'fake_activity_server.dart';
 import 'fake_auth_repository.dart';
 import 'fake_checkin_server.dart';
+import 'fake_incident_server.dart';
 import 'fake_instructions_server.dart';
 import 'fake_plan_server.dart';
 import 'fake_platform.dart';
+import 'fake_privacy.dart';
+import 'fake_push.dart';
 import 'fake_timers.dart';
 import 'in_memory_contacts_repository.dart';
 
@@ -80,6 +90,7 @@ class TestFakes {
        localAuth = localAuth ?? FakeLocalAuthGateway(),
        notifications = notifications ?? FakeNotificationPermissionGateway() {
     contacts = InMemoryContactsRepository();
+    this.auth.clock ??= clock.now;
   }
 
   final FakeAuthRepository auth;
@@ -107,7 +118,8 @@ class TestFakes {
         reauthenticated: () => auth.reauthenticated,
         receivesInstruction: (id) => instructions.isActiveRecipient(id),
       )
-      ..instructionUsage = () => instructions.liveCount;
+      ..instructionUsage = (() => instructions.liveCount)
+      ..stageUsage = (() => plan.stages.length);
   }
 
   late InMemoryContactsRepository _contacts;
@@ -166,11 +178,68 @@ class TestFakes {
   /// [instructions]. Only the wiring tests do this.
   bool realInstructionsRepository = false;
 
+  /// The incidents "server": `GET /v1/incidents`, `GET /v1/incidents/{id}` and `POST
+  /// /v1/incidents/{id}/safe`. The open incident is the one the check-in server shows in
+  /// Home, so both always agree; `incidents.open(...)` opens one.
+  late final FakeIncidentServer incidents = FakeIncidentServer(
+    serverOf: () => server,
+    clock: clock.now,
+    reauthenticated: () => auth.reauthenticated,
+  )..attach();
+
+  /// Use the production [incidentsRepositoryProvider] (the Dio one) instead of
+  /// [incidents]. Only the wiring tests do this.
+  bool realIncidentsRepository = false;
+
+  /// The Activity "server": entries newest first, served in cursor pages.
+  final FakeActivityServer activity = FakeActivityServer();
+
+  /// Use the production [activityRepositoryProvider] (the Dio one) instead of
+  /// [activity]. Only the wiring tests do this.
+  bool realActivityRepository = false;
+
+  /// The export and account deletion "server" (the 60-second password rule, the 3 an
+  /// hour limit, the 401 after a deletion).
+  late final FakePrivacyRepository accountData = FakePrivacyRepository(
+    auth: auth,
+    clock: clock.now,
+  );
+
+  /// Use the production [privacyRepositoryProvider] (the Dio one) instead of
+  /// [accountData]. Only the wiring tests do this.
+  bool realPrivacyRepository = false;
+
+  /// The system's save dialog for the export.
+  final FakeFileExportGateway exportGateway = FakeFileExportGateway();
+
   /// Retry and reset timers of the check-in controller (fired by hand).
   final FakeTimers timers = FakeTimers();
 
+  /// Push: Firebase Cloud Messaging, not configured unless a test says so (so no other
+  /// test ever registers a token), the foreground notifications, and the devices API.
+  final FakePushGateway push = FakePushGateway();
+  final FakeLocalNotificationGateway localNotifications =
+      FakeLocalNotificationGateway();
+  final FakeDevicesRepository devices = FakeDevicesRepository();
+
+  /// Retry timers of the push registration (fired by hand), and where a tapped
+  /// notification went.
+  final FakeTimers pushTimers = FakeTimers();
+  final List<String> pushRoutes = [];
+
+  /// Use the production [devicesRepositoryProvider] (the Dio one) instead of [devices].
+  /// Only the wiring tests do this.
+  bool realDevicesRepository = false;
+
+  /// Take a tapped notification to the real router instead of recording the route in
+  /// [pushRoutes].
+  bool realPushNavigation = false;
+
   /// The idempotency keys the check-in controller creates.
   final FakeKeys keys = FakeKeys();
+
+  /// The idempotency keys of I'M SAFE confirmations (`key-1`, `key-2`, ...).
+  final FakeKeys safeKeys = FakeKeys();
 
   /// Use the production schedule, check-in and Home repositories (the Dio ones).
   /// Only the wiring tests do this.
@@ -179,8 +248,12 @@ class TestFakes {
   /// Fresh in-memory preferences (the platform instance is replaced globally).
   PreferencesStore prefs = freshPreferences();
 
-  /// The in-memory secure storage shared by everything this test wires up.
-  final InMemorySecureStore secure = InMemorySecureStore();
+  /// The in-memory secure storage shared by everything this test wires up. It holds the
+  /// id of the account the session belongs to (`user-1`, the one `tokenResponse()` and
+  /// the fakes use): that is where the pending check-in reads its owner from.
+  final InMemorySecureStore secure = InMemorySecureStore({
+    SessionKeys.userId: 'user-1',
+  });
 
   List<Override> get overrides => [
     authRepositoryProvider.overrideWithValue(auth),
@@ -203,8 +276,23 @@ class TestFakes {
     if (!realPlanRepository) planRepositoryProvider.overrideWithValue(plan),
     if (!realInstructionsRepository)
       instructionsRepositoryProvider.overrideWithValue(instructions),
+    if (!realIncidentsRepository)
+      incidentsRepositoryProvider.overrideWithValue(incidents),
+    if (!realActivityRepository)
+      activityRepositoryProvider.overrideWithValue(activity),
+    if (!realPrivacyRepository)
+      privacyRepositoryProvider.overrideWithValue(accountData),
+    fileExportGatewayProvider.overrideWithValue(exportGateway),
+    pushGatewayProvider.overrideWithValue(push),
+    localNotificationGatewayProvider.overrideWithValue(localNotifications),
+    if (!realDevicesRepository)
+      devicesRepositoryProvider.overrideWithValue(devices),
+    pushTimerProvider.overrideWithValue(pushTimers.create),
+    if (!realPushNavigation)
+      pushNavigateProvider.overrideWithValue(pushRoutes.add),
     checkInTimerProvider.overrideWithValue(timers.create),
     checkInKeyGeneratorProvider.overrideWithValue(keys.next),
+    safeKeyGeneratorProvider.overrideWithValue(safeKeys.next),
   ];
 }
 
