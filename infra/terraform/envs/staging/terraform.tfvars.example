@@ -1,0 +1,33 @@
+# Copy to terraform.tfvars (git-ignored) and fill in. Nothing in this file is a secret.
+
+project_id = "afterme-staging" # your real project id
+
+api_domain    = "api.staging.afterme.app"
+public_domain = "staging.afterme.app"
+
+github_repository = "OWNER/AfterMe" # exact case; `gh repo view --json nameWithOwner`
+github_repository_id = "123456789" # required: gh api repos/OWNER/AfterMe --jq .id
+
+# Two people (BETA_PLAN section 4). SMS channels must each be verified once in the console.
+oncall_emails        = ["owner@example.com", "second.person@example.com"]
+oncall_phone_numbers = ["+910000000000", "+910000000001"]
+oncall_principals    = ["user:owner@example.com", "user:second.person@example.com"]
+
+jwt_active_kid = "k20261012" # the --kid you give generate_jwt_key.py
+email_from     = "AfterMe <no-reply@mail.staging.afterme.app>"
+support_email  = "support@afterme.app"
+abuse_email    = "abuse@afterme.app"
+
+# --- stage 1 (foundations) leaves these at their defaults ---------------------------------
+# deploy_services = false
+# admin_vm_enabled = true            # only while provisioning the database roles
+# admin_vm_members = ["user:owner@example.com"]
+#
+# --- stage 2 (after the secrets are populated and the first image is pushed) ---------------
+# deploy_services = true
+# image = "asia-south1-docker.pkg.dev/afterme-staging/afterme/backend@sha256:..."
+
+# Counsel's LEGAL_* settings, once they exist (full variable names):
+# extra_env = {
+#   AFTERME_LEGAL_ENTITY_NAME = "..."
+# }

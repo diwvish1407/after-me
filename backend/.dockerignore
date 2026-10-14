@@ -1,0 +1,40 @@
+# The build context is backend/. Only what the image runs, and what `uv sync` needs, goes in.
+
+# Secrets and local environment: never in a layer.
+.env
+.env.*
+**/.env
+**/.env.*
+*.pem
+*.key
+*.keystore
+*.jks
+*.p12
+*.pfx
+service-account*.json
+google-services.json
+.dev_mail
+
+# Version control and CI
+.git
+.gitignore
+.github
+
+# Local environments and caches
+.venv
+**/__pycache__
+**/*.py[cod]
+.pytest_cache
+.mypy_cache
+.ruff_cache
+.hypothesis
+.coverage
+coverage.xml
+htmlcov
+
+# Not part of the running image (the migration job, tests and developer tooling)
+tests
+scripts
+Makefile
+Dockerfile
+.dockerignore

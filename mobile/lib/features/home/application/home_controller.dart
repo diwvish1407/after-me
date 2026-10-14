@@ -9,16 +9,14 @@ import '../../../core/api/failures/failure_mapper.dart';
 import '../../../core/auth/auth_controller.dart';
 import '../../../core/auth/session_epoch.dart';
 import '../../../core/time/clock.dart';
-import '../../auth/application/me_controller.dart';
 import '../../checkin/application/checkin_controller.dart';
-import '../../checkin/application/schedule_controller.dart';
 import '../../checkin/data/models/checkin_models.dart';
 import '../../contacts/application/contacts_controller.dart';
 import '../../incidents/application/safe_controller.dart';
 import '../../incidents/data/models/incident_models.dart';
 import '../../instructions/application/instructions_controller.dart';
-import '../../plan/application/plan_controller.dart';
 import '../data/home_repository.dart';
+import 'home_inputs.dart';
 
 /// The last good Home aggregate and what is needed to read its times correctly.
 @immutable
@@ -112,51 +110,18 @@ class HomeController extends AsyncNotifier<HomeData?> {
           unawaited(refresh());
         }
       })
-      ..listen(scheduleControllerProvider, (previous, next) {
-        final before = previous?.value;
-        final after = next.value;
-        // A settings change or an on/off switch. A schedule that was only read again
-        // after a check-in (same version) is what Home already applied from the answer.
-        if (before != null &&
-            after != null &&
-            (before.version != after.version ||
-                before.status != after.status)) {
-          unawaited(refresh());
-        }
+      // The aggregate is built from the schedule, the plan, the contacts and the profile:
+      // those controllers bump this counter when what they hold really changed (a
+      // listener on them would start their reads at every cold start; see
+      // `HomeInputChanges`).
+      ..listen(homeInputChangesProvider, (previous, next) {
+        unawaited(refresh());
       })
-      ..listen(planControllerProvider, (previous, next) {
-        final before = previous?.value;
-        final after = next.value;
-        // A saved plan, or the latest one read after a 412: the aggregate counts its
-        // stages and judges its readiness.
-        if (before != null &&
-            after != null &&
-            before.version != after.version) {
-          unawaited(refresh());
-        }
-      })
-      ..listen(contactsControllerProvider, (previous, next) {
-        final before = previous?.value;
-        final after = next.value;
-        if (before != null && after != null && !listEquals(before, after)) {
-          unawaited(refresh());
-        }
-      })
-      ..listen(instructionsControllerProvider, (previous, next) {
-        final before = previous?.value;
-        final after = next.value;
-        // The aggregate counts the active instructions and judges recipients who have
-        // not accepted.
-        if (before != null && after != null && !listEquals(before, after)) {
-          unawaited(refresh());
-        }
-      })
-      ..listen(meControllerProvider, (previous, next) {
-        final before = previous?.value?.profile.timezone;
-        final after = next.value?.profile.timezone;
-        if (before != null && after != null && before != after) {
-          unawaited(refresh());
-        }
+      // The aggregate counts the active instructions and judges recipients who have not
+      // accepted. This follows the changes, not the list: the list's read needs the
+      // password, and Home does not start it.
+      ..listen(instructionChangesProvider, (previous, next) {
+        unawaited(refresh());
       });
     try {
       final snapshot = await ref.watch(homeRepositoryProvider).load();
@@ -280,6 +245,10 @@ class HomeController extends AsyncNotifier<HomeData?> {
   /// counts of the aggregate disagree with the list on hand, the list is read again. It
   /// is read silently (the list stays on screen until the new one replaces it).
   void _reconcileContacts(PlanSummary summary) {
+    // Only a list that is on hand can disagree: `read` would start its read.
+    if (!ref.exists(contactsControllerProvider)) {
+      return;
+    }
     final contacts = ref.read(contactsControllerProvider).value;
     if (contacts == null) {
       return;
@@ -374,3 +343,15 @@ final serverNowProvider = Provider<DateTime Function()>((ref) {
   final clock = ref.watch(clockProvider);
   return () => clock().add(offset);
 });
+
+/// A Hold blocks contact-facing work right now (`service.interruption`), as of the last
+/// read of Home. False before there is a read, and for a server that does not say.
+final serviceInterruptionProvider = Provider<bool>(
+  (ref) =>
+      ref.watch(
+        homeControllerProvider.select(
+          (v) => v.value?.snapshot.serviceInterruption,
+        ),
+      ) ??
+      false,
+);

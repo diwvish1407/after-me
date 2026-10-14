@@ -53,6 +53,11 @@ STAGING: dict[str, Any] = {
     ),
     "probe_token": "p" * 48,
     "kms_provider": "gcp_kms",
+    "kms_key_name": (
+        "projects/afterme-prod/locations/asia-south1/keyRings/afterme/cryptoKeys/instruction-kek"
+    ),
+    "support_email": "support@afterme.example",
+    "abuse_email": "abuse@afterme.example",
     "push_provider": "fcm",
     "fcm_project_id": "afterme-staging",
     "email_from": "AfterMe <alerts@mail.afterme.example>",

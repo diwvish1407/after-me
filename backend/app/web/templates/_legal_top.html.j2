@@ -1,0 +1,4 @@
+{% if not legal.final %}
+<p class="notice" role="note"><strong>DRAFT — not yet reviewed by counsel.</strong> This text describes what AfterMe does today, but it has not been checked by a lawyer and may change before it takes effect. Please do not rely on it as final.</p>
+{% endif %}
+<p class="meta">Version {{ legal.version }} · {% if legal.effective_date %}Effective {{ legal.effective_date }}{% else %}Not yet in force{% endif %}</p>

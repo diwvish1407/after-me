@@ -4,6 +4,7 @@ import 'package:afterme/core/auth/auth_controller.dart';
 import 'package:afterme/core/auth/session_store.dart';
 import 'package:afterme/core/storage/secure_store.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'fake_http_adapter.dart';
@@ -107,6 +108,8 @@ Future<HttpWorld> openHttpApp(
   },
   AuthStatus status = AuthStatus.signedIn,
   bool settle = true,
+  List<Override> extraOverrides = const [],
+  bool realAuth = false,
 }) async {
   final secure = store ?? InMemorySecureStore();
   if (status == AuthStatus.signedIn) {
@@ -143,7 +146,8 @@ Future<HttpWorld> openHttpApp(
     ..realInstructionsRepository = true
     ..realIncidentsRepository = true
     ..realActivityRepository = true
-    ..realPrivacyRepository = true;
+    ..realPrivacyRepository = true
+    ..realAuthRepository = realAuth;
   world.prefs = freshPreferences(prefs);
   final container = await pumpAfterMe(
     tester,
@@ -151,7 +155,10 @@ Future<HttpWorld> openHttpApp(
     status: status,
     secureStore: secure,
     settle: settle,
-    extraOverrides: [apiHttpAdapterProvider.overrideWithValue(adapter)],
+    extraOverrides: [
+      apiHttpAdapterProvider.overrideWithValue(adapter),
+      ...extraOverrides,
+    ],
   );
   if (route != AppRoutes.home && route != AppRoutes.splash) {
     container.read(routerProvider).go(route);

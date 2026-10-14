@@ -9,6 +9,7 @@ import '../../../app/theme/dimens.dart';
 import '../../../app/theme/tokens.dart';
 import '../../../core/api/failures/app_failure.dart';
 import '../../../core/design_system/design_system.dart';
+import '../../../core/security/secure_screen.dart';
 import '../../../core/time/clock.dart';
 import '../../../core/time/time_format.dart';
 import '../../../l10n/gen/app_localizations.dart';
@@ -29,10 +30,13 @@ class ContactDetailScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ContactByIdView(
-      id: contactId,
-      title: AppLocalizations.of(context).contactDetailTitle,
-      builder: (context, contact) => _ContactDetail(contact: contact),
+    // A third party's name, address and number: not in screenshots or the app switcher.
+    return SecureScreen(
+      child: ContactByIdView(
+        id: contactId,
+        title: AppLocalizations.of(context).contactDetailTitle,
+        builder: (context, contact) => _ContactDetail(contact: contact),
+      ),
     );
   }
 }

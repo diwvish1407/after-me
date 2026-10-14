@@ -58,13 +58,10 @@ class StaleDataNote extends ConsumerWidget {
     }
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.md),
-      child: Semantics(
+      child: StatusBanner(
+        kind: StatusBannerKind.info,
+        message: AppLocalizations.of(context).staleDataNote,
         liveRegion: true,
-        container: true,
-        child: StatusBanner(
-          kind: StatusBannerKind.info,
-          message: AppLocalizations.of(context).staleDataNote,
-        ),
       ),
     );
   }

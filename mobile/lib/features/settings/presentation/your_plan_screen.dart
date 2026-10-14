@@ -93,13 +93,10 @@ class _PlanView extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (stale) ...[
-          Semantics(
+          StatusBanner(
+            kind: StatusBannerKind.info,
+            message: l10n.staleDataNote,
             liveRegion: true,
-            container: true,
-            child: StatusBanner(
-              kind: StatusBannerKind.info,
-              message: l10n.staleDataNote,
-            ),
           ),
           Gap.md,
         ],

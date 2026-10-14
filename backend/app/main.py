@@ -30,6 +30,7 @@ from app.ops.router import router as ops_router
 from app.testsupport.router import router as test_support_router
 from app.web.account_router import router as account_web_router
 from app.web.contact_router import router as contact_web_router
+from app.web.legal_router import router as legal_web_router
 from app.web.release_router import router as release_web_router
 from app.web.router import router as web_router
 
@@ -57,7 +58,7 @@ def create_app(
             if role != API_ROLE:
                 msg = f"the API must connect as {API_ROLE}, not {role}"
                 raise RuntimeError(msg)
-        if "kms_local_key" not in settings.model_fields_set:
+        if settings.kms_provider == "local" and "kms_local_key" not in settings.model_fields_set:
             log.warning("kms.development_key_in_use")
         log.info("app.started", env=settings.app_env.value)
         yield
@@ -95,6 +96,7 @@ def create_app(
     app.include_router(ops_router)
     app.include_router(webhooks_router)
     app.include_router(web_router)
+    app.include_router(legal_web_router)
     app.include_router(account_web_router)
     app.include_router(release_web_router)  # before /c: its paths are more specific
     app.include_router(contact_web_router)

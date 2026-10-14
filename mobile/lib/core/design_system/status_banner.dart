@@ -27,12 +27,19 @@ class StatusBanner extends StatelessWidget {
     required this.message,
     this.title,
     this.action,
+    this.liveRegion = false,
     super.key,
   });
 
   final StatusBannerKind kind;
   final String? title;
   final String message;
+
+  /// A screen reader announces the banner by itself when its text changes (a check-in
+  /// recorded, a notice that appeared, an incident that opened). The flag is on the
+  /// banner's own node, whose label is the whole text: a live region that only wraps
+  /// the banner would have no label of its own, and nothing would be announced.
+  final bool liveRegion;
 
   /// Optional action, usually an [AppButton.text].
   final Widget? action;
@@ -76,6 +83,7 @@ class StatusBanner extends StatelessWidget {
 
     return Semantics(
       container: true,
+      liveRegion: liveRegion,
       child: DecoratedBox(
         decoration: BoxDecoration(
           color: background,

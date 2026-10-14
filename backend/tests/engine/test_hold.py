@@ -206,6 +206,26 @@ async def test_a_stage_that_ran_in_an_undetected_outage_is_rolled_back_and_shift
 
 
 @MONITORED
+async def test_the_hold_ends_only_after_ten_minutes_of_fresh_probes(world: World) -> None:
+    """The documented promise (ESCALATION_ENGINE §7.2): fresh probes for ten continuous minutes.
+    Phase 10 game day OPS-01 measured seven: the window's edge alone was compared with the first
+    probe, which could arrive up to one staleness period into the window."""
+    await world.ready()
+    probes(world, world.clock.current, DUE - timedelta(minutes=10), timedelta(minutes=1))
+    await world.advance_to(DUE)  # ten minutes without a probe: the Hold has been entered
+    assert holds(world)[0]["ended_at"] is None
+
+    recovered = world.clock.current
+    probes(world, recovered, recovered + timedelta(minutes=14), timedelta(minutes=1))
+    await world.advance_to(recovered + timedelta(minutes=8))
+    assert holds(world)[0]["ended_at"] is None  # the old rule had ended it by now
+    await world.advance_to(recovered + timedelta(minutes=9, seconds=30))
+    assert holds(world)[0]["ended_at"] is None
+    await world.advance_to(recovered + timedelta(minutes=11))
+    assert holds(world)[0]["ended_at"] is not None
+
+
+@MONITORED
 async def test_a_message_already_handed_to_a_provider_is_not_rolled_back(world: World) -> None:
     person = await world.ready()
     probes(world, world.clock.current, STAGE_1 + timedelta(minutes=6), timedelta(minutes=1))

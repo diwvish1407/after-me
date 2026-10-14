@@ -188,6 +188,87 @@ void main() {
     expect(snapshot.recentActivity, isEmpty);
   });
 
+  group('service.interruption', () {
+    Future<HomeSnapshot> load(Map<String, Object?>? extra) async {
+      final (_, home) = await repo(
+        always(FakeReply.json(200, _home(extra: extra))),
+      );
+      return home.load();
+    }
+
+    test('true while a Hold blocks contact-facing work', () async {
+      final snapshot = await load({
+        'service': {'interruption': true},
+      });
+      expect(snapshot.service.interruption, isTrue);
+      expect(snapshot.serviceInterruption, isTrue);
+    });
+
+    test('false when the server says false', () async {
+      final snapshot = await load({
+        'service': {'interruption': false},
+      });
+      expect(snapshot.service.interruption, isFalse);
+      expect(snapshot.serviceInterruption, isFalse);
+    });
+
+    test('an old server that does not send it means no interruption', () async {
+      // `_home` has no `service` at all.
+      final snapshot = await load(null);
+      expect(snapshot.service, const HomeService());
+      expect(snapshot.serviceInterruption, isFalse);
+    });
+
+    test('null, an empty object and a null flag are read as false', () async {
+      for (final service in <Object?>[
+        null,
+        <String, Object?>{},
+        {'interruption': null},
+      ]) {
+        final snapshot = await load({'service': service});
+        expect(snapshot.serviceInterruption, isFalse, reason: '$service');
+        // The rest of the aggregate is still read.
+        expect(snapshot.user.displayName, 'Diwakar');
+      }
+    });
+
+    test('unknown fields are ignored, with the flag on or off', () async {
+      final on = await load({
+        'service': {
+          'interruption': true,
+          'reason': 'ingestion',
+          'since': '2026-10-14T13:00:00Z',
+          'a_field_from_the_future': {'x': 1},
+        },
+        'another_top_level_thing': [1, 2, 3],
+      });
+      expect(on.serviceInterruption, isTrue);
+      final off = await load({
+        'service': {'interruption': false, 'banner': 'maintenance'},
+      });
+      expect(off.serviceInterruption, isFalse);
+    });
+
+    test('only a literal true counts; anything unreadable never breaks '
+        'Home', () async {
+      for (final service in <Object?>[
+        'down',
+        7,
+        true,
+        [true],
+        {'interruption': 'true'},
+        {'interruption': 1},
+        {
+          'interruption': [true],
+        },
+      ]) {
+        final snapshot = await load({'service': service});
+        expect(snapshot.serviceInterruption, isFalse, reason: '$service');
+        expect(snapshot.checkin.status, CheckInStatus.active);
+      }
+    });
+  });
+
   test('the name never reaches a log', () async {
     final (_, home) = await repo(always(FakeReply.json(200, _home())));
     final snapshot = await home.load();

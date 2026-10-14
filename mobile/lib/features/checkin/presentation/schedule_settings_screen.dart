@@ -240,14 +240,11 @@ class _ScheduleFormState extends ConsumerState<_ScheduleForm> {
           ),
           Gap.md,
         ],
-        Semantics(
+        StatusBanner(
+          kind: kind,
+          title: status,
+          message: statusMessage,
           liveRegion: true,
-          container: true,
-          child: StatusBanner(
-            kind: kind,
-            title: status,
-            message: statusMessage,
-          ),
         ),
         Gap.lg,
         Semantics(

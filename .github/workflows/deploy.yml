@@ -1,0 +1,286 @@
+# Deployment (docs/DEPLOYMENT.md section 5, docs/INFRASTRUCTURE.md section 10).
+#
+#   tag v*                  -> staging, automatically
+#   workflow_dispatch       -> staging or production (production waits for the reviewers of the
+#                              GitHub Environment `production`, and runs from `main` only)
+#
+# Order, and why: build and push the image -> (production: on-demand database backup) -> run the
+# migration job and WAIT for it -> deploy the API by digest (a revision that cannot reach the
+# database or is not at the migrated schema never receives traffic: its startup probe is
+# /health/ready) -> smoke tests through the public domain, automatic rollback of the API if they
+# fail -> deploy the worker pool and the jobs by the same digest.
+#
+# No key anywhere: Google access is Workload Identity Federation. The provider only accepts this
+# repository (name AND numeric id), this workflow file, ref main (or a v* tag for staging), and a
+# job that runs in the GitHub Environment of that project: `staging` or `production`
+# (assertion.environment; infra/terraform/modules/iam). GitHub enforces each Environment's
+# deployment branch and tag rules before such a job starts, so they are part of the gate: the
+# repository settings the owner must set are in infra/README.md ("GitHub repository settings").
+# No secret is read or printed: the smoke test needs none, and the probe token never leaves Secret
+# Manager. Per-environment settings are GitHub Environment VARIABLES (not secrets):
+#   GCP_PROJECT_ID, GCP_REGION, GCP_WORKLOAD_IDENTITY_PROVIDER, GCP_SERVICE_ACCOUNT, API_URL
+#
+# Rollback by hand: infra/scripts/rollback.sh <project> <region> <previous image@sha256:...>
+# (every run prints the previous image and the exact command in its summary).
+
+name: deploy
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Where to deploy"
+        type: choice
+        options: [staging, production]
+        default: staging
+        required: true
+      build_only:
+        description: "Only build and push the image and print its digest (the very first deploy: Terraform needs an image to create Cloud Run with)"
+        type: boolean
+        default: false
+      release_tag:
+        description: "Optional tag (vX.Y.Z) to deploy instead of the tip of main; it must be reachable from main"
+        type: string
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-${{ inputs.environment || 'staging' }}
+  cancel-in-progress: false
+
+jobs:
+  # Decides WHAT is deployed WHERE. No Google credentials, no id-token.
+  plan:
+    name: Resolve target
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      environment: ${{ steps.resolve.outputs.environment }}
+      short: ${{ steps.resolve.outputs.short }}
+      sha: ${{ steps.resolve.outputs.sha }}
+      ref_label: ${{ steps.resolve.outputs.ref_label }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Resolve environment and commit
+        id: resolve
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_ENVIRONMENT: ${{ inputs.environment }}
+          INPUT_TAG: ${{ inputs.release_tag }}
+          GITHUB_REF_FULL: ${{ github.ref }}
+          GITHUB_REF_SHORT: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" = "push" ]; then
+            environment=staging
+            tag="$GITHUB_REF_SHORT"
+          else
+            environment="$INPUT_ENVIRONMENT"
+            tag="$INPUT_TAG"
+          fi
+          case "$environment" in
+            staging) short=staging ;;
+            production) short=prod ;;
+            *) echo "unknown environment: $environment" >&2; exit 1 ;;
+          esac
+
+          if [ "$environment" = production ] && [ "$GITHUB_REF_FULL" != "refs/heads/main" ]; then
+            echo "production deploys run from the main branch only (this run: $GITHUB_REF_FULL)" >&2
+            exit 1
+          fi
+
+          if [ -n "$tag" ]; then
+            [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.]+)?$ ]] || { echo "not a release tag: $tag" >&2; exit 1; }
+            sha="$(git rev-list -n 1 "refs/tags/$tag")"
+            label="$tag"
+          else
+            sha="$(git rev-parse HEAD)"
+            label="main@${sha:0:12}"
+          fi
+
+          # Only code that is on main is ever deployed (a tag cut on a side branch is refused).
+          git merge-base --is-ancestor "$sha" origin/main || { echo "$sha is not reachable from origin/main" >&2; exit 1; }
+
+          {
+            echo "environment=$environment"
+            echo "short=$short"
+            echo "sha=$sha"
+            echo "ref_label=$label"
+          } >> "$GITHUB_OUTPUT"
+          echo "Deploying $label ($sha) to $environment" >> "$GITHUB_STEP_SUMMARY"
+
+  deploy:
+    name: Build, migrate, deploy, smoke
+    needs: plan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    # The ONLY job with Google credentials, and it always runs in the GitHub Environment of its
+    # target (`staging` or `production`): the Workload Identity provider refuses a token whose
+    # `environment` claim is anything else. Staging has no reviewers but its deployment rules
+    # allow only `main` and `v*` tags; production waits here for the required reviewers.
+    environment:
+      name: ${{ needs.plan.outputs.environment }}
+      url: ${{ vars.API_URL }}
+    permissions:
+      contents: read
+      id-token: write # Workload Identity Federation only; nothing else in this workflow has it
+    env:
+      PROJECT: ${{ vars.GCP_PROJECT_ID }}
+      REGION: ${{ vars.GCP_REGION }}
+      API_URL: ${{ vars.API_URL }}
+      ENV_SHORT: ${{ needs.plan.outputs.short }}
+      TARGET_ENV: ${{ needs.plan.outputs.environment }}
+      RELEASE_SHA: ${{ needs.plan.outputs.sha }}
+      RELEASE_LABEL: ${{ needs.plan.outputs.ref_label }}
+    steps:
+      - name: Check out the release commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.plan.outputs.sha }}
+          persist-credentials: false
+
+      - name: Authenticate to Google Cloud (Workload Identity Federation, no key)
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+          project_id: ${{ vars.GCP_PROJECT_ID }}
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
+
+      - name: Build and push the image
+        id: image
+        run: |
+          set -euo pipefail
+          python_version="$(tr -d '[:space:]' < backend/.python-version)"
+          repo="${REGION}-docker.pkg.dev/${PROJECT}/afterme/backend"
+          docker build --build-arg "PYTHON_VERSION=${python_version}" \
+            --tag "${repo}:${RELEASE_SHA}" backend
+          docker push "${repo}:${RELEASE_SHA}"
+          case "$RELEASE_LABEL" in v*) docker tag "${repo}:${RELEASE_SHA}" "${repo}:${RELEASE_LABEL}"; docker push "${repo}:${RELEASE_LABEL}" ;; esac
+          digest="$(docker inspect --format '{{index .RepoDigests 0}}' "${repo}:${RELEASE_SHA}")"
+          case "$digest" in "${repo}@sha256:"*) ;; *) echo "unexpected digest reference" >&2; exit 1 ;; esac
+          echo "ref=${digest}" >> "$GITHUB_OUTPUT"
+          echo "Image: \`${digest}\`" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Remember what is running now (rollback target)
+        if: ${{ !inputs.build_only }}
+        id: previous
+        run: |
+          set -euo pipefail
+          previous="$(gcloud run services describe afterme-api --project "$PROJECT" --region "$REGION" \
+            --format 'value(spec.template.spec.containers[0].image)')"
+          echo "ref=${previous}" >> "$GITHUB_OUTPUT"
+          {
+            echo "### Rollback"
+            echo "Previous image: \`${previous}\`"
+            echo
+            echo '```'
+            echo "infra/scripts/rollback.sh ${PROJECT} ${REGION} ${previous}"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Back up the database before migrating (production)
+        if: ${{ needs.plan.outputs.environment == 'production' && !inputs.build_only }}
+        run: |
+          set -euo pipefail
+          gcloud sql backups create --instance "afterme-pg-${ENV_SHORT}" --project "$PROJECT" \
+            --description "pre-deploy ${RELEASE_LABEL}"
+
+      - name: Migrate (alembic upgrade head) and wait for it
+        if: ${{ !inputs.build_only }}
+        env:
+          IMAGE: ${{ steps.image.outputs.ref }}
+        run: |
+          set -euo pipefail
+          gcloud run jobs update afterme-migrate --project "$PROJECT" --region "$REGION" --image "$IMAGE" --quiet
+          # --wait returns non-zero if the execution fails: nothing below runs, traffic is untouched.
+          gcloud run jobs execute afterme-migrate --project "$PROJECT" --region "$REGION" --wait --quiet
+
+      - name: Deploy the API by digest
+        if: ${{ !inputs.build_only }}
+        id: api
+        env:
+          IMAGE: ${{ steps.image.outputs.ref }}
+        run: |
+          set -euo pipefail
+          gcloud run services update afterme-api --project "$PROJECT" --region "$REGION" --image "$IMAGE" --quiet
+
+      - name: Smoke tests through the public domain
+        if: ${{ !inputs.build_only }}
+        id: smoke
+        run: infra/scripts/smoke.sh "$API_URL"
+
+      # Everything goes back together (the API, the worker pool and every job, afterme-migrate
+      # included), whatever this run had already moved: rollback.sh attempts each one, prints
+      # what was and was not rolled back, and fails this step if anything was not. The previous
+      # API image becomes ready on the migrated schema because /health/ready accepts a schema
+      # that is ahead of it (expand/contract migrations, docs/DEPLOYMENT.md section 5).
+      - name: Roll back the API, the worker pool and the jobs (smoke tests failed)
+        if: ${{ failure() && !inputs.build_only && steps.api.outcome == 'success' && steps.smoke.outcome == 'failure' }}
+        env:
+          PREVIOUS: ${{ steps.previous.outputs.ref }}
+        run: |
+          set -euo pipefail
+          if [ -z "$PREVIOUS" ]; then
+            echo "::error::Smoke tests failed and no previous image was recorded: nothing was rolled back" >&2
+            exit 1
+          fi
+          echo "::error::Smoke tests failed; rolling everything back to ${PREVIOUS}"
+          infra/scripts/rollback.sh "$PROJECT" "$REGION" "$PREVIOUS"
+
+      - name: Deploy the worker pool by digest
+        if: ${{ !inputs.build_only }}
+        env:
+          IMAGE: ${{ steps.image.outputs.ref }}
+        run: |
+          set -euo pipefail
+          gcloud beta run worker-pools update afterme-worker --project "$PROJECT" --region "$REGION" --image "$IMAGE" --quiet
+
+      - name: Deploy the jobs (retention, watchdog, operator) by digest
+        if: ${{ !inputs.build_only }}
+        env:
+          IMAGE: ${{ steps.image.outputs.ref }}
+        run: |
+          set -euo pipefail
+          # Same list as infra/scripts/rollback.sh (afterme-migrate was moved before the API).
+          failed=0
+          for job in afterme-maintenance afterme-status-check afterme-admin afterme-kms \
+                     afterme-oncall-status afterme-oncall-hold-status \
+                     afterme-oncall-hold-enter afterme-oncall-hold-exit; do
+            if ! gcloud run jobs update "$job" --project "$PROJECT" --region "$REGION" --image "$IMAGE" --quiet; then
+              echo "::error::job ${job} was NOT moved to ${IMAGE}" >&2
+              failed=1
+            fi
+          done
+          exit "$failed"
+
+      - name: Client-address rule (staging only)
+        if: ${{ needs.plan.outputs.environment == 'staging' && !inputs.build_only }}
+        run: infra/scripts/verify_client_ip.sh "$API_URL" spoof
+
+      - name: Summary
+        if: ${{ !inputs.build_only }}
+        env:
+          IMAGE: ${{ steps.image.outputs.ref }}
+        run: |
+          {
+            echo "### Deployed"
+            echo "- release: \`${RELEASE_LABEL}\` (\`${RELEASE_SHA}\`)"
+            echo "- environment: ${TARGET_ENV}"
+            echo "- image: \`${IMAGE}\`"
+            echo "- next: watch the dashboard for 30 minutes (docs/DEPLOYMENT.md section 8)"
+          } >> "$GITHUB_STEP_SUMMARY"

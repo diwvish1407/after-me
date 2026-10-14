@@ -1,0 +1,28 @@
+# Copy to terraform.tfvars (git-ignored) and fill in. Nothing in this file is a secret.
+
+project_id = "afterme-prod" # your real project id
+
+api_domain    = "api.afterme.app"
+public_domain = "afterme.app"
+
+github_repository = "OWNER/AfterMe"
+github_repository_id = "123456789" # required: gh api repos/OWNER/AfterMe --jq .id
+
+oncall_emails        = ["owner@example.com", "second.person@example.com"]
+oncall_phone_numbers = ["+910000000000", "+910000000001"]
+oncall_principals    = ["user:owner@example.com", "user:second.person@example.com"]
+
+jwt_active_kid = "k20261012"
+email_from     = "AfterMe <no-reply@mail.afterme.app>"
+support_email  = "support@afterme.app"
+abuse_email    = "abuse@afterme.app"
+
+# Stays false until counsel has approved the legal texts (docs/BETA_PLAN.md section 3).
+legal_documents_final = false
+
+# Sizing defaults for prod are in variables.tf: db-custom-2-7680 regional HA, API 1..7 instances,
+# 2 workers, backups 30 days, PITR 7 days, deletion protection on.
+
+# Stage 1 leaves these alone; see staging/terraform.tfvars.example.
+# deploy_services = true
+# image = "asia-south1-docker.pkg.dev/afterme-prod/afterme/backend@sha256:..."

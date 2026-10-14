@@ -80,6 +80,19 @@ class CheckinEvent(Base):
         ),
         UniqueConstraint("user_id", "idempotency_key", name="uq_checkin_events_idem"),
         Index("ix_checkin_events_user_time", "user_id", text("received_at DESC")),
+        # Performance (migration 0011; backend/tests/perf/PLANS.md): the retention purge reads
+        # the oldest rows, and ON DELETE SET NULL of a session or a device must find its rows.
+        Index("ix_checkin_events_received_at", "received_at"),
+        Index(
+            "ix_checkin_events_session",
+            "session_id",
+            postgresql_where=text("session_id IS NOT NULL"),
+        ),
+        Index(
+            "ix_checkin_events_device",
+            "device_id",
+            postgresql_where=text("device_id IS NOT NULL"),
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(

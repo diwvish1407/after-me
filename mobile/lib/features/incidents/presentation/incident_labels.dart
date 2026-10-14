@@ -78,6 +78,48 @@ String revokeReasonText(AppLocalizations l10n, ReleaseRevokeReason? reason) =>
     };
 
 /// The names of the contacts of [item], in the plan's order, without blanks.
+/// The names of the people the all-clear went to, in an order that never changes between
+/// two reads of the same answer ("Mom and Brother", never "Brother and Mom" the next
+/// time): the order in which they were first notified ([notifiedOrder], contact ids, as
+/// the incident's timeline lists them), and whoever that order does not know after them,
+/// alphabetically (ignoring case; the id breaks a tie). Targets without a name are left
+/// out.
+List<String> allClearNames(
+  List<AllClearTarget> targets, {
+  List<String> notifiedOrder = const [],
+}) {
+  final rank = {
+    for (var i = 0; i < notifiedOrder.length; i++) notifiedOrder[i]: i,
+  };
+  final named = [
+    for (final target in targets)
+      if (target.displayName.isNotEmpty) target,
+  ];
+  int byRank(AllClearTarget a, AllClearTarget b) {
+    final ra = rank[a.contactId];
+    final rb = rank[b.contactId];
+    if (ra != null && rb != null) {
+      return ra.compareTo(rb);
+    }
+    if (ra != null) {
+      return -1;
+    }
+    if (rb != null) {
+      return 1;
+    }
+    final byName = a.displayName.toLowerCase().compareTo(
+      b.displayName.toLowerCase(),
+    );
+    if (byName != 0) {
+      return byName;
+    }
+    final exact = a.displayName.compareTo(b.displayName);
+    return exact != 0 ? exact : a.contactId.compareTo(b.contactId);
+  }
+
+  return [for (final target in named..sort(byRank)) target.displayName];
+}
+
 List<String> stageNames(TimelineItem item) => [
   for (final contact in item.contacts ?? const <TimelineContact>[])
     if (contact.displayName.isNotEmpty) contact.displayName,

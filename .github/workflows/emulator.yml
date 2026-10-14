@@ -1,0 +1,160 @@
+name: emulator
+
+# THIS WORKFLOW HAS NOT BEEN EXECUTED YET. It was written without being able to run GitHub
+# Actions, and the integration suite it runs has only ever run on a developer machine
+# (macOS, a locally created AVD, a local PostgreSQL). Treat the first run as the test of the
+# workflow itself, and check in order:
+#   1. "Enable KVM": the emulator needs hardware acceleration. Standard hosted Linux runners
+#      have /dev/kvm for public repositories; for a private repository check the runner type.
+#      Without it the emulator is unusably slow and the boot step times out.
+#   2. The action tag below resolves, and the API 36 google_apis x86_64 system image is
+#      offered (if not, use api-level 34: minSdk is 26, so any image from 26 up is valid).
+#   3. mobile/tool/integration.sh finds the emulator that the action booted ("Waiting for
+#      emulator-5554 to finish booting" in the log) instead of trying to boot an AVD itself, and
+#      finds adb under $ANDROID_HOME. PostgreSQL is reached through the PG* variables set here.
+#   4. backend/.env is written (scripts/write_dev_env.py), the throwaway database afterme_it is
+#      created and migrated, API and worker answer on 127.0.0.1:8000.
+#   5. Every mob6*_test.dart suite passes; note how long they take against timeout-minutes.
+#   6. The log artifact has the API, worker and per-suite logs.
+# Actions here are pinned to what mobile.yml and backend.yml use, except the emulator action,
+# which is pinned to an exact release. GitHub moves actions to a newer Node runtime over time:
+# bump the tag to the newest release of reactivecircus/android-emulator-runner if the run
+# warns about it.
+
+# Weekly, and on demand. Not on every push: it takes tens of minutes and is the one job here
+# that can be flaky for reasons of the hosted hardware, so it must not block a merge.
+on:
+  schedule:
+    - cron: "41 3 * * 0" # Sundays, 03:41 UTC
+  workflow_dispatch:
+    inputs:
+      only:
+        description: "Run only this suite file, e.g. mob63_missed_grace_test.dart (default: all)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: emulator-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  integration:
+    name: Integration suite on an Android emulator (real app, real backend)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      # integration.sh runs `psql -d postgres` and scripts/dev_db_setup.sh as a superuser: the
+      # service container's, through libpq's own variables (throwaway CI credentials).
+      PGHOST: localhost
+      PGPORT: "5432"
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      # The script's default role passwords (afterme_*_dev) are used as they are: this
+      # database lives for the length of the job. Not secrets.
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      # Hardware acceleration for the emulator (the documented step for hosted runners).
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v10
+        with:
+          version: "0.9.26"
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+
+      - name: Install backend dependencies (locked) and write backend/.env
+        working-directory: backend
+        run: |
+          uv sync --frozen
+          uv run python scripts/write_dev_env.py
+
+      - name: Set up Java (Temurin 17)
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: Set up Flutter (pinned, the same version as mobile.yml)
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.47.6
+          cache: true
+          pub-cache: true
+
+      # Generated code is not committed (mobile/README.md "Generated code"): regenerate it
+      # before the tests build the app, exactly as mobile.yml does.
+      - name: Get dependencies and generate code
+        working-directory: mobile
+        run: |
+          flutter pub get --enforce-lockfile
+          dart run build_runner build
+          flutter gen-l10n
+
+      # The action creates and boots the AVD, then runs `script` with the emulator attached.
+      # integration.sh uses an attached device when there is one (it would boot the AVD named
+      # by AFTERME_IT_AVD itself otherwise: the name is set to the action's AVD for that
+      # case). It recreates the throwaway database afterme_it, starts the API and the worker
+      # on 127.0.0.1:8000 with test support, and runs the mob6*_test.dart suites with
+      # --flavor dev (which talks to http://10.0.2.2:8000, the runner's loopback).
+      - name: Run mobile/tool/integration.sh on the emulator
+        uses: reactivecircus/android-emulator-runner@v2.30.1
+        env:
+          AFTERME_IT_AVD: afterme_ci
+          # Where integration.sh writes its logs, so that the upload step can find them. The
+          # `runner` context exists in a step's env, not in a job's.
+          TMPDIR: ${{ runner.temp }}
+          # through the environment, never interpolated into the script
+          ONLY: ${{ inputs.only }}
+        with:
+          api-level: 36
+          target: google_apis
+          arch: x86_64
+          avd-name: afterme_ci
+          force-avd-creation: false
+          disable-animations: true
+          emulator-options: >-
+            -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
+            -camera-back none
+          script: bash mobile/tool/integration.sh ${ONLY:+--only "$ONLY"}
+
+      # The suite's own logs (API, worker, one per test file; the mail directory is left out).
+      - name: Upload the integration logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: emulator-integration-logs
+          path: ${{ runner.temp }}/afterme-it.*/*.log
+          if-no-files-found: ignore
+          retention-days: 14

@@ -2,6 +2,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../../app/theme/dimens.dart';
 import '../../app/theme/tokens.dart';
+import 'progress_spinner.dart';
 
 /// A centred progress indicator with an optional visible label. The label (or
 /// [semanticsLabel]) is announced to screen readers.
@@ -20,7 +21,7 @@ class LoadingView extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            CircularProgressIndicator(semanticsLabel: semanticsLabel ?? label),
+            ProgressSpinner(semanticsLabel: semanticsLabel ?? label),
             if (label != null) ...[
               const SizedBox(height: AppSpacing.md),
               ExcludeSemantics(

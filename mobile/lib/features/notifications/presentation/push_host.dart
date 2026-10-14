@@ -40,8 +40,15 @@ class _PushHostState extends ConsumerState<PushHost>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      unawaited(ref.read(pushCoordinatorProvider).onResumed());
+    switch (state) {
+      case AppLifecycleState.resumed:
+        unawaited(ref.read(pushCoordinatorProvider).onResumed());
+      case AppLifecycleState.paused || AppLifecycleState.hidden:
+        // No background work: a registration retry waiting for its turn is dropped; the
+        // return to the foreground registers again.
+        ref.read(pushCoordinatorProvider).onPaused();
+      case AppLifecycleState.inactive || AppLifecycleState.detached:
+        break;
     }
   }
 

@@ -61,6 +61,14 @@ class ActivityItem(ResponseModel):
     occurred_at: UtcDateTime
 
 
+class ServiceStatus(ResponseModel):
+    """The state of the service itself, the same for everyone. ``interruption`` is true while a
+    Hold (the system circuit breaker) blocks contact-facing work, up to the moment the deadlines
+    have been shifted. Nothing about the reason, the time or the operator is exposed."""
+
+    interruption: bool
+
+
 class HomeResponse(ResponseModel):
     server_time: UtcDateTime
     user: HomeUser
@@ -69,3 +77,4 @@ class HomeResponse(ResponseModel):
     plan_summary: PlanSummary
     readiness: Readiness
     recent_activity: list[ActivityItem]
+    service: ServiceStatus

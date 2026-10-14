@@ -52,6 +52,9 @@ class EscalationIncident(Base):
             unique=True,
             postgresql_where=text("status IN ('grace', 'escalating', 'escalated')"),
         ),
+        # Hold's anomaly check counts the incidents opened in the last hour, every tick, and
+        # compares with the same hour of earlier days (migration 0011).
+        Index("ix_incidents_opened", "opened_at"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -89,6 +92,14 @@ class IncidentAction(Base):
             postgresql_where=text("status = 'pending'"),
         ),
         Index("ix_incident_actions_incident", "incident_id"),
+        # One person's due actions (``EngineStore.due_actions``): without it every unit of work
+        # of a tick reads every due action of every person (migration 0011).
+        Index(
+            "ix_incident_actions_user_pending",
+            "user_id",
+            "scheduled_for",
+            postgresql_where=text("status = 'pending'"),
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(

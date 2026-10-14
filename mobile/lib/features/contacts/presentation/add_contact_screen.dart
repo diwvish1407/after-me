@@ -4,6 +4,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../../../app/router.dart';
 import '../../../core/design_system/design_system.dart';
+import '../../../core/security/secure_screen.dart';
 import '../../../l10n/gen/app_localizations.dart';
 import '../application/contacts_controller.dart';
 import 'contact_form.dart';
@@ -35,18 +36,21 @@ class AddContactScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
-    return FormPage(
-      title: l10n.contactAddTitle,
-      children: [
-        PageHeading(l10n.contactStepTitle),
-        Gap.xs,
-        BodyText(l10n.contactStepBody),
-        Gap.lg,
-        ContactForm(
-          submitLabel: l10n.contactFormSendInvite,
-          onSubmit: (values) => _save(context, ref, values),
-        ),
-      ],
+    // The name, address and number being typed are a third party's.
+    return SecureScreen(
+      child: FormPage(
+        title: l10n.contactAddTitle,
+        children: [
+          PageHeading(l10n.contactStepTitle),
+          Gap.xs,
+          BodyText(l10n.contactStepBody),
+          Gap.lg,
+          ContactForm(
+            submitLabel: l10n.contactFormSendInvite,
+            onSubmit: (values) => _save(context, ref, values),
+          ),
+        ],
+      ),
     );
   }
 }

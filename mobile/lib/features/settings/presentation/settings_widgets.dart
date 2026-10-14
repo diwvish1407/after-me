@@ -80,7 +80,10 @@ Future<bool> confirmAction(
   final result = await showDialog<bool>(
     context: context,
     builder: (context) => AlertDialog(
-      title: Text(title),
+      // The route is named by what it asks (otherwise a screen reader says "Alert"), and
+      // the title is a heading to jump to.
+      semanticLabel: title,
+      title: Semantics(header: true, child: Text(title)),
       content: Text(message),
       actions: [
         TextButton(

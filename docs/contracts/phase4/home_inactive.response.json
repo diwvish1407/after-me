@@ -56,5 +56,8 @@
       "action": "contact.invitation_sent",
       "occurred_at": "2026-10-08T09:02:40Z"
     }
-  ]
+  ],
+  "service": {
+    "interruption": false
+  }
 }

@@ -1,0 +1,109 @@
+{% extends "base.html.j2" %}
+{% block title %}Privacy policy · AfterMe{% endblock %}
+{% block main_attrs %} class="wide legal"{% endblock %}
+{# Converted from docs/legal/PRIVACY_POLICY_DRAFT.md. Counsel's notes and the "open points" section
+   live in the docs only. Facts that the draft left in [brackets] come from settings (see
+   Settings.legal_*); rows and sentences that depended on a decision that has not been made
+   (billing, crash reporting, regional sections) are left out rather than guessed. #}
+{% block content %}
+<h1>Privacy policy</h1>
+{% include "_legal_top.html.j2" %}
+
+<h2>1. Who we are</h2>
+<p>{{ legal.operator }} ("<strong>we</strong>", "<strong>AfterMe</strong>") provides the AfterMe app and the web pages at {{ legal.site }}. Contact for privacy questions: <a href="mailto:{{ legal.contact_email }}">{{ legal.contact_email }}</a>.{% if legal.postal_address %} Postal address: {{ legal.postal_address }}.{% endif %}</p>
+
+<h2>2. What AfterMe does, in one paragraph</h2>
+<p>You choose people (your <strong>trusted contacts</strong>) and information (your <strong>instructions</strong>). You check in on a schedule. If you do not, we first remind you; if you still do not answer, we follow the plan you set: we tell the contacts you chose and, later, let them read the information you chose for each of them. This policy explains what information that takes, who sees it and for how long.</p>
+
+<h2>3. Information we process</h2>
+<div class="table-wrap">
+<table>
+<thead><tr><th>What</th><th>Where it comes from</th><th>Why we need it</th></tr></thead>
+<tbody>
+<tr><td><strong>Account:</strong> email address, password (stored only as a one-way hash)</td><td>You</td><td>To create and secure your account and to send security emails</td></tr>
+<tr><td><strong>Profile:</strong> display name, optional phone number, country, time zone, language</td><td>You</td><td>To run your schedule in your time zone, to show your name to your contacts</td></tr>
+<tr><td><strong>Trusted contacts:</strong> name, your relationship label, email address, optional phone number</td><td>You</td><td>To invite them and to send them what you decided</td></tr>
+<tr><td><strong>Instructions:</strong> title and text, the category, which contacts receive which instruction and at which stage</td><td>You</td><td>To share them with the contacts you chose, only as you configured. The title and text are <strong>encrypted at rest</strong></td></tr>
+<tr><td><strong>Check-ins and plan:</strong> schedule, each check-in (time, whether from the app or the web), the plan and its history, incidents (what happened and when), notices sent</td><td>Your use of the app</td><td>To do the service and to show you your own history</td></tr>
+<tr><td><strong>Device information:</strong> device identifier we generate, platform, app and OS version, language, <strong>push notification token</strong></td><td>Your phone</td><td>To deliver reminders, to protect your account, and to diagnose problems</td></tr>
+<tr><td><strong>Security records:</strong> sign-ins, password and email changes, account actions; a <strong>one-way hash</strong> of the IP address; the browser or app user agent</td><td>Your use</td><td>To protect your account and to investigate abuse</td></tr>
+<tr><td><strong>Delivery records:</strong> which message went to which recipient, when, and whether it was delivered, bounced or reported as spam (no message text)</td><td>Email and push providers</td><td>To make sure alerts arrive and to stop sending to addresses that cannot receive</td></tr>
+</tbody>
+</table>
+</div>
+<p>We do <strong>not</strong> collect your location, your phone's contact list, photos or files, microphone or camera data, or an advertising identifier. We do not use advertising or third-party analytics.</p>
+
+<h3>Information about your trusted contacts</h3>
+<p>If you add someone, you give us their name and email address so that we can invite them. We email them to ask whether they agree (you can send the invitation again, within limits), with a clear way to decline or to opt out of all AfterMe messages for ever. Until they accept, we do not send them alerts or information. If someone chooses "never contact me about AfterMe again", or reports a message as unwanted, or an address cannot receive mail at all (a hard bounce), we keep a <strong>one-way hash of that address</strong> so that no AfterMe user can email it again; we cannot read the address back from the hash. (If they only stop the emails of one person, that choice is recorded for that person alone.) When a contact accepts or declines, and when they open a page of ours, we record the time, a one-way hash of their IP address and, for the invitation, which version of the consent text they saw; you can see whether and when a contact opened something you shared.</p>
+
+<h3>Information shown to your contacts</h3>
+<p>An alert says that you did not check in, when you last did and when you were due, and gives your display name and your email address so that they can recognise you. It never contains the text of your instructions. When something is to be shared with a contact, the same email or a separate one carries a link (never the text); to read an instruction a contact must open that link and enter a <strong>one-time code</strong> that we send to the address you gave. When you check in or confirm you are safe, the link stops working and everyone who was told receives an all-clear.</p>
+
+<h2>4. Why we may process it, and on what basis</h2>
+<div class="table-wrap">
+<table>
+<thead><tr><th>Purpose</th><th>GDPR / UK GDPR</th><th>India (DPDP Act 2023)</th></tr></thead>
+<tbody>
+<tr><td>Providing the service you asked for (account, schedule, reminders, releases)</td><td>Contract (Art. 6(1)(b))</td><td>Consent / legitimate use for the service requested</td></tr>
+<tr><td>Security of accounts and the service, abuse prevention</td><td>Legitimate interests (Art. 6(1)(f))</td><td>Legitimate uses</td></tr>
+<tr><td>Messages to your contacts</td><td>Contract with you; legitimate interests; the contact's consent to the invitation</td><td>Consent of the data principal for the contact; you confirm you may share their details</td></tr>
+<tr><td>Legal obligations, claims</td><td>Legal obligation / legitimate interests</td><td>Legitimate uses</td></tr>
+</tbody>
+</table>
+</div>
+<p>You are responsible for having the right to give us your contacts' details. Do not add anyone who would not expect to hear from you.</p>
+
+<h2>5. Who we share it with</h2>
+<div class="table-wrap">
+<table>
+<thead><tr><th>Recipient</th><th>Why</th><th>What they receive</th></tr></thead>
+<tbody>
+<tr><td><strong>Your trusted contacts</strong></td><td>The purpose of the service</td><td>Only what you configured: your name and email in alerts; instructions you assigned to them once released</td></tr>
+<tr><td><strong>Hosting provider</strong> (Google Cloud, data centres in Mumbai, India)</td><td>To run the service</td><td>All data, encrypted in transit; instructions encrypted at rest with keys held in a key-management service</td></tr>
+<tr><td><strong>Email delivery provider</strong></td><td>To send email</td><td>Recipient address, subject, message text (never instruction text)</td></tr>
+<tr><td><strong>Google (Firebase Cloud Messaging)</strong></td><td>To deliver push notifications</td><td>Your push token, a message type and an incident number, and a short generic notice that names nobody and contains no instruction text, for example "You missed your check-in" or, once contacts have been told, "Your contacts have been notified". Firebase also keeps its own installation identifier for the app</td></tr>
+<tr><td><strong>Google Play</strong></td><td>App distribution</td><td>As described in Google's terms</td></tr>
+<tr><td><strong>Authorities</strong></td><td>Where the law requires</td><td>The minimum required</td></tr>
+</tbody>
+</table>
+</div>
+<p>We do not sell personal data and we do not share it for advertising.</p>
+
+<h2>6. Security, and an honest limit</h2>
+<p>We use TLS for every connection, encrypt instruction text at rest with a separate key per person wrapped by a key-management service, hash passwords with a modern memory-hard algorithm, limit what each of our own components can do, and keep audit records of security-relevant actions. Our instruction text is <strong>not end-to-end encrypted</strong>: the service must be able to decrypt it itself in order to release it to your contacts when your plan says so, and our staff are bound by access controls and audit records but are technically able to administer the system. We tell you this plainly because it matters to your choices.</p>
+
+<h2>7. How long we keep it</h2>
+<div class="table-wrap">
+<table>
+<thead><tr><th>Data</th><th>Kept for</th></tr></thead>
+<tbody>
+<tr><td>Account, profile, contacts, instructions, plan</td><td>Until you delete them or your account</td></tr>
+<tr><td>Check-in history</td><td>400 days, then deleted</td></tr>
+<tr><td>Incident history and releases</td><td>Life of the account</td></tr>
+<tr><td>Delivery records</td><td>90 days</td></tr>
+<tr><td>Security (audit) records: sign-ins, changes, who did what and when, with an account number and a one-way hash of the IP address, <strong>no name or email</strong></td><td>{{ legal.audit_retention }}. They are <strong>kept in this pseudonymous form after an account is deleted</strong> until that period ends</td></tr>
+<tr><td>Sessions and one-time tokens</td><td>Removed 30 days after they expire or are revoked</td></tr>
+<tr><td>Backups</td><td>Up to 35 days; deleted data leaves backups as they expire</td></tr>
+<tr><td>Address hashes of people who opted out or complained</td><td>As long as needed to honour the opt-out</td></tr>
+<tr><td><strong>Deleted accounts</strong></td><td>Access stops at once; the encryption key for your instructions is destroyed at once; the account's records are erased 30 days later. What remains: the pseudonymous security records above, and the one-way address hashes of anyone who opted out or whose address bounced</td></tr>
+</tbody>
+</table>
+</div>
+
+<h2>8. Your choices and rights</h2>
+<ul>
+<li><strong>Access and copy:</strong> <em>Settings → Privacy and data → Export my data</em> gives you a file with your account, contacts, instructions, plan and your check-in, incident and activity history (long lists are capped). It does not include device and security records: write to us for those.</li>
+<li><strong>Correction:</strong> edit your profile, contacts, instructions and plan in the app.</li>
+<li><strong>Deletion:</strong> <em>Settings → Privacy and data → Delete account</em> or the page <a href="/a/delete">{{ legal.site }}/a/delete</a> (works without the app, with an emailed link and your password).</li>
+<li><strong>Contacts:</strong> anyone you add can decline, withdraw, or opt out of all AfterMe messages from any email.</li>
+<li><strong>Withdrawing consent, objecting, complaints:</strong> write to <a href="mailto:{{ legal.contact_email }}">{{ legal.contact_email }}</a>. You may complain to your data-protection authority.</li>
+<li><strong>Children:</strong> AfterMe is for people 18 and over and is not directed at children. If you believe a child has an account, tell us and we will delete it.</li>
+</ul>
+
+<h2>9. Cookies on our web pages</h2>
+<p>The check-in, deletion and contact pages use <strong>only strictly necessary cookies</strong>: a short-lived sign-in cookie for the web check-in pages (about an hour), a session cookie for the contact page (about an hour), and a security token that protects forms. No analytics or advertising cookies are used. This page and the other pages under /legal and /support set no cookies at all.</p>
+
+<h2>10. Changes</h2>
+<p>We will tell you in the app or by email before a material change takes effect. The version and date are at the top.</p>
+{% include "_legal_links.html.j2" %}
+{% endblock %}

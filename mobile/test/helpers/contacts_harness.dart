@@ -1,6 +1,7 @@
 import 'package:afterme/app/app.dart';
 import 'package:afterme/app/router.dart';
 import 'package:afterme/core/auth/auth_controller.dart';
+import 'package:afterme/core/config/app_config.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
@@ -17,6 +18,7 @@ Future<ProviderContainer> openApp(
   double textScale = 1,
   bool settle = true,
   bool roboto = false,
+  AppConfig? config,
 }) async {
   final f = fakes ?? TestFakes();
   f.prefs = freshPreferences({
@@ -27,6 +29,7 @@ Future<ProviderContainer> openApp(
     tester,
     fakes: f,
     status: AuthStatus.signedIn,
+    config: config,
     size: size,
     textScale: textScale,
     settle: settle,

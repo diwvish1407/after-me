@@ -29,6 +29,7 @@ import '../application/client_checks.dart';
 import '../application/home_controller.dart';
 import '../application/home_status.dart';
 import '../data/models/home_models.dart';
+import 'service_interruption_banner.dart';
 
 /// Home (USER_FLOWS.md §4, §5): the status, I'M OK, the next and last check-in, the plan,
 /// a persistent banner while the safety net has a gap, and the one readiness banner that
@@ -57,9 +58,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   /// The stage time a "it has arrived, read Home again" refresh was already made for.
   DateTime? _refreshedForStage;
 
-  /// Ticks since the incident was last read again (it is read about once a minute while
-  /// one is open, so views and stages show without pulling).
-  int _incidentTicks = 0;
+  /// Ticks since Home was last read again by the ticker. It is read about once a minute
+  /// while an incident is open (so views and stages show without pulling), while a
+  /// deadline has passed with no incident yet (an incident is about to open, or a Hold is
+  /// keeping it from opening), and while a service interruption is on (so its end shows).
+  int _pollTicks = 0;
 
   /// The app is in the foreground and this tab is the one on view. The ticker (and with
   /// it the once-a-minute read of an open incident) runs only then: a phone in a pocket
@@ -104,7 +107,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   void _syncTicker() {
     final run = _foreground && _onView;
     if (run && _ticker == null) {
-      _incidentTicks = 0;
+      _pollTicks = 0;
       _ticker = Timer.periodic(const Duration(seconds: 30), (_) => _tick());
     } else if (!run) {
       _ticker?.cancel();
@@ -157,15 +160,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       final now = data.serverNow(ref.read(clockProvider)());
       final status = homeStatus(data.snapshot, serverNow: now);
       final due = data.snapshot.checkin.nextDueAt;
-      // The deadline passed while Home was open: the server may have moved on.
       if (status == HomeStatus.overdue && due != _refreshedForDue) {
+        // The deadline passed while Home was open: the server may have moved on. The
+        // minute of the next read starts from this one.
         _refreshedForDue = due;
+        _pollTicks = 0;
         unawaited(ref.read(homeControllerProvider.notifier).refresh());
-      }
-      if (status == HomeStatus.incident) {
+      } else if (status == HomeStatus.incident) {
         _tickIncident(data.snapshot.incidentDetails, now);
+      } else if (status == HomeStatus.overdue ||
+          (status != HomeStatus.notActive &&
+              data.snapshot.serviceInterruption)) {
+        _pollMinute();
       } else {
-        _incidentTicks = 0;
+        _pollTicks = 0;
       }
     }
     setState(() {});
@@ -180,13 +188,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     final at = stage?.scheduledFor;
     if (at != null && !at.isAfter(now) && at != _refreshedForStage) {
       _refreshedForStage = at;
-      _incidentTicks = 0;
+      _pollTicks = 0;
       unawaited(ref.read(homeControllerProvider.notifier).refresh());
       return;
     }
-    _incidentTicks++;
-    if (_incidentTicks >= 2) {
-      _incidentTicks = 0;
+    _pollMinute();
+  }
+
+  /// Reads Home again about once a minute (every second tick of the 30-second ticker).
+  void _pollMinute() {
+    _pollTicks++;
+    if (_pollTicks >= 2) {
+      _pollTicks = 0;
       unawaited(ref.read(homeControllerProvider.notifier).refresh());
     }
   }
@@ -280,16 +293,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Semantics(
+        StatusBanner(
+          kind: StatusBannerKind.attention,
+          title: offline ? l10n.homeOfflineBanner : l10n.homeUnavailableTitle,
+          message: offline
+              ? l10n.homeUnavailableBody
+              : failureMessage(l10n, failure),
           liveRegion: true,
-          container: true,
-          child: StatusBanner(
-            kind: StatusBannerKind.attention,
-            title: offline ? l10n.homeOfflineBanner : l10n.homeUnavailableTitle,
-            message: offline
-                ? l10n.homeUnavailableBody
-                : failureMessage(l10n, failure),
-          ),
         ),
         Gap.md,
         // What the last tap came to: not received yet, refused, or too old to send (most
@@ -330,9 +340,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     final now = data.serverNow(ref.read(clockProvider)());
     final timezone = _timezone(data);
     final status = homeStatus(snapshot, serverNow: now);
-    final name =
-        ref.watch(meControllerProvider).value?.profile.displayName ??
-        snapshot.user.displayName;
+    // The aggregate carries the name; a profile change reads it again (HomeInputChanges),
+    // so Home never starts `GET /v1/me` just to greet the person.
+    final name = snapshot.user.displayName;
     final checks = ref.watch(clientChecksProvider);
     final banner = status == HomeStatus.notActive
         ? null
@@ -361,6 +371,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     final incident = status == HomeStatus.incident
         ? snapshot.incidentDetails
         : null;
+    // A Hold blocks anything contact-facing: nothing is sent and deadlines move. Said
+    // calmly at the top, and every sentence below that promised a time leaves it out.
+    // An account whose check-ins are off has no deadline to move and no I'M OK to use, so
+    // the notice (which says both) is left to the accounts it is true for.
+    final interruption =
+        snapshot.serviceInterruption && status != HomeStatus.notActive;
     // Instruction titles are content: the window is secure while one is on screen.
     final showsTitles =
         incident?.releases.any((r) => (r.instructionTitle ?? '').isNotEmpty) ??
@@ -370,10 +386,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          if (interruption) ...[const ServiceInterruptionBanner(), Gap.md],
           if (data.stale) ...[
             StatusBanner(
               kind: StatusBannerKind.info,
               message: l10n.homeOfflineBanner,
+              // The status on screen is no longer confirmed: said when it happens.
+              liveRegion: true,
             ),
             Gap.md,
           ],
@@ -394,7 +413,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           ],
           if (banner != null) ...[_ReadinessBannerView(banner: banner), Gap.md],
           if (incident != null)
-            ..._incidentSection(context, incident, checkIn, now, timezone)
+            ..._incidentSection(
+              context,
+              incident,
+              checkIn,
+              now,
+              timezone,
+              interruption: interruption,
+            )
           else ...[
             _statusHeader(context, data, checkIn, status, now, timezone),
             if (status == HomeStatus.notActive)
@@ -419,8 +445,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     Incident incident,
     CheckInState checkIn,
     DateTime now,
-    String? timezone,
-  ) {
+    String? timezone, {
+    required bool interruption,
+  }) {
     final l10n = AppLocalizations.of(context);
     // The tap's `safe_required` answer counts only for the incident it named: one that
     // outlived its incident must not turn this one (nobody told yet) into "contacts have
@@ -438,19 +465,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       now: now,
       needsSafe: needsSafe,
       timezone: timezone,
+      interruption: interruption,
     );
     final phase = _incidentPhaseBanner(context, tap, timezone, now);
     final behind = incidentIsBehind(incident, needsSafe: needsSafe);
     return [
       if (phase != null) ...[phase, Gap.md],
-      Semantics(
+      StatusBanner(
+        kind: headline.kind,
+        title: headline.title,
+        message: headline.body,
         liveRegion: true,
-        container: true,
-        child: StatusBanner(
-          kind: headline.kind,
-          title: headline.title,
-          message: headline.body,
-        ),
       ),
       const SizedBox(height: AppSpacing.xl),
       if (needsSafe)
@@ -471,6 +496,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           incident: incident,
           now: now,
           timezone: timezone,
+          paused: interruption,
           heading: needsSafe
               ? l10n.incidentTimelineHeadingAll
               : l10n.incidentTimelineHeadingNext,
@@ -587,10 +613,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         ),
       },
     };
-    return Semantics(
+    return StatusBanner(
+      kind: kind,
+      title: title,
+      message: body ?? '',
       liveRegion: true,
-      container: true,
-      child: StatusBanner(kind: kind, title: title, message: body ?? ''),
     );
   }
 
@@ -674,15 +701,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         Gap.md,
       ],
       if (missing != null) ...[
-        Semantics(
-          liveRegion: true,
-          container: true,
-          child: StatusBanner(
-            kind: StatusBannerKind.attention,
-            message: l10n.homeActivationMissing(
-              activationMissingText(l10n, missing),
-            ),
+        StatusBanner(
+          kind: StatusBannerKind.attention,
+          message: l10n.homeActivationMissing(
+            activationMissingText(l10n, missing),
           ),
+          liveRegion: true,
         ),
         Gap.md,
       ],
@@ -852,13 +876,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       ),
       if (checkIn.phase == CheckInPhase.success && result != null) ...[
         Gap.md,
-        Semantics(
+        StatusBanner(
+          kind: StatusBannerKind.ok,
+          message: _successMessage(context, result, timezone, now),
           liveRegion: true,
-          container: true,
-          child: StatusBanner(
-            kind: StatusBannerKind.ok,
-            message: _successMessage(context, result, timezone, now),
-          ),
         ),
       ] else if (checkIn.isUnconfirmed &&
           checkIn.phase != CheckInPhase.sending) ...[

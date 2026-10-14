@@ -111,6 +111,8 @@ class AuthSession(Base):
         CheckConstraint(in_list("revoke_reason", REVOKE_REASONS), name="revoke_reason"),
         CheckConstraint("char_length(user_agent) <= 200", name="user_agent_length"),
         Index("ix_sessions_user_active", "user_id", postgresql_where=text("revoked_at IS NULL")),
+        # ON DELETE SET NULL of a device must not scan the table (migration 0011).
+        Index("ix_sessions_device", "device_id", postgresql_where=text("device_id IS NOT NULL")),
     )
 
     id: Mapped[uuid.UUID] = _uuid_pk()
@@ -136,7 +138,15 @@ class AuthSession(Base):
 
 class RefreshToken(Base):
     __tablename__ = "refresh_tokens"
-    __table_args__ = (Index("ix_refresh_tokens_session", "session_id"),)
+    __table_args__ = (
+        Index("ix_refresh_tokens_session", "session_id"),
+        # ON DELETE SET NULL of a rotated-out token must not scan the table (migration 0011).
+        Index(
+            "ix_refresh_tokens_replaced_by",
+            "replaced_by",
+            postgresql_where=text("replaced_by IS NOT NULL"),
+        ),
+    )
 
     id: Mapped[uuid.UUID] = _uuid_pk()
     session_id: Mapped[uuid.UUID] = mapped_column(

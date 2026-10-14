@@ -97,6 +97,9 @@ defaults to the API origin), `SENTRY_DSN` (empty for now), `PLAY_STORE_URL` (opt
 three files until the owner creates the Firebase projects ([DEPLOYMENT §4](../docs/DEPLOYMENT.md)),
 and with them empty the app builds and runs normally and says push is not configured. All four are
 set or none is (a mix is refused at start-up, naming what is missing).
+`SCREENSHOT_MODE` (`true`/`false`, default `false`; in `dev.json` and `staging.json` as `"false"`,
+**never** in `prod.json`) makes the window capturable for store screenshots; see
+[Screenshots for the store](#screenshots-for-the-store-screenshot_mode).
 These are **not secrets** — the app contains none ([ARCHITECTURE §5.9](../docs/ARCHITECTURE.md)).
 `AppConfig.fromEnvironment()` validates them at start-up and the app **refuses to start** on an
 invalid configuration: missing values, a non-http(s) URL, or plain `http`/a local address in
@@ -135,7 +138,7 @@ Run from `mobile/` (CI runs the same steps: [`.github/workflows/mobile.yml`](../
 ```bash
 dart run build_runner build
 flutter gen-l10n
-dart format --output=none --set-exit-if-changed lib test tool
+dart format --output=none --set-exit-if-changed lib test tool integration_test
 flutter analyze                                  # must report zero issues
 flutter test --coverage
 dart run tool/coverage_check.dart                # >= 70% overall, >= 90% interceptors, session and every Phase 2-8 feature area (contacts, check-ins, home, plan, instructions, incidents, notifications and time formatting included)
@@ -147,6 +150,20 @@ dart run tool/check_manifest_permissions.dart    # merged prod manifest: INTERNE
 CI ([`mobile.yml`](../.github/workflows/mobile.yml)) runs every command above, plus a staging debug build
 (flavor compile check). Coverage excludes generated files. Tests are deterministic and never use the network: the API
 client is tested end to end over a fake `HttpClientAdapter` (`test/helpers/fake_http_adapter.dart`).
+
+## Performance and battery (Phase 11)
+
+TEST_PLAN PERF-05: cold start under 2 s on a mid-range phone, no frame over 16 ms on Home, and
+**no background work**. Principle: nothing may make a check-in slower, less reliable or less
+visible.
+
+| What | How |
+|---|---|
+| Cold start | `tool/perf_startup.sh` (release build of the dev flavor, 10 cold starts with `am start -W`, plus Flutter's own first-frame time from `flutter run --profile --trace-startup`). On a real phone: `tool/perf_startup.sh --device <serial> --runs 10`. An emulator is not a mid-range phone: its numbers are indicative only. |
+| Frame times | `tool/integration.sh --perf` (adds `integration_test/perf_home_test.dart`, run with `flutter drive --profile`, to the suite; numbers in `build/perf_frames.json`). Rebuild counts are pinned by `test/perf/home_rebuilds_test.dart`. |
+| HTTP calls | `test/perf/api_calls_test.dart` pins the request log of a cold start and of each screen (cold start: the token refresh and `GET /v1/home`, nothing else). Home follows `homeInputChangesProvider` instead of listening to the schedule, plan, contact and account controllers (a listener starts their reads). |
+| No background work | Every periodic timer is `ForegroundTicker` (cancelled on `paused`/`hidden`) or Home's own 30 s ticker (also only while the tab is on view): `test/perf/foreground_timers_test.dart`. `test/perf/no_background_work_test.dart` scans `lib/` and `android/` for WorkManager, AlarmManager, foreground services, wake locks, boot receivers, a second isolate, scheduled notifications and any `Timer.periodic` not on its allow-list. The one timer that is deliberately **not** cancelled when the app is paused is the one-shot retry of an unconfirmed I'M OK (a person who taps offline and puts the phone away must still be counted when the network returns). |
+| First frame | `AfterMeStart` (`lib/app/start.dart`) puts the splash on screen before `PackageInfo` answers; the app starts after the flavor check. A wrong flavor or an unreadable package still stops everything (`MisconfiguredBuildApp`). |
 
 ## Build
 
@@ -316,7 +333,8 @@ test/                          unit + widget tests (helpers/ has the fakes and t
                                the index); test/fixtures/ holds stand-ins used until a golden file exists
   accessibility/               every Phase 2 screen at 2.0 text scale and against the guidelines
 tool/                          coverage_check.dart, check_manifest_permissions.dart,
-                               emulator_smoke.sh, emulator_walkthrough.sh
+                               emulator_smoke.sh, emulator_walkthrough.sh, integration.sh
+                               (+ it_host.py, its host-side helper), build_release.sh
 ```
 
 Material widgets come from **`package:material_ui`**, the official home of Material since
@@ -383,6 +401,28 @@ enforces WCAG AA ratios. Widget tests run `androidTapTargetGuideline`,
 `labeledTapTargetGuideline` and `textContrastGuideline`, and render key screens at 2.0 text
 scale. The platform default font is used for now; **bundling an OFL font is a Phase 2 item**.
 
+**Phase 10 accessibility pass** (everything that can be checked without a person using TalkBack;
+what remains is the list in the Phase 10 report and TEST_PLAN §8):
+
+* *Reduce motion.* The app's own motion is the spinner and the page transitions. `ProgressSpinner`
+  (`core/design_system/progress_spinner.dart`) is the only spinner: under
+  `MediaQuery.disableAnimationsOf` it is a still hourglass, and the words next to it stay.
+  `ReducedMotionPageTransitionsBuilder` (`app/theme/reduced_motion_transitions.dart`) wraps the
+  platform's page transitions in the theme so that a page is simply there. Everything else that
+  moves is the framework's, which shortens its controllers to one frame under the same setting.
+  Tests: `test/accessibility/reduce_motion_test.dart`.
+* *Semantics audit.* `test/helpers/semantics_audit.dart` walks the semantics tree in focus order
+  and reports an unnamed control, two neighbouring controls with one name, a screen without a
+  heading, a live region with no label of its own and an icon glyph read out as text. It runs over
+  **every screen of `screens_matrix_test.dart`** (211), and `semantics_audit_self_test.dart` shows
+  each rule able to fail. A status change is announced only if the live region itself carries the
+  words, so `StatusBanner` has a `liveRegion` flag (a `Semantics(liveRegion: true)` wrapped
+  around a banner has no label and announces nothing); `confirmAction` names its dialog by its
+  title and marks the title as a heading.
+* *Display size.* Home, the incident screens and I'M SAFE (47 screens) are also laid out at
+  360 x 640 logical pixels, device pixel ratio 2.75 and 2.0 text scale: no overflow, no broken
+  word, and every button can be scrolled to (`expectEveryButtonReachable`).
+
 ## Accounts and onboarding (Phase 2)
 
 Flows follow [USER_FLOWS §3, §7, §11](../docs/USER_FLOWS.md). Every string is in the ARB, copy
@@ -402,6 +442,12 @@ follows the wording rules in §15, targets are 48 dp, and every screen is tested
   who is in a plan stage (see [the plan](#the-plan-phase-5)); any feature can use it. An optional
   `ReauthReason` replaces the generic body with why that action needs the password. A wrong
   password (`401 invalid_credentials`) keeps the session.
+* **About this build** (Settings > About AfterMe, for a bug report): the app version, build
+  number, environment (`dev`/`staging`/`prod`) and API host (`host[:port]`; never a token, an
+  account id or an email), shown as four lines and copied by one explicit **Copy diagnostic
+  text** button (`ClipboardGateway`; the app has no other clipboard use and never reads it),
+  confirmed with a snackbar. The Terms and Privacy links are `PUBLIC_BASE_URL` + `/legal/terms`
+  and `/legal/privacy` (`AppConfig.publicUri`), not hard-coded hosts.
 * **Settings:** Profile (name, phone, country, timezone with a device-mismatch suggestion,
   language), Security (change password, change email with its code step, active sessions with
   revoke, *Log out everywhere*, app lock), Notifications, About, Terms/Privacy links
@@ -802,7 +848,7 @@ installs the dev APK, and taps Welcome → Next → Get started → Create accou
 It fails with a clear message (and `failure.png`) when a screen or button cannot be found. Build
 the dev debug APK first. Like the smoke check it is manual (CI has no emulator).
 
-## Integration tests on an emulator (Phase 7, MOB-61 to MOB-65)
+## Integration tests on an emulator (Phase 7, MOB-61 to MOB-68)
 
 The real app, on an Android emulator, against the real dev backend (API and worker) with the
 **test clock** ([TEST_PLAN §6](../docs/TEST_PLAN.md), [API_SPEC §17](../docs/API_SPEC.md)). They
@@ -811,7 +857,7 @@ any release build and adds no permission to the merged manifest) and are **not**
 `flutter test`, which runs `test/` only.
 
 ```bash
-tool/integration.sh                                  # all five, from a cold start
+tool/integration.sh                                  # every mob6*_test.dart, from a cold start
 tool/integration.sh --only mob63_missed_grace_test.dart
 tool/integration.sh --keep-emulator                  # leave a booted emulator for the next run
 ```
@@ -820,10 +866,19 @@ The script drops and recreates the throwaway database `afterme_it` (never `after
 migrates it; starts the API on `127.0.0.1:8000` and the worker (`AFTERME_TICK_SECONDS=2`) with
 test support on, one random token and rate limits off; uses the attached device or boots
 `AfterMe_API_36` headless; runs each `integration_test/mob6*_test.dart` (one install each); prints
-the tail of the worker and API logs when a test fails; and always stops what it started. Logs and
-the mail directory are in a temporary directory whose path it prints. It needs PostgreSQL running
-with a superuser reachable as your OS user, the backend's `.venv` (`make setup` once), and port
-8000 free (it refuses to start otherwise). A full run takes about five minutes.
+the tail of the worker, API and host-helper logs when a test fails; and always stops what it
+started. Logs and the mail directory are in a temporary directory whose path it prints. It needs
+PostgreSQL running with a superuser reachable as your OS user, the backend's `.venv` (`make setup`
+once), and ports 8000 and 8001 free (it refuses to start otherwise). A full run takes about ten
+minutes.
+
+**The host helper** (`tool/it_host.py`, 127.0.0.1:8001, reached from the phone as `10.0.2.2:8001`,
+guarded by the run's random token) does the two things a test on the phone cannot: the operator's
+`python -m cli.admin hold enter|exit|status` (not exposed over HTTP, API_SPEC §14) against the same
+database and test clock as the worker (MOB-68), and raising the account's tier in the throwaway
+database, since there is no billing (MOB-67, a second contact needs premium). It runs fixed
+commands only; nothing from a request reaches a shell. A test that needs it gets a clear message
+when `HOST_CONTROL_URL` is not set (a run that did not start from `tool/integration.sh`).
 
 To run one file by hand against a backend you started yourself (API and worker with
 `AFTERME_TEST_SUPPORT_ENABLED=true` and `AFTERME_TEST_SUPPORT_TOKEN=<40+ characters>`, both on the
@@ -841,6 +896,9 @@ flutter test integration_test/mob63_missed_grace_test.dart -d emulator-5554 --fl
 | MOB-63 | The test clock passes the deadline; the worker opens the incident; Home shows the grace state; I'M OK resolves it; no `contact_alert` was sent. |
 | MOB-64 | Stage 1 runs and the settle delay passes (stepwise, as the worker refuses a late contact message); the contact is alerted; Home offers I'M SAFE; password sheet, confirmation, result; the contact gets the all-clear; the timeline, past incidents and Activity read the real data. MOB-64b: an I'M OK from a phone that has not refreshed gets `409 safe_required` and ends on the I'M SAFE path with nothing recorded. |
 | MOB-65 | Export (password, the real `POST /v1/me/export`) and account deletion (type DELETE, password), the closed-account screen with the purge date, and a sign-in that fails afterwards. |
+| MOB-66 | An instruction written in onboarding and shared after one day (which adds a stage); the deadline is missed, stage 1 tells the contact, the final warning goes, stage 2 releases it. The contact's mail holds a link and none of the content; the test does what the contact's browser does (`/c/release`: session, the code read from the mail directory, verify) and finds the title and text; I'M SAFE in the app says who viewed what and that it cannot be undone; the portal then shows nothing, and Activity says the contact viewed it. |
+| MOB-67 | A premium account with two contacts and two stages (added through the People tab and the plan editor, saved with the password): Mom is told at stage 1 and Brother is not, Brother is told at stage 2 and Mom is not told again, I'M SAFE sends one all-clear to each. MOB-67b: I'M SAFE after stage 1 only: stage 2 never runs and Brother is never told anything. |
+| MOB-68 | The operator enters the Hold while an incident is in grace; the clock passes the grace period, the stage and the settle delay: the incident stays in grace, the stage waits, nothing reaches the contact, and the app still offers I'M OK (never I'M SAFE). When the Hold ends the person is told about the interruption and I'M OK closes the incident with nobody ever contacted. |
 
 How they are built: `integration_test/support/harness.dart` starts the app widget with the same
 providers as `main()` (real API client, secure storage, preferences, device plugins) on a wiped
@@ -852,8 +910,44 @@ uses a fresh account (`it+<timestamp>@example.com`), so the tests are independen
 only ever moves forward. What is not covered: the system's save dialog for the export (Storage
 Access Framework, system UI) is replaced by a recording `FileExportGateway`, so the real picker
 stays a manual check; system permission dialogs are never opened (the notification step is passed
-with Continue); and `main()` itself is not executed (`tool/emulator_smoke.sh` covers the launch).
+with Continue); `main()` itself is not executed (`tool/emulator_smoke.sh` covers the launch); and
+the app has no state of its own for the Hold (the API does not expose it), so MOB-68 asserts what
+the person is shown, which is the grace incident, and what the server did.
 The debug APK these runs build holds the throwaway test token as a `--dart-define`.
+
+## Screenshots for the store (`SCREENSHOT_MODE`)
+
+`FLAG_SECURE` blocks screenshots on every screen that shows or edits instruction content and on
+the password screens, which is right for people and wrong for the Play listing
+([PLAY_STORE §5](../docs/PLAY_STORE.md)). A **build-time** switch makes `SecureScreen` a no-op so
+that those screens can be captured. Nothing else changes: the same code, the same manifest.
+
+```bash
+# Staging (a staging server is needed: the placeholder URL in config/staging.json is .invalid)
+flutter build apk --flavor staging --release \
+  --dart-define-from-file=config/staging.json --dart-define=SCREENSHOT_MODE=true
+
+# Or on an emulator against the local backend
+flutter run --flavor dev \
+  --dart-define-from-file=config/dev.json --dart-define=SCREENSHOT_MODE=true
+```
+
+(`--dart-define` wins over the same key in the file, whatever the order.) Rules that make it safe:
+
+* **Never in a prod build.** `AppConfig` refuses `SCREENSHOT_MODE=true` with `APP_ENV=prod` (the
+  same "this build is not set up correctly" page as a flavor mix-up), `requirePackage` refuses it
+  in the production application id, and any value other than `true`/`false` is refused too.
+  `tool/build_release.sh` stops before building when `config/prod.json` mentions the key with a
+  value other than `false` (the key does not belong in that file at all). The manifest check is
+  not loosened.
+* **Never mistaken for the real app.** A thin "Screenshot mode" strip sits above every screen
+  (the lock screen included) and takes its own row, so a capture can be cropped cleanly.
+* The default is `false`, in `dev.json` and `staging.json` as `"false"`.
+
+Tests: `test/core/config/app_config_screenshot_mode_test.dart`,
+`test/core/security/secure_screen_screenshot_mode_test.dart` (the platform channel is not called
+in staging with the mode on; `FLAG_SECURE` stays by default and without configuration),
+`test/tool/build_release_screenshot_mode_test.dart`.
 
 ## Troubleshooting
 
@@ -910,6 +1004,19 @@ logcat only, so confirm the Welcome screen visually (`adb shell screencap`).
   opens the People tab (Phase 8); the People tab also reads the status again whenever it comes into
   view. Priority
   ordering (drag to reorder) and the pause switch (`is_active`) are in the API but not in the UI.
+* **Phase 10 follow-ups (built):** a notification tap never drops the plan editor's draft
+  (`app/leave_guards.dart`; the editor registers while it has changes). A tap about a check-in
+  or an incident (`PushType.isUrgent`: everything that opens Home except the all-clear) is never
+  held up: a save on its way is waited for (10 s at most), and Home is put **on top of** the
+  editor, which keeps its draft under it. Only a notice that can wait (a contact that could not
+  be reached) asks "Leave without saving?", and "Leave" discards the draft. Contact add, edit and
+  detail screens (and onboarding's first contact) are `FLAG_SECURE`; what onboarding saved is
+  forgotten when the account changes; a second account's first tap no longer overwrites the first account's unsent
+  check-in (the displaced record is kept under `checkin.pending.<account id>` and sent when that
+  account signs in again); closing an account clears the account's preferences (onboarding
+  progress) but not the phone's own (app lock, notification pre-prompt); Home no longer asks for
+  the instruction list at start-up (it follows `instructionChangesProvider`, so the read that
+  needs the password happens only where the list is shown).
 * Sentry is a later phase. Attachments (FR-INS-09) are deferred.
   FLAG_SECURE has been tested through the Dart gateway and the channel only; it has not been seen on
   a device yet.

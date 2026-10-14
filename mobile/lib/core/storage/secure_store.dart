@@ -13,6 +13,10 @@ abstract interface class SecureStore {
 
   Future<void> delete(String key);
 
+  /// The keys this app has stored through the secure store (never the values). Used only
+  /// to find records that are bound to a closed account by their key prefix.
+  Future<Set<String>> keys();
+
   /// Removes every value this app stored through the secure store.
   Future<void> deleteAll();
 }
@@ -51,6 +55,9 @@ final class FlutterSecureStore implements SecureStore {
   Future<void> delete(String key) => _storage.delete(key: key);
 
   @override
+  Future<Set<String>> keys() async => (await _storage.readAll()).keys.toSet();
+
+  @override
   Future<void> deleteAll() => _storage.deleteAll();
 }
 
@@ -72,6 +79,9 @@ class InMemorySecureStore implements SecureStore {
 
   @override
   Future<void> delete(String key) async => _values.remove(key);
+
+  @override
+  Future<Set<String>> keys() async => _values.keys.toSet();
 
   @override
   Future<void> deleteAll() async => _values.clear();

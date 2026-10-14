@@ -280,7 +280,7 @@ Android `allowBackup="false"`. Secure storage is device-bound and must not be re
 
 ### 5.6 Screen protection
 
-`FLAG_SECURE` is set through a small platform channel in `MainActivity` while instruction view/edit screens, the export and delete-account screens and every password-entry screen or sheet are visible. This blocks screenshots, screen recording and the app-switcher preview. A build flavor or flag that disables it for Play listing screenshots does not exist yet (Phase 11).
+`FLAG_SECURE` is set through a small platform channel in `MainActivity` while instruction view/edit screens, the contact add/detail/edit screens (and onboarding's first-contact step: they hold a third party's name, email and phone), the export and delete-account screens and every password-entry screen or sheet are visible, and on Home, the plan editor, Activity and the incident screens while an instruction title is on them. This blocks screenshots, screen recording and the app-switcher preview. For Play listing screenshots a **dev or staging** build with `SCREENSHOT_MODE=true` turns it off (Phase 10; refused with `APP_ENV=prod` at start-up and by `tool/build_release.sh`; a visible "Screenshot mode" strip is shown).
 
 ### 5.7 Push and reminders
 

@@ -118,6 +118,11 @@ class DispatchReport:
     left_queued: int = 0
     recovered: int = 0
     errors: int = 0
+    # The batch was full AND the pass moved something (sent, retried, failed or cancelled a
+    # message): more is waiting, so the caller may go on at once (PERF-03). A full batch of rows
+    # that only "wait" (a Hold, busy locks) is not a backlog: the next pass would claim the same
+    # rows again at once, a busy loop until the next tick (review E-4).
+    backlog: bool = False
     reasons: dict[str, int] = field(default_factory=dict)
 
     def why(self, reason: str) -> None:
@@ -184,6 +189,8 @@ class Dispatcher:
                     await self._back_off(notification_id)
 
         await asyncio.gather(*(one(n) for n in candidates))
+        moved = report.sent + report.retried + report.failed + report.cancelled
+        report.backlog = len(candidates) >= BATCH and moved > 0
         return report
 
     async def _back_off(self, notification_id: uuid.UUID) -> None:
@@ -241,10 +248,14 @@ class Dispatcher:
         )
         if not escalation:
             # The summary "Mom has been notified" is only true together with the alert it
-            # reports, so it waits with it.
+            # reports, so it waits with it. A fresh link to a release (``contact_other``) carries
+            # content and waits out a Hold like the escalation messages; it is not even picked
+            # up, or a batch of them (each answered "wait") would starve the person's own
+            # messages behind them, and an unknown Hold state must not let it out either.
             stmt = stmt.where(
                 Notification.category != outbox.CATEGORY_ESCALATION,
                 Notification.template_key != outbox.USER_STAGE_EXECUTED,
+                Notification.template_key.not_in(sorted(outbox.RELEASE_TEMPLATES)),
             )
         return [r[0] for r in (await session.execute(stmt)).all()]
 

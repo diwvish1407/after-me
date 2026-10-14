@@ -131,6 +131,33 @@ abstract class RecentActivity with _$RecentActivity {
       _$RecentActivityFromJson(json);
 }
 
+/// `service` of `GET /v1/home`: what the system as a whole is doing, as it affects this
+/// person. It carries one fact and nothing else (no reason, no time: those are the
+/// operator's business).
+///
+/// [interruption] is true while a Hold blocks contact-facing work (and for the short
+/// period after it ended, while deadlines are being shifted): nothing is sent to anyone,
+/// so any time that promised a message is out of date. A server that does not send the
+/// object, or sends something this app cannot read, is read as "no interruption": a
+/// notice that fails to parse must never take Home away.
+@freezed
+abstract class HomeService with _$HomeService {
+  const factory HomeService({
+    @JsonKey(fromJson: _interruptionFrom) @Default(false) bool interruption,
+  }) = _HomeService;
+
+  factory HomeService.fromJson(Map<String, dynamic> json) =>
+      _$HomeServiceFromJson(json);
+}
+
+/// Only a literal `true` is an interruption; null, a string or a number are not.
+bool _interruptionFrom(Object? value) => value == true;
+
+/// The `service` object, or none when it is absent, null or not an object.
+HomeService _serviceFrom(Object? value) => value is Map<String, dynamic>
+    ? HomeService.fromJson(value)
+    : const HomeService();
+
 /// `GET /v1/home` (API_SPEC.md §5): everything the Home screen needs in one call.
 ///
 /// [incident] is the raw object: null while no incident is open, the incident object
@@ -154,6 +181,9 @@ abstract class HomeSnapshot with _$HomeSnapshot {
     @Default(PlanSummary()) PlanSummary planSummary,
     @Default(Readiness()) Readiness readiness,
     @Default(<RecentActivity>[]) List<RecentActivity> recentActivity,
+    @JsonKey(fromJson: _serviceFrom)
+    @Default(HomeService())
+    HomeService service,
   }) = _HomeSnapshot;
 
   factory HomeSnapshot.fromJson(Map<String, dynamic> json) =>
@@ -165,4 +195,7 @@ abstract class HomeSnapshot with _$HomeSnapshot {
 
   /// The server reports an incident, readable or not.
   bool get hasIncident => incident != null;
+
+  /// A Hold blocks contact-facing work right now (`service.interruption`).
+  bool get serviceInterruption => service.interruption;
 }

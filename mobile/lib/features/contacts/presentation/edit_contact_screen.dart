@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../../../core/design_system/design_system.dart';
+import '../../../core/security/secure_screen.dart';
 import '../../../l10n/gen/app_localizations.dart';
 import '../../auth/presentation/reauth_sheet.dart';
 import '../../plan/application/plan_controller.dart';
@@ -100,18 +101,21 @@ class EditContactScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
-    return ContactByIdView(
-      id: contactId,
-      title: l10n.contactEditTitle,
-      builder: (context, contact) => FormPage(
+    // A third party's name, address and number: not in screenshots or the app switcher.
+    return SecureScreen(
+      child: ContactByIdView(
+        id: contactId,
         title: l10n.contactEditTitle,
-        children: [
-          ContactForm(
-            initial: contact,
-            submitLabel: l10n.contactFormSaveChanges,
-            onSubmit: (values) => _save(context, ref, contact, values),
-          ),
-        ],
+        builder: (context, contact) => FormPage(
+          title: l10n.contactEditTitle,
+          children: [
+            ContactForm(
+              initial: contact,
+              submitLabel: l10n.contactFormSaveChanges,
+              onSubmit: (values) => _save(context, ref, contact, values),
+            ),
+          ],
+        ),
       ),
     );
   }

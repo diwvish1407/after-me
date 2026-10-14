@@ -110,6 +110,9 @@ class FakeCheckInServer
   /// Extra readiness issues (for example Phase 5 codes).
   List<ReadinessIssue> extraIssues = [];
 
+  /// `service.interruption` of the aggregate: a Hold blocks contact-facing work.
+  bool serviceInterruption = false;
+
   /// `recent_activity` of the aggregate (action and time only), newest first.
   List<RecentActivity> recentActivity = [];
 
@@ -492,6 +495,7 @@ class FakeCheckInServer
       ),
       readiness: Readiness(ready: issues.isEmpty, issues: issues),
       recentActivity: recentActivity,
+      service: HomeService(interruption: serviceInterruption),
     );
   }
 }

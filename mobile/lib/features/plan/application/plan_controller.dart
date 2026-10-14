@@ -9,6 +9,7 @@ import '../../../core/auth/auth_controller.dart';
 import '../../../core/auth/session_epoch.dart';
 import '../../../core/freshness/stale_data.dart';
 import '../../contacts/application/contacts_controller.dart';
+import '../../home/application/home_inputs.dart';
 import '../data/plan_repository.dart';
 
 /// The signed-in person's escalation plan (`GET /plan`) and every change to it.
@@ -34,6 +35,16 @@ class PlanController extends AsyncNotifier<Plan?> {
     if (ref.watch(authControllerProvider) != AuthStatus.signedIn) {
       return null;
     }
+    // Home follows this counter (not this controller): the aggregate counts the plan's
+    // stages and judges its readiness, so a saved plan, or the latest one read after a
+    // 412, moves it.
+    listenSelf((previous, next) {
+      final before = previous?.value;
+      final after = next.value;
+      if (before != null && after != null && before.version != after.version) {
+        ref.read(homeInputChangesProvider.notifier).bump();
+      }
+    });
     // Removing a contact takes them out of every stage on the server: read the plan
     // again, so a later save never names someone who is gone (that would be a 404).
     ref.listen(contactsControllerProvider, (previous, next) {

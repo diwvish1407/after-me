@@ -81,6 +81,7 @@ class ServiceAccountTokens:
         client: httpx.AsyncClient,
         *,
         clock: Callable[[], float] = time.time,
+        scope: str = SCOPE,
     ) -> None:
         for key in ("client_email", "private_key"):
             if not isinstance(info.get(key), str) or not info[key]:
@@ -89,6 +90,7 @@ class ServiceAccountTokens:
         self._email: str = info["client_email"]
         self._key: str = info["private_key"]
         self._uri: str = str(info.get("token_uri") or DEFAULT_TOKEN_URI)
+        self._scope = scope
         self._client = client
         self._clock = clock
         self._cache = _Cached(clock)
@@ -99,7 +101,13 @@ class ServiceAccountTokens:
     async def _fetch(self) -> tuple[str, float]:
         now = int(self._clock())
         assertion = jwt.encode(
-            {"iss": self._email, "scope": SCOPE, "aud": self._uri, "iat": now, "exp": now + 3600},
+            {
+                "iss": self._email,
+                "scope": self._scope,
+                "aud": self._uri,
+                "iat": now,
+                "exp": now + 3600,
+            },
             self._key,
             algorithm="RS256",
         )

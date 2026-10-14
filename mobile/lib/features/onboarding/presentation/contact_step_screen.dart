@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../../../core/design_system/design_system.dart';
+import '../../../core/security/secure_screen.dart';
 import '../../../l10n/gen/app_localizations.dart';
 import '../../contacts/data/contacts_repository.dart';
 import '../../contacts/presentation/contact_form.dart';
@@ -36,44 +37,50 @@ class ContactStepScreen extends ConsumerWidget {
     final existing = setup?.contacts ?? const <TrustedContact>[];
     if (existing.isNotEmpty) {
       final contact = existing.first;
-      return OnboardingScaffold(
-        step: OnboardingStep.contact,
-        title: l10n.contactStepTitle,
-        subtitle: l10n.contactStepInvited(contact.displayName),
-        primaryLabel: l10n.actionContinue,
-        onPrimary: () => advanceFrom(context, ref, OnboardingStep.contact),
-        children: [
-          Card(
-            child: ListTile(
-              minTileHeight: 64,
-              leading: const Icon(Icons.person_outline_rounded),
-              title: Text(contact.displayName),
-              subtitle: Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: Align(
-                  alignment: AlignmentDirectional.centerStart,
-                  child: ContactStatusChip(status: contact.verificationStatus),
+      return SecureScreen(
+        child: OnboardingScaffold(
+          step: OnboardingStep.contact,
+          title: l10n.contactStepTitle,
+          subtitle: l10n.contactStepInvited(contact.displayName),
+          primaryLabel: l10n.actionContinue,
+          onPrimary: () => advanceFrom(context, ref, OnboardingStep.contact),
+          children: [
+            Card(
+              child: ListTile(
+                minTileHeight: 64,
+                leading: const Icon(Icons.person_outline_rounded),
+                title: Text(contact.displayName),
+                subtitle: Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Align(
+                    alignment: AlignmentDirectional.centerStart,
+                    child: ContactStatusChip(
+                      status: contact.verificationStatus,
+                    ),
+                  ),
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       );
     }
-    return OnboardingScaffold(
-      step: OnboardingStep.contact,
-      title: l10n.contactStepTitle,
-      subtitle: l10n.contactStepBody,
-      secondaryLabel: l10n.actionSkipForNow,
-      onSecondary: () => advanceFrom(context, ref, OnboardingStep.contact),
-      children: [
-        ContactForm(
-          submitLabel: l10n.contactStepSave,
-          onSubmit: (values) => _save(context, ref, values),
-        ),
-        Gap.sm,
-        BodyText(l10n.contactStepInviteNote),
-      ],
+    return SecureScreen(
+      child: OnboardingScaffold(
+        step: OnboardingStep.contact,
+        title: l10n.contactStepTitle,
+        subtitle: l10n.contactStepBody,
+        secondaryLabel: l10n.actionSkipForNow,
+        onSecondary: () => advanceFrom(context, ref, OnboardingStep.contact),
+        children: [
+          ContactForm(
+            submitLabel: l10n.contactStepSave,
+            onSubmit: (values) => _save(context, ref, values),
+          ),
+          Gap.sm,
+          BodyText(l10n.contactStepInviteNote),
+        ],
+      ),
     );
   }
 }

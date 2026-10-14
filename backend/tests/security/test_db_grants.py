@@ -451,9 +451,42 @@ def test_the_maintenance_role_removes_deleted_accounts_and_nothing_it_can_read(
     assert not table_privilege("audit_logs", "UPDATE")
 
 
-def test_the_api_may_delete_a_wrapped_key_but_not_rewrite_it(api: Conn) -> None:
+def test_the_api_may_delete_a_wrapped_key_and_rewrite_only_its_key_columns(api: Conn) -> None:
+    """Migration 0012: the operator's re-wrap and per-user rotation run as the API role."""
     assert _table_privilege(api, "user_keys", "DELETE")
-    assert not _table_privilege(api, "user_keys", "UPDATE")
+    assert not _table_privilege(api, "user_keys", "UPDATE")  # no table-wide UPDATE ...
+    for column in ("wrapped_dek", "kek_id", "dek_version", "rotated_at"):
+        assert _column_privilege(api, "user_keys", column, "UPDATE"), column
+    for column in ("user_id", "created_at"):  # ... and never the owner or the creation time
+        assert not _column_privilege(api, "user_keys", column, "UPDATE"), column
+
+
+def test_the_worker_has_nothing_on_the_wrapped_keys(worker: Conn) -> None:
+    for kind in ("SELECT", "INSERT", "UPDATE", "DELETE"):
+        assert not _table_privilege(worker, "user_keys", kind), kind
+    assert not _column_privilege(worker, "user_keys", "wrapped_dek", "SELECT")
+    assert not _column_privilege(worker, "user_keys", "wrapped_dek", "UPDATE")
+
+
+def test_a_key_version_only_moves_forward_by_one(api: Conn, owner_db: Conn) -> None:
+    user = owner_db.execute(
+        "INSERT INTO users (email, email_normalized, password_hash, email_verified_at) "
+        "VALUES ('keys@example.com', 'keys@example.com', 'x', now()) RETURNING id"
+    ).fetchone()
+    assert user is not None
+    owner_db.execute(
+        "INSERT INTO user_keys (user_id, wrapped_dek, kek_id) VALUES (%s, '\\x01', 'k')",
+        (user["id"],),
+    )
+    update = "UPDATE user_keys SET dek_version = %s, wrapped_dek = '\\x02' WHERE user_id = %s"
+    api.execute(update, (1, user["id"]))  # unchanged: a re-wrap
+    api.execute(update, (2, user["id"]))  # +1: a rotation
+    for bad in (4, 1, 0):  # a jump, a step back, below the start
+        with pytest.raises(psycopg.errors.CheckViolation):
+            api.execute(update, (bad, user["id"]))
+    row = owner_db.execute("SELECT dek_version FROM user_keys").fetchone()
+    assert row == {"dek_version": 2}
+    _denied(api, "UPDATE user_keys SET user_id = gen_random_uuid()")
 
 
 def test_the_api_role_cannot_write_the_dispatchers_attempt_log(api: Conn, owner_db: Conn) -> None:
@@ -486,3 +519,53 @@ def test_the_api_role_cannot_write_the_dispatchers_attempt_log(api: Conn, owner_
     )
     _denied(api, "UPDATE notification_logs SET outcome = 'bounced'")
     _denied(api, "DELETE FROM notification_logs")
+
+
+def test_the_maintenance_role_purges_login_material_and_reads_none_of_it(owner_db: Conn) -> None:
+    """Phase 10 (D-1): it deletes ended sessions, spent tokens and unused devices by their
+    instants and owners, and cannot read a hash, a token, a payload, a user agent, a push token
+    or an address; nor change any of those rows."""
+
+    def table(name: str, kind: str) -> bool:
+        row = owner_db.execute(
+            "SELECT has_table_privilege('afterme_maintenance', %s, %s) AS ok", (name, kind)
+        ).fetchone()
+        assert row is not None
+        return bool(row["ok"])
+
+    def column(name: str, col: str, kind: str = "SELECT") -> bool:
+        row = owner_db.execute(
+            "SELECT has_column_privilege('afterme_maintenance', %s, %s, %s) AS ok",
+            (name, col, kind),
+        ).fetchone()
+        assert row is not None
+        return bool(row["ok"])
+
+    for name in ("sessions", "refresh_tokens", "auth_tokens", "devices"):
+        assert table(name, "DELETE"), name
+        assert not table(name, "SELECT"), name  # column by column, never the whole row
+        for kind in ("INSERT", "UPDATE", "TRUNCATE"):
+            assert not table(name, kind), (name, kind)
+    allowed = {
+        "sessions": ("id", "user_id", "device_id", "revoked_at", "idle_expires_at"),
+        "refresh_tokens": ("id", "session_id", "expires_at", "used_at"),
+        "auth_tokens": ("id", "user_id", "expires_at", "used_at"),
+        "devices": ("id", "user_id", "last_seen_at"),
+    }
+    for name, columns in allowed.items():
+        for col in columns:
+            assert column(name, col), (name, col)
+    denied = {
+        "sessions": ("ip_hash", "user_agent", "web_token_hash"),
+        "refresh_tokens": ("token_hash", "replaced_by"),
+        "auth_tokens": ("secret_hash", "payload", "attempts"),
+        "devices": ("push_token", "app_version", "os_version", "locale"),
+        "audit_logs": ("metadata", "ip_hash", "actor_id", "request_id"),
+    }
+    for name, columns in denied.items():
+        for col in columns:
+            assert not column(name, col), (name, col)
+    # the audit purge reads who an event is about, to leave an open incident's trail alone
+    for col in ("id", "occurred_at", "subject_user_id", "resource_type", "resource_id"):
+        assert column("audit_logs", col), col
+    assert not table("audit_logs", "UPDATE")

@@ -54,10 +54,26 @@ class PreferencesStore {
 
   Future<void> remove(PreferenceKey key) => _prefs.remove(key.storageKey);
 
-  /// Removes every AfterMe preference (used when the account is deleted).
+  /// The preferences that describe **the account** (where it was in onboarding, and
+  /// which account that progress is for). Everything else here is the phone's own
+  /// setting (the app lock and its timeout, the notification pre-prompt result): it is
+  /// not account data, so closing an account leaves it alone.
+  static const Set<PreferenceKey> accountBound = {
+    PreferenceKey.onboardingStep,
+    PreferenceKey.onboardingCompleted,
+    PreferenceKey.onboardingUserId,
+  };
+
+  /// Removes every AfterMe preference, the phone's own settings included. Not used when
+  /// an account is closed: see [clearAccountBound].
   Future<void> clear() => _prefs.clear(
     allowList: {for (final key in PreferenceKey.values) key.storageKey},
   );
+
+  /// Removes only what belongs to the account ([accountBound]); the phone's own
+  /// settings stay.
+  Future<void> clearAccountBound() =>
+      _prefs.clear(allowList: {for (final key in accountBound) key.storageKey});
 }
 
 final preferencesStoreProvider = Provider<PreferencesStore>(

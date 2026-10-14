@@ -1,11 +1,8 @@
 import 'dart:async';
 
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:material_ui/material_ui.dart';
-import 'package:package_info_plus/package_info_plus.dart';
+import 'package:flutter/widgets.dart';
 
-import 'app/app.dart';
-import 'core/api/client_info.dart';
+import 'app/start.dart';
 import 'core/config/app_config.dart';
 import 'core/config/misconfigured_build_app.dart';
 
@@ -25,32 +22,10 @@ void main() {
   // so this, together with AppConfig's own https rule, is what refuses cleartext in
   // staging and prod (SECURITY.md §11). The binding must be created in the same zone as
   // `runApp`, so everything starts inside it.
-  runZoned(() => unawaited(_start(config)), zoneValues: config.ioZoneValues);
-}
-
-Future<void> _start(AppConfig config) async {
-  WidgetsFlutterBinding.ensureInitialized();
-
-  final PackageInfo info;
-  try {
-    info = await PackageInfo.fromPlatform();
-    // The flavor (application id) must be the one this configuration is for: a dev
-    // configuration in the production package, or the reverse, never gets to run.
-    config.requirePackage(info.packageName);
-  } on AppConfigException catch (error) {
-    runApp(MisconfiguredBuildApp(message: error.message));
-    return;
-  }
-
-  runApp(
-    ProviderScope(
-      // Failed loads show a Retry button; they are not silently retried in a loop.
-      retry: (retryCount, error) => null,
-      overrides: [
-        appConfigProvider.overrideWithValue(config),
-        clientInfoProvider.overrideWithValue(ClientInfo.fromPackageInfo(info)),
-      ],
-      child: const AfterMeApp(),
-    ),
-  );
+  runZoned(() {
+    WidgetsFlutterBinding.ensureInitialized();
+    // The first frame is the splash; the app starts when the package check is done (see
+    // AfterMeStart).
+    runApp(AfterMeStart(config: config));
+  }, zoneValues: config.ioZoneValues);
 }

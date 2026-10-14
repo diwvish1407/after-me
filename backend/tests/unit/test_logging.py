@@ -179,3 +179,37 @@ def test_dev_uses_console_renderer_and_uvicorn_access_log_is_off() -> None:
         assert len(ours) == 1
     finally:
         configure_logging(make_settings())
+
+
+@pytest.mark.parametrize(
+    ("method", "expected"),
+    [
+        ("debug", "DEBUG"),
+        ("info", "INFO"),
+        ("warning", "WARNING"),
+        ("error", "ERROR"),
+        ("critical", "CRITICAL"),
+    ],
+)
+def test_json_lines_carry_the_severity_cloud_logging_reads(method: str, expected: str) -> None:
+    """Cloud Logging takes the severity of a JSON line from ``severity`` (upper case); without
+    it every line is DEFAULT and no severity-based alert can see an error (Phase 12)."""
+    import io
+    import json
+    import logging
+
+    stream = io.StringIO()
+    handler = logging.StreamHandler(stream)
+    handler.setFormatter(build_formatter(json=True))
+    handler.setLevel(logging.DEBUG)
+    logger = logging.getLogger(f"severity-test-{method}")
+    logger.addHandler(handler)
+    logger.setLevel(logging.DEBUG)
+    logger.propagate = False
+    try:
+        getattr(logger, method)("something happened")
+    finally:
+        logger.removeHandler(handler)
+    line = json.loads(stream.getvalue().splitlines()[-1])
+    assert line["severity"] == expected
+    assert line["level"] == method

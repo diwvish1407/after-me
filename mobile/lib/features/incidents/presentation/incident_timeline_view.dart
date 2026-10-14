@@ -15,12 +15,19 @@ import 'incident_labels.dart';
 /// Times are the server's, shown in the profile's timezone with the day counted from the
 /// server's idea of now. Every line has a word as well as an icon, and is read out as one
 /// sentence. A stage that was put back later is simply at its new time.
+///
+/// While a service interruption is on ([paused]) the lines of a stage, or of the warning
+/// before one, that are still to happen do not state a time: their time is out of date
+/// (nothing is sent, and they move later by the length of the interruption), so the line
+/// says it is paused. What already happened keeps its time. The person's own reminders
+/// carry on during an interruption and keep theirs.
 class IncidentTimelineView extends StatelessWidget {
   const IncidentTimelineView({
     required this.incident,
     required this.now,
     required this.timezone,
     this.heading,
+    this.paused = false,
     super.key,
   });
 
@@ -32,6 +39,9 @@ class IncidentTimelineView extends StatelessWidget {
 
   /// A heading above the lines; none when null.
   final String? heading;
+
+  /// A service interruption is on: upcoming stages show no time.
+  final bool paused;
 
   @override
   Widget build(BuildContext context) {
@@ -55,6 +65,7 @@ class IncidentTimelineView extends StatelessWidget {
             incident: incident,
             now: now,
             timezone: timezone,
+            paused: paused,
           ),
       ],
     );
@@ -67,8 +78,10 @@ class _EventTile extends StatelessWidget {
     required this.incident,
     required this.now,
     required this.timezone,
+    required this.paused,
   });
 
+  final bool paused;
   final IncidentEvent event;
   final Incident incident;
   final DateTime now;
@@ -87,14 +100,15 @@ class _EventTile extends StatelessWidget {
       now: now,
       timezone: timezone,
     );
-    final when = formatDayTime(
-      context,
-      l10n,
-      event.at,
-      now: now,
-      timezone: timezone,
-    );
     final upcoming = event.item?.isUpcoming ?? false;
+    final timeIsPaused =
+        paused &&
+        upcoming &&
+        (event.kind == IncidentEventKind.stage ||
+            event.kind == IncidentEventKind.finalWarning);
+    final when = timeIsPaused
+        ? l10n.incidentTimelinePaused
+        : formatDayTime(context, l10n, event.at, now: now, timezone: timezone);
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.md),
       child: Semantics(

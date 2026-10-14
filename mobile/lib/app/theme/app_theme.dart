@@ -1,6 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 
 import 'dimens.dart';
+import 'reduced_motion_transitions.dart';
 import 'tokens.dart';
 
 /// Type scale from USER_FLOWS.md §1.3: body 16 sp (line height 1.4), titles
@@ -160,6 +161,8 @@ abstract final class AppTheme {
       dividerColor: t.border,
       materialTapTargetSize: MaterialTapTargetSize.padded,
       visualDensity: VisualDensity.standard,
+      // Pages stand still when the phone is set to remove animations.
+      pageTransitionsTheme: reducedMotionPageTransitions(),
       extensions: [AppTokens(t)],
       appBarTheme: AppBarThemeData(
         backgroundColor: t.bg,

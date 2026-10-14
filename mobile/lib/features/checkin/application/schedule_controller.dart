@@ -6,6 +6,7 @@ import '../../../core/api/failures/failure_mapper.dart';
 import '../../../core/auth/auth_controller.dart';
 import '../../../core/auth/session_epoch.dart';
 import '../../auth/application/me_controller.dart';
+import '../../home/application/home_inputs.dart';
 import '../../incidents/application/safe_controller.dart';
 import '../data/schedule_repository.dart';
 import 'checkin_controller.dart';
@@ -30,14 +31,23 @@ class ScheduleController extends AsyncNotifier<ScheduleSnapshot?> {
     if (ref.watch(authControllerProvider) != AuthStatus.signedIn) {
       return null;
     }
+    // Home follows this counter (not this controller, whose read a listener would
+    // start): a settings change or an on/off switch moves the aggregate. A schedule that
+    // was only read again after a check-in (same version) is what Home already applied
+    // from the answer.
+    listenSelf((previous, next) {
+      final before = previous?.value;
+      final after = next.value;
+      if (before != null &&
+          after != null &&
+          (before.version != after.version || before.status != after.status)) {
+        ref.read(homeInputChangesProvider.notifier).bump();
+      }
+    });
     // A timezone change recomputes the deadline on the server, which also changes the
     // version: read it again so the next save carries the right ETag.
-    ref.listen(meControllerProvider, (previous, next) {
-      final before = previous?.value?.profile.timezone;
-      final after = next.value?.profile.timezone;
-      if (before != null && after != null && before != after) {
-        reload();
-      }
+    ref.listen(timezoneChangesProvider, (previous, next) {
+      reload();
     });
     // A confirmed check-in moves the last check-in and the deadline on the server (the
     // version stays): read them again so this screen agrees with Home.

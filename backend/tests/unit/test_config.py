@@ -32,6 +32,11 @@ SECURE_PROD = {
     ),
     "probe_token": "p" * 48,
     "kms_provider": "gcp_kms",  # the local KMS keeps the KEK in the environment: dev/test only
+    "kms_key_name": (
+        "projects/afterme-prod/locations/asia-south1/keyRings/afterme/cryptoKeys/instruction-kek"
+    ),
+    "support_email": "support@afterme.example",
+    "abuse_email": "abuse@afterme.example",
     "push_provider": "fcm",
     "fcm_project_id": "afterme-prod",
     "email_from": "AfterMe <alerts@mail.afterme.example>",
@@ -189,6 +194,26 @@ def test_weak_argon2_only_in_test_env() -> None:
     make_settings(argon2_time_cost=1, argon2_memory_cost_kib=1024)
     with pytest.raises(ValidationError, match="Argon2"):
         make_settings(app_env="dev", argon2_time_cost=1, argon2_memory_cost_kib=1024)
+
+
+def test_the_grace_period_floor_matches_the_database_in_every_environment() -> None:
+    """The plan table refuses a grace period under 60 minutes (CHECK), so the configured minimum
+    may not promise less: it would turn a plan edit into a 500."""
+    with pytest.raises(ValidationError) as excinfo:
+        make_settings(grace_min_minutes=59)
+    assert "GRACE_MIN_MINUTES must be at least 60" in _problems(excinfo.value)
+    assert make_settings(grace_min_minutes=60).grace_min_minutes == 60
+
+
+def test_the_other_plan_bounds_also_match_the_database() -> None:
+    with pytest.raises(ValidationError) as excinfo:
+        make_settings(grace_max_minutes=4_321)
+    assert "GRACE_MAX_MINUTES must not exceed 4320" in _problems(excinfo.value)
+    with pytest.raises(ValidationError) as excinfo:
+        make_settings(stage_max_offset_minutes=43_201)
+    assert "STAGE_MAX_OFFSET_MINUTES must not exceed 43200" in _problems(excinfo.value)
+    settings = make_settings(grace_max_minutes=4_320, stage_max_offset_minutes=43_200)
+    assert settings.grace_max_minutes == 4_320
 
 
 def test_rate_limit_toggle_allowed_in_dev_and_test_only() -> None:

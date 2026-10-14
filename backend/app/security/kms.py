@@ -5,21 +5,52 @@ wrap and unwrap a per-user data-encryption key (DEK), passing the user's ID as a
 authenticated data so a wrapped DEK cannot be moved to another account.
 
 ``LocalKms`` keeps the KEK in the process environment. It exists for development and tests and
-is **refused in staging and production** (``Settings``); a cloud KMS provider implements the
-same two methods and is a deployment item (ROADMAP Phase 10-12).
+is **refused in staging and production** (``Settings``). ``GcpKms`` (``gcp_kms.py``) is the
+production provider; ``UnavailableKms`` is what a process that must never decrypt content (the
+escalation worker, BD-5) is given instead of either.
 """
 
 from __future__ import annotations
 
 import hashlib
 import uuid
+from dataclasses import dataclass
 from typing import Protocol
 
+from app.core.logging import get_logger
 from app.security import envelope
+
+_log = get_logger("afterme.kms")
 
 
 class KmsError(Exception):
-    """The KMS could not wrap or unwrap a key."""
+    """The KMS could not wrap or unwrap a key. ``code`` is a short, fixed, non-secret word
+    (``timeout``, ``permission_denied``, ...): never a key name, a response body or key material,
+    so it is safe to log and to print."""
+
+    def __init__(self, code: str = "kms_error") -> None:
+        super().__init__(code)
+        self.code = code
+        self.logged = False
+
+
+def log_failure(exc: KmsError, operation: str) -> KmsError:
+    """The one ``kms.call_failed`` event of a failure: the operation (``encrypt``/``decrypt``)
+    and the short code, nothing else (no key name, no bytes). Called by the Cloud KMS adapter for
+    every error it raises and by the vault for every error it meets, so a failure from any
+    provider is logged, and logged once (the monitoring alert counts these lines)."""
+    if not exc.logged:
+        exc.logged = True
+        _log.warning("kms.call_failed", operation=operation, failure=exc.code)
+    return exc
+
+
+@dataclass(frozen=True)
+class Unwrapped:
+    dek: bytes
+    # Whether the key was wrapped with the KEK (version) that new wraps use now. ``False`` means
+    # "still decrypts, but the re-wrap job should rewrite it" (``cli.admin kms rewrap``).
+    current: bool
 
 
 class KmsProvider(Protocol):
@@ -33,6 +64,10 @@ class KmsProvider(Protocol):
         ...
 
     async def unwrap(self, wrapped: bytes, *, user_id: uuid.UUID, key_id: str) -> bytes: ...
+
+    async def unwrap_status(self, wrapped: bytes, *, user_id: uuid.UUID, key_id: str) -> Unwrapped:
+        """``unwrap`` that also says whether the wrapping is up to date (for the re-wrap job)."""
+        ...
 
 
 def local_key_id(key: bytes) -> str:
@@ -61,10 +96,32 @@ class LocalKms:
         return envelope.encrypt(self._keys[key_id], dek, aad=aad), key_id
 
     async def unwrap(self, wrapped: bytes, *, user_id: uuid.UUID, key_id: str) -> bytes:
+        return (await self.unwrap_status(wrapped, user_id=user_id, key_id=key_id)).dek
+
+    async def unwrap_status(self, wrapped: bytes, *, user_id: uuid.UUID, key_id: str) -> Unwrapped:
         key = self._keys.get(key_id)
         if key is None:
-            raise KmsError
+            raise KmsError("unknown_key")
         try:
-            return envelope.decrypt(key, wrapped, aad=envelope.dek_aad(user_id, key_id))
+            dek = envelope.decrypt(key, wrapped, aad=envelope.dek_aad(user_id, key_id))
         except envelope.DecryptionError:
-            raise KmsError from None
+            raise KmsError("invalid_ciphertext") from None
+        return Unwrapped(dek, current=key_id == self._active_id)
+
+
+class UnavailableKms:
+    """For a process that must never read content (the escalation worker): every call fails
+    closed with the same error a KMS outage gives, and nothing is ever sent anywhere."""
+
+    @property
+    def active_key_id(self) -> str:
+        return "unavailable"
+
+    async def wrap(self, dek: bytes, *, user_id: uuid.UUID) -> tuple[bytes, str]:
+        raise KmsError("not_configured")
+
+    async def unwrap(self, wrapped: bytes, *, user_id: uuid.UUID, key_id: str) -> bytes:
+        raise KmsError("not_configured")
+
+    async def unwrap_status(self, wrapped: bytes, *, user_id: uuid.UUID, key_id: str) -> Unwrapped:
+        raise KmsError("not_configured")

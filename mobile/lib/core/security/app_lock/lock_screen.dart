@@ -106,12 +106,10 @@ class _LockScreenState extends ConsumerState<LockScreen>
               ),
               if (message != null) ...[
                 const SizedBox(height: AppSpacing.md),
-                Semantics(
+                StatusBanner(
+                  kind: StatusBannerKind.info,
+                  message: message,
                   liveRegion: true,
-                  child: StatusBanner(
-                    kind: StatusBannerKind.info,
-                    message: message,
-                  ),
                 ),
               ],
               const SizedBox(height: AppSpacing.lg),

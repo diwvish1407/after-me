@@ -39,3 +39,16 @@ backend/.dev_mail/
 mobile/build/
 mobile/.dart_tool/
 mobile/coverage/
+
+# Terraform (infra/): provider binaries, state and real variable files never go in git.
+# .terraform.lock.hcl IS committed (it pins the provider checksums).
+infra/**/.terraform/
+infra/**/*.tfstate
+infra/**/*.tfstate.*
+infra/**/*.tfvars
+!infra/**/*.tfvars.example
+infra/**/backend.hcl
+infra/**/crash.log
+
+# make perf output (machine-specific)
+backend/perf-report.json

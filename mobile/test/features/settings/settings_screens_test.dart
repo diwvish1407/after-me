@@ -851,7 +851,7 @@ void main() {
         expect(find.text('Lock after'), findsOneWidget);
         expect(find.text('After 5 minutes away'), findsOneWidget);
 
-        await tester.tap(find.text('Immediately when I leave the app'));
+        await tester.tap(find.text('As soon as I leave the app'));
         await tester.pumpAndSettle();
         expect(
           container.read(appLockControllerProvider).timeout,

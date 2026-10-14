@@ -10,10 +10,12 @@ import '../../../core/api/failures/app_failure.dart';
 import '../../../core/design_system/design_system.dart';
 import '../../../core/security/secure_screen.dart';
 import '../../../core/time/clock.dart';
+import '../../../core/time/foreground_ticker.dart';
 import '../../../l10n/gen/app_localizations.dart';
 import '../../checkin/application/checkin_controller.dart';
 import '../../checkin/presentation/check_in_notices.dart';
 import '../../home/application/home_controller.dart';
+import '../../home/presentation/service_interruption_banner.dart';
 import '../application/incident_context.dart';
 import '../data/models/incident_models.dart';
 import 'incident_headline.dart';
@@ -38,25 +40,32 @@ class IncidentTimelineScreen extends ConsumerStatefulWidget {
 
 class _IncidentTimelineScreenState
     extends ConsumerState<IncidentTimelineScreen> {
-  Timer? _ticker;
+  late final ForegroundTicker _ticker = ForegroundTicker(
+    period: const Duration(seconds: 30),
+    onTick: _redraw,
+    onForeground: _redraw,
+  );
 
   @override
   void initState() {
     super.initState();
     // Times such as "is due" are decided from the clock plus the server's offset; the
-    // timer only triggers a redraw.
-    _ticker = Timer.periodic(const Duration(seconds: 30), (_) {
-      if (mounted) {
-        setState(() {});
-      }
-    });
+    // timer only triggers a redraw, and only while the app is in the foreground (it is
+    // cancelled when the app is paused and redraws once when it returns).
+    _ticker.start();
     unawaited(Future.microtask(_refresh));
   }
 
   @override
   void dispose() {
-    _ticker?.cancel();
+    _ticker.stop();
     super.dispose();
+  }
+
+  void _redraw() {
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   Future<void> _refresh() async {
@@ -143,12 +152,14 @@ class _IncidentTimelineScreenState
     // The `safe_required` answer of a tap counts only for the incident it named.
     final needsSafe =
         incident.needsSafe || checkIn.safeRequiredApplies(incident.id);
+    final interruption = snapshot.serviceInterruption;
     final headline = incidentHeadline(
       context,
       incident,
       now: now,
       needsSafe: needsSafe,
       timezone: timezone,
+      interruption: interruption,
     );
     final behind = incidentIsBehind(incident, needsSafe: needsSafe);
     return Column(
@@ -161,14 +172,12 @@ class _IncidentTimelineScreenState
           ),
           Gap.md,
         ],
-        Semantics(
+        if (interruption) ...[const ServiceInterruptionBanner(), Gap.md],
+        StatusBanner(
+          kind: headline.kind,
+          title: headline.title,
+          message: headline.body,
           liveRegion: true,
-          container: true,
-          child: StatusBanner(
-            kind: headline.kind,
-            title: headline.title,
-            message: headline.body,
-          ),
         ),
         Gap.lg,
         if (needsSafe)
@@ -181,6 +190,7 @@ class _IncidentTimelineScreenState
             incident: incident,
             now: now,
             timezone: timezone,
+            paused: interruption,
             heading: needsSafe
                 ? l10n.incidentTimelineHeadingAll
                 : l10n.incidentTimelineHeadingNext,

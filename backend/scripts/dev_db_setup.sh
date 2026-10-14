@@ -34,6 +34,22 @@ for name in "$DEV_DB" "$TEST_DB"; do
   fi
 done
 
+# This script creates roles with development passwords and drops nothing but creates databases:
+# never run it against a shared server. An exported PGHOST of a staging or production server
+# (provisioning uses provision_roles.sql) is refused unless the caller says it really is a
+# throwaway one (CI service containers use localhost).
+case "${PGHOST:-}" in
+  ""|localhost|127.0.0.1|::1|/*) ;;
+  *)
+    if [[ "${AFTERME_ALLOW_REMOTE_DEV_DB_SETUP:-}" != "yes" ]]; then
+      echo "error: PGHOST=$PGHOST is not this machine. This script sets development role" >&2
+      echo "       passwords; for a shared server use scripts/provision_roles.sql. To really" >&2
+      echo "       run it against a throwaway server set AFTERME_ALLOW_REMOTE_DEV_DB_SETUP=yes." >&2
+      exit 2
+    fi
+    ;;
+esac
+
 psql_admin() {
   psql -X -q -v ON_ERROR_STOP=1 -d "$1" "${@:2}"
 }

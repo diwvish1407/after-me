@@ -82,13 +82,10 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
           PageHeading(l10n.signInHeading),
           Gap.lg,
           if (ref.watch(sessionEndedNoticeProvider)) ...[
-            Semantics(
+            StatusBanner(
+              kind: StatusBannerKind.info,
+              message: l10n.errorSessionExpired,
               liveRegion: true,
-              container: true,
-              child: StatusBanner(
-                kind: StatusBannerKind.info,
-                message: l10n.errorSessionExpired,
-              ),
             ),
             Gap.md,
           ],

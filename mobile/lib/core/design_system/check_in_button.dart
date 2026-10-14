@@ -8,6 +8,7 @@ import '../../app/theme/app_theme.dart';
 import '../../app/theme/dimens.dart';
 import '../../app/theme/tokens.dart';
 import '../../l10n/gen/app_localizations.dart';
+import 'progress_spinner.dart';
 
 /// Visual states of the check-in button (USER_FLOWS.md §1.3, §5).
 enum CheckInButtonState {
@@ -251,7 +252,7 @@ class _StateIcon extends StatelessWidget {
           dimension: _size,
           child: Padding(
             padding: const EdgeInsets.all(AppSpacing.xxs),
-            child: CircularProgressIndicator(
+            child: ProgressSpinner(
               strokeWidth: 3,
               color: color,
               // A translucent track keeps the moving arc visible on filled colours.

@@ -1,0 +1,143 @@
+name: nightly
+
+# TEST_PLAN §10: "Engine lifecycle and concurrency tests are also run 100x in a nightly job to
+# catch flakiness." §12 (closed beta): "nightly 100x lifecycle run green for 7 consecutive
+# nights". A night is green when this workflow's single job is green; a red night is a failed
+# job (and, with the default notification settings, an email to whoever last touched the
+# schedule). Count the green nights in the Actions list: this workflow only ever has one run
+# per night.
+#
+# What runs (the same PostgreSQL service and setup steps as backend.yml):
+#   1. `make engine-gate`: the T0-T8 lifecycle 100 times in a row (LIFECYCLE_REPEATS=100), then
+#      every other engine suite once, with tests/unit/test_engine_pure.py.
+#   2. The concurrency suite (tests/engine/test_concurrency.py) 100 times, each in its own
+#      pytest process. A failure does not stop the loop: the number of red runs out of 100 is
+#      the flakiness figure, and every failing run's output is kept.
+#
+# Scheduled workflows run only on the default branch, and GitHub switches them off after 60
+# days without repository activity: if the nights stop appearing, re-enable the workflow.
+# `workflow_dispatch` runs the same thing by hand.
+
+on:
+  schedule:
+    # Daily, 01:23 UTC. Off the hour on purpose: the top of the hour is when GitHub's scheduler
+    # is busiest and delays or drops runs.
+    - cron: "23 1 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# One night at a time; a run that is still going is never cancelled by the next trigger.
+concurrency:
+  group: nightly
+  cancel-in-progress: false
+
+jobs:
+  engine-100x:
+    name: Engine lifecycle and concurrency, 100 times
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    defaults:
+      run:
+        working-directory: backend
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      # Superuser connection for scripts/dev_db_setup.sh (throwaway CI container credentials).
+      PGHOST: localhost
+      PGPORT: "5432"
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      # Role passwords for this ephemeral database only; not secrets.
+      AFTERME_OWNER_DB_PASSWORD: ci_owner_password
+      AFTERME_API_DB_PASSWORD: ci_api_password
+      AFTERME_WORKER_DB_PASSWORD: ci_worker_password
+      AFTERME_TEST_DB_NAME: afterme_test
+      AFTERME_TEST_PG_HOST: localhost
+      AFTERME_TEST_PG_PORT: "5432"
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v10
+        with:
+          version: "0.9.26"
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+
+      - name: Check that uv.lock matches pyproject.toml
+        run: uv lock --check
+
+      - name: Install dependencies (locked)
+        run: uv sync --frozen
+
+      - name: Create database roles and databases
+        run: ./scripts/dev_db_setup.sh
+
+      # `shell: bash` is bash with -eo pipefail: tee must not hide pytest's exit status.
+      - name: Lifecycle T0-T8 x100, then every engine suite (make engine-gate)
+        shell: bash
+        run: make engine-gate 2>&1 | tee engine-gate.log
+
+      - name: Concurrency suite x100
+        shell: bash
+        run: |
+          set -u
+          failures=0
+          : > concurrency-failures.log
+          for i in $(seq 1 100); do
+            if uv run pytest tests/engine/test_concurrency.py -q > run.log 2>&1; then
+              echo "run $i/100: $(tail -n 1 run.log)"
+            else
+              failures=$((failures + 1))
+              echo "::error title=Concurrency suite failed::run $i of 100 failed"
+              echo "===== run $i of 100 =====" | tee -a concurrency-failures.log
+              tee -a concurrency-failures.log < run.log
+            fi
+          done
+          echo "concurrency suite: $failures failed run(s) out of 100"
+          {
+            echo "### Concurrency suite"
+            echo ""
+            echo "$failures failed run(s) out of 100."
+          } >> "$GITHUB_STEP_SUMMARY"
+          test "$failures" -eq 0
+
+      - name: Upload the logs of a failed night
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: nightly-engine-logs
+          path: |
+            backend/engine-gate.log
+            backend/concurrency-failures.log
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: Record a green night
+        if: success()
+        run: |
+          {
+            echo "### Nightly engine run: green"
+            echo ""
+            echo "Lifecycle T0-T8 x100, all engine suites, concurrency suite x100."
+          } >> "$GITHUB_STEP_SUMMARY"

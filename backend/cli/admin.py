@@ -4,10 +4,30 @@
     python -m cli.admin hold status | enter --reason "..." | exit [--include-ingestion]
     python -m cli.admin incident void <incident-id>
     python -m cli.admin action retry <action-id>
+    python -m cli.admin user set-tier <user-id> free|premium --reason "..."  # users.tier only
+    python -m cli.admin user suspend <user-id> --reason "..."    # suspended; every session revoked
+    python -m cli.admin user unsuspend <user-id> --reason "..."  # suspended back to active
+    python -m cli.admin kms check                  # wrap/unwrap 32 random bytes with the real KMS
+    python -m cli.admin kms rewrap [--dry-run] [--limit N]   # wrapped keys -> the primary version
+    python -m cli.admin kms rotate-user <user-id> --reason "..."   # a new DEK for one account
     python -m cli.admin email-test --to ADDRESS     # one message through the configured chain
     python -m cli.admin push-test --token TOKEN     # one push through the configured provider
+    python -m cli.admin beta-report [--since YYYY-MM-DD] [--until YYYY-MM-DD] [--json]
 
-Connects as the worker role; every command is audited with an operator actor.
+Connects as the worker role; every command that changes something is audited with an operator
+actor. ``status``, ``hold status`` and ``beta-report`` only read, and are not.
+
+The ``kms`` commands are the exception: they connect as the **API role** (``DATABASE_URL``),
+because only that role may read keys and content, and use the configured KMS identity (run them
+where the API's service account is, e.g. a Cloud Run job of the API image). ``kms check`` needs
+no database. See ``app/ops/kms.py`` for what is safe to interrupt and re-run.
+
+``beta-report`` is the closed-beta review: metrics for the period, then every incident in which
+a contact was messaged, with deterministic verdict hints. It is read-only (a READ ONLY
+transaction) and carries UUIDs, counts, template keys, statuses and times, never a name, an
+address, a token or instruction text. Dates are UTC days, both ends inclusive. Exit status 0;
+2 (nothing printed on stdout) for a bad period, or a database that is not migrated to this
+code's head or lacks a table.
 """
 
 from __future__ import annotations
@@ -16,17 +36,35 @@ import argparse
 import asyncio
 import getpass
 import json
+import re
 import sys
 import uuid
+from datetime import date
 
-from app.api.container import build_worker_services
+from app.api.container import AppServices, build_kms, build_services, build_worker_services
+from app.auth.models import USER_TIERS
 from app.core.config import load_settings
 from app.core.logging import configure_logging
 from app.notifications.email import EmailMessage
 from app.notifications.errors import ProviderError
 from app.notifications.providers.factory import build_email_provider, build_push_provider
 from app.notifications.push import PushMessage
-from app.ops import admin
+from app.ops import admin, beta, users
+from app.ops import kms as kms_ops
+
+_DAY_RE = re.compile(r"\d{4}-\d{2}-\d{2}")
+
+
+def _day(value: str) -> date:
+    """``YYYY-MM-DD`` only: ``20261001`` and ISO week dates are parsed by ``fromisoformat`` too,
+    and an operator who typed one of those probably meant something else."""
+    if _DAY_RE.fullmatch(value):
+        try:
+            return date.fromisoformat(value)
+        except ValueError:
+            pass
+    msg = f"not a date (YYYY-MM-DD): {value!r}"
+    raise argparse.ArgumentTypeError(msg)
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -49,13 +87,68 @@ def _parser() -> argparse.ArgumentParser:
     action_sub = action.add_subparsers(dest="action_command", required=True)
     retry = action_sub.add_parser("retry", help="put a held action back to pending")
     retry.add_argument("action_id", type=uuid.UUID)
+    user = sub.add_parser("user", help="one account: its tier and its suspension")
+    user_sub = user.add_subparsers(dest="user_command", required=True)
+    set_tier = user_sub.add_parser("set-tier", help="change users.tier and nothing else")
+    set_tier.add_argument("user_id", type=uuid.UUID)
+    set_tier.add_argument("tier", choices=USER_TIERS)
+    set_tier.add_argument("--reason", required=True, help="why (kept in the audit record)")
+    for name, text in (
+        ("suspend", "suspend the account and end every session; voids and sends nothing"),
+        ("unsuspend", "suspended back to active"),
+    ):
+        one = user_sub.add_parser(name, help=text)
+        one.add_argument("user_id", type=uuid.UUID)
+        one.add_argument("--reason", required=True, help="why (kept in the audit record)")
+    kms = sub.add_parser("kms", help="key management: check, re-wrap, rotate one user's key")
+    kms_sub = kms.add_subparsers(dest="kms_command", required=True)
+    kms_sub.add_parser("check", help="prove the configured KMS wraps and unwraps (no database)")
+    rewrap = kms_sub.add_parser(
+        "rewrap", help="rewrite every wrapped key under the KMS's current key version"
+    )
+    rewrap.add_argument(
+        "--dry-run", action="store_true", help="count what would change; write nothing"
+    )
+    rewrap.add_argument(
+        "--limit", type=int, default=None, metavar="N", help="rewrite at most N keys this run"
+    )
+    rotate = kms_sub.add_parser(
+        "rotate-user", help="a new data key for one account; its instructions are re-encrypted"
+    )
+    rotate.add_argument("user_id", type=uuid.UUID)
+    rotate.add_argument("--reason", required=True, help="why (kept in the audit record)")
     email = sub.add_parser(
         "email-test", help="send one test message through the configured email provider(s)"
     )
     email.add_argument("--to", required=True)
     push = sub.add_parser("push-test", help="send one test push through the configured provider")
     push.add_argument("--token", required=True, help="an FCM registration token")
+    report = sub.add_parser(
+        "beta-report",
+        help="closed-beta metrics and every escalated incident, for review (read-only)",
+    )
+    report.add_argument(
+        "--since", type=_day, metavar="YYYY-MM-DD", help="first UTC day (default: the beginning)"
+    )
+    report.add_argument(
+        "--until", type=_day, metavar="YYYY-MM-DD", help="last UTC day, inclusive (default: now)"
+    )
+    report.add_argument("--json", action="store_true", help="a machine-readable document")
     return parser
+
+
+def _parse(argv: list[str]) -> argparse.Namespace:
+    parser = _parser()
+    args = parser.parse_args(argv)
+    if args.command == "beta-report" and args.since and args.until and args.since > args.until:
+        parser.error("--since is after --until")
+    if (
+        args.command == "kms"
+        and args.kms_command == "rewrap"
+        and (args.limit is not None and args.limit < 1)
+    ):
+        parser.error("--limit must be at least 1")
+    return args
 
 
 async def _provider_test(args: argparse.Namespace) -> int:
@@ -99,11 +192,98 @@ async def _provider_test(args: argparse.Namespace) -> int:
     return 0
 
 
-async def run(argv: list[str]) -> int:
-    args = _parser().parse_args(argv)
+async def _user_command(args: argparse.Namespace, services: AppServices, operator: str) -> int:
+    """``user set-tier | suspend | unsuspend``. Exit ``0`` when the account is as asked (also
+    when it already was), ``2`` when the command was refused."""
+    try:
+        if args.user_command == "set-tier":
+            change = await users.set_tier(
+                services,
+                operator=operator,
+                user_id=args.user_id,
+                tier=args.tier,
+                reason=args.reason,
+            )
+        elif args.user_command == "suspend":
+            change = await users.suspend(
+                services, operator=operator, user_id=args.user_id, reason=args.reason
+            )
+        else:
+            change = await users.unsuspend(
+                services, operator=operator, user_id=args.user_id, reason=args.reason
+            )
+    except users.UserCommandError as exc:
+        print(f"refused: {exc}")  # noqa: T201
+        return 2
+    if change.command == "set_tier":
+        said = (
+            f"tier set: {change.before} -> {change.after}"
+            if change.changed
+            else f"tier is already {change.after}; nothing changed"
+        )
+    elif change.command == "suspend":
+        said = (
+            f"suspended (was {change.before}); sessions revoked: {change.sessions_revoked}"
+            if change.changed
+            else "already suspended and no session was open; nothing changed"
+        )
+    else:
+        said = (
+            "unsuspended: the account is active again (the person signs in again)"
+            if change.changed
+            else f"the account is not suspended (status {change.before}); nothing changed"
+        )
+    print(said)  # noqa: T201
+    for note in change.notes:
+        print(f"note: {note}")  # noqa: T201
+    return 0
+
+
+async def _kms_command(args: argparse.Namespace, operator: str) -> int:
+    """``kms check | rewrap | rotate-user``. Exit ``0`` when done, ``1`` when something is left
+    for a rerun (busy users, a failing KMS), ``2`` when refused."""
+    settings = load_settings()
+    configure_logging(settings)
+    if args.kms_command == "check":
+        ok, said = await kms_ops.check(build_kms(settings))
+        print(said)  # noqa: T201
+        return 0 if ok else 1
+    services = build_services(settings, application_name="afterme-admin-kms")
+    try:
+        if settings.is_production_like:
+            role = await services.db.current_role()
+            if role != "afterme_api":
+                print(f"refused: the kms commands must connect as afterme_api, not {role}")  # noqa: T201
+                return 2
+        if args.kms_command == "rewrap":
+            report = await kms_ops.rewrap(
+                services, operator=operator, dry_run=args.dry_run, limit=args.limit
+            )
+            print(json.dumps(report.as_dict(), indent=2))  # noqa: T201
+            return 0 if report.complete or report.stopped_by_limit else 1
+        try:
+            rotation = await kms_ops.rotate_user(
+                services, operator=operator, user_id=args.user_id, reason=args.reason
+            )
+        except users.UserCommandError as exc:
+            print(f"refused: {exc}")  # noqa: T201
+            return 2
+        print(  # noqa: T201
+            f"rotated: key version {rotation.from_version} -> {rotation.to_version}; "
+            f"instructions re-encrypted: {rotation.instructions}"
+        )
+        return 0
+    finally:
+        await services.db.dispose()
+
+
+async def run(argv: list[str]) -> int:  # noqa: PLR0911 - one return per command
+    args = _parse(argv)
     if args.command in ("email-test", "push-test"):
         configure_logging(load_settings())
         return await _provider_test(args)
+    if args.command == "kms":
+        return await _kms_command(args, args.operator or getpass.getuser())
     settings = load_settings()
     configure_logging(settings)
     services = build_worker_services(settings)
@@ -129,12 +309,24 @@ async def run(argv: list[str]) -> int:
             )
             print("voided" if ok else "no open incident with that id")  # noqa: T201
             return 0 if ok else 2
+        if args.command == "beta-report":
+            try:
+                report = await beta.beta_report(services, since=args.since, until=args.until)
+            except beta.SchemaMismatch as exc:
+                # not a report: a database that is empty or behind would read as a quiet beta
+                print(f"refused: {exc}", file=sys.stderr)  # noqa: T201
+                return 2
+            document = report.as_dict()
+            print(json.dumps(document, indent=2) if args.json else beta.format_text(document))  # noqa: T201
+            return 0
         if args.command == "action" and args.action_command == "retry":
             outcome = await admin.retry_action(
                 services, operator=operator, action_id=args.action_id
             )
             print(outcome)  # noqa: T201
             return 0 if outcome == "retried" else 2
+        if args.command == "user":
+            return await _user_command(args, services, operator)
         return 2
     finally:
         await services.db.dispose()

@@ -4,12 +4,14 @@ import 'package:material_ui/material_ui.dart';
 import '../core/api/upgrade_gate.dart';
 import '../core/auth/auth_controller.dart';
 import '../core/security/app_lock/app_lock_gate.dart';
+import '../core/security/secure_screen.dart';
 import '../core/upgrade/upgrade_recheck.dart';
 import '../core/upgrade/upgrade_required_gate.dart';
 import '../features/home/application/home_controller.dart';
 import '../features/notifications/presentation/push_host.dart';
 import '../l10n/gen/app_localizations.dart';
 import 'router.dart';
+import 'screenshot_mode_banner.dart';
 import 'theme/app_theme.dart';
 
 /// The font family of both themes. Null in the app (the platform font); tests override
@@ -53,6 +55,7 @@ class AfterMeApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final router = ref.watch(routerProvider);
     final fontFamily = ref.watch(fontFamilyProvider);
+    final screenshotMode = ref.watch(screenshotModeProvider);
     return MaterialApp.router(
       onGenerateTitle: (context) => AppLocalizations.of(context).appName,
       theme: AppTheme.light(fontFamily: fontFamily),
@@ -62,14 +65,18 @@ class AfterMeApp extends ConsumerWidget {
       // The lock covers the navigator, so it also covers sheets and dialogs; the update
       // screen sits just under it and keeps everything below it alive. Push (Phase 8)
       // paints nothing: it starts the token's life and hears the app return.
-      builder: (context, child) => PushHost(
-        child: AppLockGate(
-          child: UpgradeRequiredGate(
-            onRecheck: () => _recheck(ref),
-            child: child ?? const SizedBox.shrink(),
+      builder: (context, child) {
+        final app = PushHost(
+          child: AppLockGate(
+            child: UpgradeRequiredGate(
+              onRecheck: () => _recheck(ref),
+              child: child ?? const SizedBox.shrink(),
+            ),
           ),
-        ),
-      ),
+        );
+        // A screenshot build says so on every screen, lock screen included.
+        return screenshotMode ? ScreenshotModeBanner(child: app) : app;
+      },
       // material_ui ships its own Material/Cupertino localizations (Flutter 3.47
       // moved Material out of the SDK); combine them with ours.
       localizationsDelegates: const [

@@ -94,6 +94,13 @@ class PendingCheckIn {
 /// tap is part of the person's daily pattern (SECURITY.md §2). The record holds only an
 /// opaque account id, a random key and a time: no names, addresses or schedule.
 ///
+/// **One record per account.** The newest account's record is under [storageKey]; when
+/// another account taps on the same phone, the record already there is moved aside under
+/// `checkin.pending.<account id>` instead of being replaced, so a tap one person made and
+/// the server never confirmed is still sent when that person is signed in again. A record
+/// is only ever read for its own account (the server binds a check-in to the session's
+/// account in any case).
+///
 /// Storage failures never stop a check-in: a record that cannot be written still works
 /// for as long as the process lives.
 class PendingCheckInStore {
@@ -101,6 +108,9 @@ class PendingCheckInStore {
 
   /// The secure-storage key of the record.
   static const storageKey = 'checkin.pending';
+
+  /// The key a record that was moved aside is kept under.
+  static String _parkedKey(String userId) => '$storageKey.$userId';
 
   final SecureStore _secure;
 
@@ -124,7 +134,14 @@ class PendingCheckInStore {
     }
     try {
       final record = PendingCheckIn.tryDecode(await _secure.read(storageKey));
-      return record != null && record.userId == userId ? record : null;
+      if (record != null && record.userId == userId) {
+        return record;
+      }
+      // Moved aside by another account's tap on this phone.
+      final parked = PendingCheckIn.tryDecode(
+        await _secure.read(_parkedKey(userId)),
+      );
+      return parked != null && parked.userId == userId ? parked : null;
     } on Object {
       return null;
     }
@@ -138,13 +155,27 @@ class PendingCheckInStore {
       return;
     }
     try {
+      final existing = PendingCheckIn.tryDecode(await _secure.read(storageKey));
+      if (existing != null && existing.userId != record.userId) {
+        // Another account's unsent tap is not ours to replace. One that is already too
+        // old to be sent (it would be dropped when read) is not worth keeping.
+        if (!existing.isStaleAt(record.reportedAt)) {
+          await _secure.write(_parkedKey(existing.userId), existing.encode());
+        }
+      }
       await _secure.write(storageKey, record.encode());
+      // This account's earlier record, if one was moved aside, is replaced by this one.
+      await _secure.delete(_parkedKey(record.userId));
     } on Object {
       // Still retried for as long as the app runs.
     }
   }
 
-  /// Removes the record, whoever it belongs to (the account it belonged to is closed).
+  /// Removes the record in the **main slot**, whoever it belongs to. It never touches a
+  /// record that another account's tap moved aside (`checkin.pending.<id>`): those are
+  /// those accounts' own, and a call that cannot name an account has no business
+  /// deleting them one by one. Closing an account whose id cannot be read uses
+  /// [clearAll]; everything else uses [clearFor].
   Future<void> clear() async {
     try {
       await _secure.delete(storageKey);
@@ -154,10 +185,42 @@ class PendingCheckInStore {
     }
   }
 
+  /// Removes **every** record this phone keeps: the main slot and each one that was
+  /// moved aside. Only for the closure of an account whose id is unknown (so its parked
+  /// copy cannot be named): the closed account's trace of its daily pattern outweighs
+  /// another account's unsent tap, which is worth nothing after
+  /// [pendingCheckInMaxAge] in any case. Each deletion is independent: one that fails
+  /// never stops the others.
+  Future<void> clearAll() async {
+    await clear();
+    Set<String> keys;
+    try {
+      keys = await _secure.keys();
+    } on Object {
+      return;
+    }
+    for (final key in keys) {
+      if (key.startsWith('$storageKey.')) {
+        try {
+          await _secure.delete(key);
+        } on Object {
+          // As in [clear].
+        }
+      }
+    }
+  }
+
   /// Removes the record when it is [userId]'s (or is damaged and so nobody's). A record
   /// of another account stays: this tap was confirmed, or dropped, and that one is not
   /// ours to forget.
   Future<void> clearFor(String userId) async {
+    if (userId.isNotEmpty) {
+      try {
+        await _secure.delete(_parkedKey(userId));
+      } on Object {
+        // As in [clear].
+      }
+    }
     try {
       final raw = await _secure.read(storageKey);
       if (raw == null) {

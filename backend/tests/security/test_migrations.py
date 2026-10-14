@@ -118,6 +118,9 @@ def test_single_linear_history() -> None:
     assert len(heads) == 1
     revisions = list(script.walk_revisions())
     assert [r.revision for r in revisions] == [
+        "0012",
+        "0011",
+        "0010",
         "0009",
         "0008",
         "0007",
@@ -374,3 +377,31 @@ def test_phase3_downgrade_keeps_phase1_and_removes_only_phase3(
         ).scalar_one()
     command.upgrade(cfg, "head")
     assert _tables(engine) == {*ALL_TABLES, "alembic_version"}
+
+
+def test_0011_refuses_an_invalid_index_left_by_a_failed_concurrent_build(scratch_url: str) -> None:
+    """M-1: the runbook builds 0011's indexes with CREATE INDEX CONCURRENTLY on a live
+    database first. A failed or cancelled concurrent build leaves an INVALID index under the
+    name; ``CREATE INDEX IF NOT EXISTS`` would then accept it silently (and the planner ignores
+    it). The migration must stop and say which index to drop."""
+    cfg = alembic_config(scratch_url)
+    command.upgrade(cfg, "0010")
+    with connect(database=SCRATCH_DB) as conn:
+        conn.execute("CREATE TABLE m1_scratch (x integer)")
+        conn.execute("INSERT INTO m1_scratch VALUES (0)")
+        with pytest.raises(Exception, match="division by zero"):
+            conn.execute("CREATE INDEX CONCURRENTLY ix_audit_occurred ON m1_scratch ((1 / x))")
+        row = conn.execute(
+            "SELECT i.indisvalid FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid "
+            "WHERE c.relname = 'ix_audit_occurred'"
+        ).fetchone()
+        assert row is not None
+        assert row["indisvalid"] is False
+    with pytest.raises(Exception, match="ix_audit_occurred"):
+        command.upgrade(cfg, "0011")
+    with connect(database=SCRATCH_DB) as conn:
+        (version,) = conn.execute("SELECT version_num FROM alembic_version").fetchone().values()
+        assert version == "0010"  # nothing was recorded as done
+        conn.execute("DROP INDEX ix_audit_occurred")
+        conn.execute("DROP TABLE m1_scratch")
+    command.upgrade(cfg, "head")

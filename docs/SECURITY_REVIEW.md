@@ -110,7 +110,7 @@ See §6.2.
 
 ## 6. Mobile review
 
-**No S1 or S2.** Tokens, the pending check-in record and the push token live in Keystore-backed storage; there are no logs, clipboard use or files; drafts are memory-only; the merged manifest matches the permission allowlist; backup is fully excluded; refresh and reauth are sound; the shipped `libapp.so` is obfuscated and stripped.
+**No S1 or S2.** Tokens, the pending check-in record and the push token live in Keystore-backed storage; there are no logs or files, and the clipboard is written only by one explicit user action (Settings → About → Copy diagnostic text: version, build, environment and server host, added in Phase 10); drafts are memory-only; the merged manifest matches the permission allowlist; backup is fully excluded; refresh and reauth are sound; the shipped `libapp.so` is obfuscated and stripped.
 
 ### 6.1 MASVS L1
 

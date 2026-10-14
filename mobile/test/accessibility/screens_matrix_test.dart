@@ -40,6 +40,7 @@ import '../helpers/in_memory_contacts_repository.dart';
 import '../helpers/incident_fixtures.dart';
 import '../helpers/pump_app.dart';
 import '../helpers/real_fonts.dart';
+import '../helpers/semantics_audit.dart';
 import '../helpers/test_app.dart';
 
 /// Every screen added in Phases 2 to 4, reached the way a person reaches it.
@@ -1434,6 +1435,18 @@ final _screens = <_Screen>[
     prepare: (tester, _) => _tapCheckIn(tester),
   ),
   _Screen(
+    'home (check-in refused)',
+    signedIn: true,
+    route: AppRoutes.home,
+    configure: (fakes) {
+      _activeHome(fakes);
+      fakes.server.failures['checkIn'] = [
+        const ValidationFailure(code: 'validation_failed'),
+      ];
+    },
+    prepare: (tester, _) => _tapCheckIn(tester),
+  ),
+  _Screen(
     'home (earlier check-in expired)',
     signedIn: true,
     route: AppRoutes.home,
@@ -1593,6 +1606,69 @@ final _screens = <_Screen>[
     configure: (fakes) =>
         _incidentHome(fakes, escalatedJson(), now: _afterStageOne),
     prepare: (tester, _) async => expect(find.text("I'M SAFE"), findsOneWidget),
+  ),
+  // A service interruption (a Hold): the banner on top, and no time at which contacts
+  // would be told, in the states a person is most likely to be in.
+  _Screen(
+    'home (service interruption, checked in)',
+    signedIn: true,
+    route: AppRoutes.home,
+    configure: (fakes) {
+      _activeHome(fakes);
+      fakes.server.serviceInterruption = true;
+    },
+    prepare: (tester, _) async {
+      await _tapCheckIn(tester);
+      expect(find.text("We're having a service interruption"), findsOneWidget);
+      expect(find.text("You're checked in"), findsOneWidget);
+    },
+  ),
+  _Screen(
+    'home (service interruption, grace: no time, I\'M OK)',
+    signedIn: true,
+    route: AppRoutes.home,
+    configure: (fakes) {
+      _incidentHome(fakes, incidentJson());
+      fakes.server.serviceInterruption = true;
+    },
+    prepare: (tester, _) async {
+      expect(find.text("We're having a service interruption"), findsOneWidget);
+      expect(
+        find.text(
+          'Mom will be notified unless you check in. '
+          'Paused during the interruption.',
+        ),
+        findsOneWidget,
+      );
+      expect(find.textContaining('11:00 PM'), findsNothing);
+    },
+  ),
+  _Screen(
+    'home (service interruption, escalated: no time, I\'M SAFE)',
+    signedIn: true,
+    route: AppRoutes.home,
+    configure: (fakes) {
+      _incidentHome(fakes, escalatedJson(), now: _afterStageOne);
+      fakes.server.serviceInterruption = true;
+    },
+    prepare: (tester, _) async {
+      expect(find.text("We're having a service interruption"), findsOneWidget);
+      expect(find.text("I'M SAFE"), findsOneWidget);
+      expect(find.text('Tomorrow · 8:00 PM'), findsNothing);
+    },
+  ),
+  _Screen(
+    'timeline (service interruption, escalated)',
+    signedIn: true,
+    route: AppRoutes.homeIncident,
+    configure: (fakes) {
+      _incidentHome(fakes, escalatedJson(), now: _afterStageOne);
+      fakes.server.serviceInterruption = true;
+    },
+    prepare: (tester, _) async {
+      expect(find.text("We're having a service interruption"), findsOneWidget);
+      expect(find.text("I'M SAFE"), findsOneWidget);
+    },
   ),
   _Screen(
     'home (notified: every stage ran, a view, a long name and title)',
@@ -2867,6 +2943,135 @@ void main() {
           _expectNoMidWordBreaks(tester, '${screen.name} on $sizeName');
         });
       }
+    }
+  });
+
+  // "Display size" at its largest together with the largest font (TEST_PLAN §8): the
+  // phone's density goes up, so the screen is 360 x 640 logical pixels at a device pixel
+  // ratio of 2.75, and text is at 2.0 times. Home, the incident screens and I'M SAFE are
+  // what must still work: nothing overflows, no word breaks, and every button can be
+  // scrolled to and tapped (I'M OK and I'M SAFE above all).
+  group('display size 360x640 at pixel ratio 2.75, 2.0 text scale', () {
+    final screens = [
+      for (final screen in _screens)
+        if (screen.name.startsWith('home') ||
+            screen.name.startsWith('timeline') ||
+            screen.name.startsWith("I'M SAFE"))
+          screen,
+    ];
+    test('covers Home, the incident screens and I\'M SAFE', () {
+      expect(screens.length, greaterThan(35));
+    });
+    for (final screen in screens) {
+      testWidgets(screen.name, (tester) async {
+        tester.view.devicePixelRatio = 2.75;
+        addTearDown(tester.view.resetDevicePixelRatio);
+        await _open(tester, screen, size: const Size(360, 640), textScale: 2);
+        expect(tester.takeException(), isNull);
+        _expectNoMidWordBreaks(tester, '${screen.name} at 360x640');
+        await expectEveryButtonReachable(tester, screen.name);
+      });
+    }
+  });
+
+  // What TalkBack is given, on every screen of the matrix (TEST_PLAN §8): each control
+  // has a name, no two controls next to each other are named alike, the screen has a
+  // heading, and no icon glyph is read out as text. `test/helpers/semantics_audit.dart`
+  // is shown able to fail by `semantics_audit_self_test.dart`.
+  group('semantics audit: names, neighbours, headings, no leaked glyphs', () {
+    for (final screen in _screens) {
+      testWidgets(screen.name, (tester) async {
+        final handle = tester.ensureSemantics();
+        await _open(tester, screen, size: const Size(360, 780), textScale: 1);
+        expect(tester.takeException(), isNull);
+        final findings = auditSemantics(tester);
+        handle.dispose();
+        expect(
+          findings,
+          isEmpty,
+          reason: '${screen.name}:\n${findings.join('\n')}',
+        );
+      });
+    }
+  });
+
+  // A change of status is **announced**: the words are on a live region's own label (a
+  // live region that only wraps its content has no label to announce), so a screen
+  // reader says them when they change, without the person having to look.
+  group('status changes are announced by a live region', () {
+    // screen name -> what its live regions say, in part.
+    const announced = <String, List<String>>{
+      'home (checked in)': [
+        "You're checked in",
+        'Checked in. Next check-in tomorrow at 8:00 PM.',
+      ],
+      'home (not received yet)': [
+        "Not received yet — we'll keep trying",
+        'Not received yet',
+      ],
+      'home (rate limited)': ["We'll send your check-in again in 20 minutes"],
+      'home (check-in refused)': ["That check-in didn't go through"],
+      'home (earlier check-in expired)': [
+        "Your earlier check-in wasn't received",
+      ],
+      'home (offline, last known status)': ['Offline'],
+      'home (grace: who is told when, I\'M OK, what happens next)': [
+        'You missed your 8:00 PM check-in',
+        'Mom will be notified at 11:00 PM unless you check in.',
+      ],
+      'home (notified: who was told, what is next, I\'M SAFE)': [
+        'Your contacts have been notified',
+        'Mom was notified at 11:00 PM.',
+      ],
+      'home (service interruption, checked in)': [
+        "We're having a service interruption",
+        'Nothing is sent to your contacts',
+        "You're checked in",
+      ],
+      'home (service interruption, grace: no time, I\'M OK)': [
+        "We're having a service interruption",
+        'Mom will be notified unless you check in. '
+            'Paused during the interruption.',
+      ],
+      'home (service interruption, escalated: no time, I\'M SAFE)': [
+        "We're having a service interruption",
+        'Your contacts have been notified',
+      ],
+      'home (confirm you\'re safe)': ["Please confirm you're safe"],
+      'I\'M SAFE: marked safe': ["You're marked safe"],
+      'I\'M SAFE: not confirmed': ["We couldn't confirm that"],
+      'I\'M SAFE: already closed': ['This was already closed'],
+      'onboarding: done (contact and plan missing)': [
+        "Check-ins aren't on yet",
+      ],
+      'settings > export my data (saved)': ['Saved'],
+      'settings > export my data (not confirmed)': [
+        "We couldn't get your file",
+      ],
+    };
+    for (final entry in announced.entries) {
+      testWidgets(entry.key, (tester) async {
+        final screen = _screens.firstWhere((s) => s.name == entry.key);
+        final handle = tester.ensureSemantics();
+        await _open(tester, screen, size: const Size(360, 780), textScale: 1);
+        final live = liveRegionLabels(tester);
+        handle.dispose();
+        final spoken = live.join('\n');
+        for (final words in entry.value) {
+          expect(
+            spoken,
+            contains(words),
+            reason:
+                '${entry.key}: a live region should say "$words"; the '
+                'live regions say: $live',
+          );
+        }
+        expect(
+          live.where((label) => label.isEmpty),
+          isEmpty,
+          reason: '${entry.key}: a live region with no words announces nothing',
+        );
+      });
     }
   });
 

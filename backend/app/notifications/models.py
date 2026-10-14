@@ -60,6 +60,23 @@ class Notification(Base):
         Index("ix_notifications_due", "send_after", postgresql_where=text("status = 'queued'")),
         Index("ix_notifications_incident", "incident_id"),
         Index("ix_notifications_user_time", "user_id", text("created_at DESC")),
+        # Performance (migration 0011; backend/tests/perf/PLANS.md). The dispatcher puts back
+        # what a dead worker left in ``sending`` on every pass; the retention purge reads the
+        # oldest finished rows; ON DELETE SET NULL of an action or a device must find its rows.
+        Index(
+            "ix_notifications_sending", "updated_at", postgresql_where=text("status = 'sending'")
+        ),
+        Index(
+            "ix_notifications_finished",
+            "created_at",
+            postgresql_where=text("status IN ('sent', 'failed', 'cancelled')"),
+        ),
+        Index(
+            "ix_notifications_action", "action_id", postgresql_where=text("action_id IS NOT NULL")
+        ),
+        Index(
+            "ix_notifications_device", "device_id", postgresql_where=text("device_id IS NOT NULL")
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(

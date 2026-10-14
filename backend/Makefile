@@ -4,7 +4,7 @@ SHELL := /bin/bash
 
 UV ?= uv
 
-.PHONY: help setup db migrate migrate-check run test lint fmt fmt-check typecheck audit check latest-mail contracts worker engine-gate admin maintenance
+.PHONY: help setup db migrate migrate-check run test lint fmt fmt-check typecheck audit check latest-mail contracts worker engine-gate admin maintenance beta-report gameday perf
 
 help: ## List the targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-10s %s\n", $$1, $$2}'
@@ -62,6 +62,15 @@ maintenance: ## Finish account deletions once (scrub contacts, purge accounts pa
 
 admin: ## Operator commands, e.g. `make admin ARGS="status"` or `ARGS="hold enter --reason x"`
 	$(UV) run python -m cli.admin $(ARGS)
+
+beta-report: ## Closed-beta review: every escalated incident + metrics: make beta-report ARGS="--since 2026-10-01 --json"
+	$(UV) run python -m cli.admin beta-report $(ARGS)
+
+gameday: ## Rehearse OPS-01..03 on a throwaway database with the real API and worker (~5 min); ARGS="--only ops-02"
+	$(UV) run python scripts/gameday.py $(ARGS)
+
+perf: ## TEST_PLAN §9 on a throwaway database (100k users, ~25 min); ARGS="--users 10000" for ~8 min, --only plans
+	$(UV) run python scripts/perf.py --json perf-report.json $(ARGS)
 
 engine-gate: ## Phase 5 exit gate: the T0-T8 lifecycle 100 times in a row, then every engine suite
 	LIFECYCLE_REPEATS=100 $(UV) run pytest tests/engine tests/unit/test_engine_pure.py -q

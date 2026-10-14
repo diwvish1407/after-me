@@ -1,6 +1,7 @@
 import 'package:afterme/core/device/device_info_source.dart';
 import 'package:afterme/core/links/url_opener.dart';
 import 'package:afterme/core/permissions/notification_permission.dart';
+import 'package:afterme/core/platform/clipboard_gateway.dart';
 import 'package:afterme/core/platform/contact_picker.dart';
 import 'package:afterme/core/security/app_lock/local_auth_gateway.dart';
 import 'package:afterme/core/security/screen_privacy.dart';
@@ -139,4 +140,21 @@ class FakeDeviceInfoSource implements DeviceInfoSource {
 
   @override
   Future<List<String>> availableTimezones() async => zones;
+}
+
+/// Records what was copied to the clipboard (the About screen's button is the only use).
+class FakeClipboardGateway implements ClipboardGateway {
+  final List<String> copied = [];
+
+  /// Make the next copies fail, as a system that refuses would.
+  bool refuse = false;
+
+  @override
+  Future<bool> copy(String text) async {
+    if (refuse) {
+      return false;
+    }
+    copied.add(text);
+    return true;
+  }
 }

@@ -9,8 +9,10 @@ from __future__ import annotations
 
 import base64
 import binascii
+import json
 import os
 import re
+from datetime import date
 from enum import StrEnum
 from functools import cached_property
 from pathlib import Path
@@ -34,6 +36,12 @@ MIN_PEPPER_BYTES = 32
 _MIN_RELEASE_OFFSET_FLOOR = 1_440
 _SETTLE_DELAY_FLOOR_SECONDS = 300
 _LATE_SHIFT_FLOOR_MINUTES = 30
+# The shortest grace period that may be configured (FR-ESC-01: 1-72 h). The database enforces the
+# same floor (CHECK ck_escalation_plans_grace_minutes), so a lower setting would let the plan
+# editor accept a value that the insert then refuses with a 500.
+_GRACE_MIN_FLOOR_MINUTES = 60
+_GRACE_MAX_CEILING_MINUTES = 4_320
+_STAGE_OFFSET_CEILING_MINUTES = 43_200
 _MIN_API_KEY = 8
 # A webhook secret sits on a public URL that anyone can send requests to: 32 characters is
 # 192 bits of base64, and no more than a password manager generates anyway (Phase 9, F12).
@@ -44,6 +52,13 @@ _TLS_SSLMODES = frozenset({"require", "verify-ca", "verify-full"})
 # set so the production validators can be exercised end to end in tests (Phase 8 adds the real
 # provider and this set then stops being the only gate).
 DEV_ONLY_EMAIL_PROVIDERS: frozenset[str] = frozenset({"console", "recording"})
+
+# A Cloud KMS CryptoKey (never a version: the version is chosen by Cloud KMS: SECURITY §6.2).
+KMS_KEY_NAME_RE = re.compile(
+    r"^projects/[A-Za-z0-9][A-Za-z0-9:._-]{2,98}/locations/[a-z0-9-]{1,63}"
+    r"/keyRings/[A-Za-z0-9_-]{1,63}/cryptoKeys/[A-Za-z0-9_-]{1,63}$"
+)
+_EMAIL_RE = re.compile(r"^[^@\s<>\"'`,;()\[\]\\]{1,64}@[A-Za-z0-9.-]{1,200}\.[A-Za-z0-9-]{2,63}$")
 
 _SEMVER = re.compile(r"^(0|[1-9]\d{0,5})\.(0|[1-9]\d{0,5})\.(0|[1-9]\d{0,5})$")
 _KID = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
@@ -111,6 +126,12 @@ class Settings(BaseSettings):
     kms_provider: Literal["local", "gcp_kms"] = "local"
     kms_local_key: SecretStr = SecretStr(_DEV_KMS_LOCAL_KEY)
     kms_local_key_previous: SecretStr | None = None
+    # ``gcp_kms``: the full resource name of the Cloud KMS CryptoKey (not a version), e.g.
+    # ``projects/p/locations/asia-south1/keyRings/afterme/cryptoKeys/instruction-kek``. Not a
+    # secret. The identity that calls Cloud KMS is the metadata server's (Workload Identity);
+    # ``KMS_CREDENTIALS_JSON`` (a service-account key) is for development and CI only.
+    kms_key_name: str | None = None
+    kms_credentials_json: SecretStr | None = None
 
     # ------------------------------------------------------------------ notifications
     # DEPLOYMENT §4. ``console`` and ``recording`` are for development and tests; the others
@@ -143,6 +164,20 @@ class Settings(BaseSettings):
     fcm_project_id: Annotated[str, Field(min_length=1, max_length=64)] | None = None
     fcm_credentials_json: SecretStr | None = None
 
+    # ------------------------------------------------------------------ public pages
+    # Support and abuse addresses (shown on /support and in every contact-facing email) and the
+    # facts the legal pages need. ``LEGAL_DOCUMENTS_FINAL`` removes the "draft" banner from
+    # /legal/*: set it only after counsel has reviewed the texts in app/web/templates.
+    support_email: str = "support@afterme.invalid"
+    abuse_email: str = "abuse@afterme.invalid"
+    legal_documents_final: bool = False
+    legal_operator_name: Annotated[str, Field(max_length=200)] | None = None
+    legal_contact_email: str | None = None
+    legal_postal_address: Annotated[str, Field(max_length=500)] | None = None
+    legal_version: Annotated[str, Field(min_length=1, max_length=40)] = "draft-1"
+    legal_effective_date: date | None = None
+    legal_governing_law: Annotated[str, Field(max_length=500)] | None = None
+
     trusted_proxy_hops: Annotated[int, Field(ge=0, le=10)] = 0
     min_client_version: str = "0.0.0"
 
@@ -167,6 +202,9 @@ class Settings(BaseSettings):
     maintenance_database_url: SecretStr = SecretStr(_DEV_MIGRATION_URL)
     # How long a deleted account's remaining rows are kept before the hard delete.
     account_deletion_days: Annotated[int, Field(ge=1, le=90)] = 30
+    # How long an audit record is kept (PRD D10: a year, which counsel must confirm). At least
+    # 90 days: the beta review and an investigation after a stolen session read it.
+    audit_retention_days: Annotated[int, Field(ge=90, le=3650)] = 365
     tick_seconds: Annotated[int, Field(ge=1, le=300)] = 15
     grace_min_minutes: Annotated[int, Field(ge=1, le=10_080)] = 60
     grace_max_minutes: Annotated[int, Field(ge=1, le=10_080)] = 4_320
@@ -228,6 +266,8 @@ class Settings(BaseSettings):
             *self._check_hardening(),
             *self._check_environment_safety(),
             *self._check_providers(),
+            *self._check_kms(),
+            *self._check_public_pages(),
             *self._check_test_support(),
         ]
         if problems:
@@ -322,6 +362,14 @@ class Settings(BaseSettings):
             problems.append("GRACE_MIN_MINUTES must not exceed GRACE_MAX_MINUTES")
         if self.stage_max_offset_minutes < self.grace_max_minutes:
             problems.append("STAGE_MAX_OFFSET_MINUTES must not be below GRACE_MAX_MINUTES")
+        # The plan tables refuse values outside these bounds (CHECK grace_minutes, offset_minutes):
+        # a setting that promises more would turn a plan edit into a 500.
+        if self.grace_max_minutes > _GRACE_MAX_CEILING_MINUTES:
+            problems.append(f"GRACE_MAX_MINUTES must not exceed {_GRACE_MAX_CEILING_MINUTES}")
+        if self.stage_max_offset_minutes > _STAGE_OFFSET_CEILING_MINUTES:
+            problems.append(
+                f"STAGE_MAX_OFFSET_MINUTES must not exceed {_STAGE_OFFSET_CEILING_MINUTES}"
+            )
         if self.ingestion_stale_seconds <= self.ingestion_probe_interval_seconds:
             problems.append("INGESTION_STALE_SECONDS must exceed INGESTION_PROBE_INTERVAL_SECONDS")
         if self.is_production_like:
@@ -335,6 +383,11 @@ class Settings(BaseSettings):
                 problems.append(
                     f"SETTLE_DELAY_SECONDS must be at least {_SETTLE_DELAY_FLOOR_SECONDS}"
                 )
+        if self.grace_min_minutes < _GRACE_MIN_FLOOR_MINUTES:
+            problems.append(
+                f"GRACE_MIN_MINUTES must be at least {_GRACE_MIN_FLOOR_MINUTES}: a shorter grace "
+                "period makes a wrongful alert more likely, and the database refuses it"
+            )
         return problems
 
     def _check_providers(self) -> list[str]:
@@ -429,6 +482,57 @@ class Settings(BaseSettings):
                 )
         return problems
 
+    def _check_kms(self) -> list[str]:
+        problems: list[str] = []
+        if self.kms_provider == "gcp_kms":
+            if not self.kms_key_name:
+                problems.append("KMS_KEY_NAME is required for KMS_PROVIDER=gcp_kms")
+            elif not KMS_KEY_NAME_RE.fullmatch(self.kms_key_name):
+                problems.append(
+                    "KMS_KEY_NAME must be the CryptoKey's full resource name "
+                    "(projects/<p>/locations/<l>/keyRings/<r>/cryptoKeys/<k>), not a key version"
+                )
+            if self.kms_credentials_json is not None and not _is_service_account_json(
+                self.kms_credentials_json.get_secret_value()
+            ):
+                problems.append(
+                    "KMS_CREDENTIALS_JSON must be a service-account key (client_email, private_key)"
+                )
+        elif self.kms_key_name is not None or self.kms_credentials_json is not None:
+            problems.append(
+                "KMS_KEY_NAME and KMS_CREDENTIALS_JSON are only for KMS_PROVIDER=gcp_kms"
+            )
+        if self.is_production_like and (
+            self.kms_local_key_previous is not None
+            or self.kms_local_key.get_secret_value() != _DEV_KMS_LOCAL_KEY
+        ):
+            # A real key-encryption key must not sit in the environment next to a cloud KMS:
+            # it is a second way in, and an invitation to switch the provider back one day.
+            problems.append("KMS_LOCAL_KEY and KMS_LOCAL_KEY_PREVIOUS must not be set here")
+        return problems
+
+    def _check_public_pages(self) -> list[str]:
+        problems: list[str] = []
+        for name in ("support_email", "abuse_email", "legal_contact_email"):
+            value: str | None = getattr(self, name)
+            if value is not None and not _EMAIL_RE.fullmatch(value):
+                problems.append(f"{name.upper()} must be a plain email address")
+        if self.is_production_like:
+            for name in ("support_email", "abuse_email"):
+                if getattr(self, name).endswith(".invalid"):
+                    problems.append(f"{name.upper()} must be a real address (it is in our emails)")
+        if self.legal_documents_final and self.is_production_like:
+            for name in (
+                "legal_operator_name",
+                "legal_contact_email",
+                "legal_postal_address",
+                "legal_effective_date",
+            ):
+                value = getattr(self, name)
+                if value is None or (isinstance(value, str) and not value.strip()):
+                    problems.append(f"{name.upper()} is required when LEGAL_DOCUMENTS_FINAL=true")
+        return problems
+
     def _check_test_support(self) -> list[str]:
         if not self.test_support_enabled:
             return []
@@ -511,6 +615,20 @@ def _is_svix_secret(value: str) -> bool:
         return len(base64.b64decode(value.removeprefix("whsec_"), validate=True)) >= 16  # noqa: PLR2004
     except ValueError:
         return False
+
+
+def _is_service_account_json(raw: str) -> bool:
+    try:
+        info = json.loads(raw)
+    except ValueError:
+        return False
+    return (
+        isinstance(info, dict)
+        and isinstance(info.get("client_email"), str)
+        and isinstance(info.get("private_key"), str)
+        and bool(info["client_email"])
+        and bool(info["private_key"])
+    )
 
 
 def decode_kek(value: str) -> bytes | None:

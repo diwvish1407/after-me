@@ -3,6 +3,16 @@
 ``seal`` and ``open`` run inside the caller's transaction and session. A DEK is created on a
 user's first instruction (wrapped by the KMS, stored in ``user_keys``) and unwrapped DEKs are
 cached in process memory for at most ``ttl`` seconds: never logged, never persisted.
+
+A DEK can be rotated by an operator while an API process holds the old one in its cache
+(``app/ops/kms.py``; ``rotate-user`` commits under the user's lock, from another process). The
+cache therefore never decides on its own whether a key is current:
+
+* ``seal`` (which runs under the user's lock, so a rotation cannot commit between the check and
+  the caller's commit) confirms ``dek_version`` in the database before it uses a cached key. A
+  stale key is dropped and the new one unwrapped: nothing is ever sealed under a retired key.
+* ``open`` that finds the ciphertext one version ahead of its cached key looks again once, from
+  the database, before it gives up. Otherwise a mismatch fails closed (``DecryptionError``).
 """
 
 from __future__ import annotations
@@ -21,7 +31,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.security import envelope
 from app.security.envelope import DecryptionError
-from app.security.kms import KmsError, KmsProvider
+from app.security.kms import KmsError, KmsProvider, log_failure
 from app.security.models import UserKey
 
 CACHE_TTL_SECONDS: Final = 300
@@ -67,16 +77,33 @@ class InstructionVault:
 
     # ------------------------------------------------------------------ keys
 
+    @property
+    def kms(self) -> KmsProvider:
+        """For the operator's key commands (``app/ops/kms.py``)."""
+        return self._kms
+
     def forget(self, user_id: uuid.UUID) -> None:
         self._cache.pop(user_id, None)
+
+    async def warm(self, session: AsyncSession, *, user_id: uuid.UUID) -> None:
+        """Unwrap (or create) the user's key now, so that a caller about to take the user's lock
+        does not hold it across the KMS call. Raises :class:`VaultUnavailableError`."""
+        await self._key(session, user_id, create=True)
 
     async def _key(
         self, session: AsyncSession, user_id: uuid.UUID, *, create: bool
     ) -> tuple[bytes, int]:
+        dek, version, _ = await self._lookup(session, user_id, create=create)
+        return dek, version
+
+    async def _lookup(
+        self, session: AsyncSession, user_id: uuid.UUID, *, create: bool
+    ) -> tuple[bytes, int, bool]:
+        """``(dek, dek_version, came_from_cache)``."""
         now = self._monotonic()
         cached = self._cache.get(user_id)
         if cached is not None and cached.expires > now:
-            return cached.dek, cached.version
+            return cached.dek, cached.version, True
         row = await self._row(session, user_id)
         if row is None:
             if not create:
@@ -84,16 +111,23 @@ class InstructionVault:
             row = await self._create(session, user_id)
         try:
             dek = await self._kms.unwrap(row.wrapped_dek, user_id=user_id, key_id=row.kek_id)
-        except KmsError:
+        except KmsError as exc:
+            log_failure(exc, "decrypt")  # once: the Cloud KMS adapter may have logged it already
             raise VaultUnavailableError from None
         if len(self._cache) >= self._max:
             self._cache.clear()  # simple and safe: a cache miss only costs one unwrap
         self._cache[user_id] = _Cached(dek, row.dek_version, now + self._ttl)
-        return dek, row.dek_version
+        return dek, row.dek_version, False
 
     async def _create(self, session: AsyncSession, user_id: uuid.UUID) -> UserKey:
         dek = envelope.new_key()
-        wrapped, key_id = await self._kms.wrap(dek, user_id=user_id)
+        try:
+            wrapped, key_id = await self._kms.wrap(dek, user_id=user_id)
+        except KmsError as exc:
+            # A person's FIRST key (onboarding's first instruction): the same 503 + Retry-After
+            # as every other path that needs the KMS, not a 500.
+            log_failure(exc, "encrypt")
+            raise VaultUnavailableError from None
         statement = (
             insert(UserKey)
             .values(user_id=user_id, wrapped_dek=wrapped, kek_id=key_id)
@@ -117,8 +151,17 @@ class InstructionVault:
         )
 
     @staticmethod
+    async def _stored_version(session: AsyncSession, user_id: uuid.UUID) -> int | None:
+        stmt = select(UserKey.dek_version).where(UserKey.user_id == user_id)
+        return (await session.execute(stmt)).scalar_one_or_none()
+
+    @staticmethod
     async def _row(session: AsyncSession, user_id: uuid.UUID) -> UserKey | None:
-        stmt = select(UserKey).where(UserKey.user_id == user_id)
+        stmt = (
+            select(UserKey)
+            .where(UserKey.user_id == user_id)
+            .execution_options(populate_existing=True)
+        )
         return (await session.execute(stmt)).scalar_one_or_none()
 
     async def destroy(self, session: AsyncSession, *, user_id: uuid.UUID) -> bool:
@@ -143,7 +186,11 @@ class InstructionVault:
         body: str,
     ) -> tuple[bytes, int]:
         """Returns ``(ciphertext, key_version)``."""
-        dek, version = await self._key(session, user_id, create=True)
+        dek, version, cached = await self._lookup(session, user_id, create=True)
+        if cached and await self._stored_version(session, user_id) != version:
+            # Rotated (or removed) since this process unwrapped it: never seal under it.
+            self.forget(user_id)
+            dek, version = await self._key(session, user_id, create=True)
         plaintext = json.dumps(
             {"title": title, "body": body}, ensure_ascii=False, separators=(",", ":")
         ).encode()
@@ -161,7 +208,10 @@ class InstructionVault:
     ) -> tuple[str, str]:
         """Returns ``(title, body)``. Raises :class:`DecryptionError` for a ciphertext that was
         changed or does not belong to this user, row and key version."""
-        dek, version = await self._key(session, user_id, create=False)
+        dek, version, cached = await self._lookup(session, user_id, create=False)
+        if key_version != version and cached:
+            self.forget(user_id)  # possibly rotated by another process: look again, once
+            dek, version = await self._key(session, user_id, create=False)
         if key_version != version:
             raise DecryptionError
         aad = envelope.instruction_aad(user_id, instruction_id, key_version)

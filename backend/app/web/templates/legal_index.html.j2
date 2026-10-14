@@ -1,0 +1,12 @@
+{% extends "base.html.j2" %}
+{% block title %}Legal · AfterMe{% endblock %}
+{% block main_attrs %} class="wide legal"{% endblock %}
+{% block content %}
+<h1>Legal</h1>
+{% include "_legal_top.html.j2" %}
+<ul>
+<li><a href="/legal/privacy">Privacy policy</a>: what information AfterMe uses, who sees it and for how long.</li>
+<li><a href="/legal/terms">Terms of service</a>: the agreement between you and us.</li>
+<li><a href="/support">Support</a>: how to reach us, how to report an unwanted message, and what to do if you lose your phone.</li>
+</ul>
+{% endblock %}

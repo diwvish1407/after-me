@@ -566,6 +566,41 @@ void main() {
       expect(w.fakes.pushTimers.delays, [const Duration(minutes: 20)]);
     });
 
+    test('no background work: a retry waiting when the app is paused is '
+        'cancelled, none is made while it is away, and returning registers '
+        'again', () async {
+      final w = _World();
+      w.fakes.devices.failures.add(const NetworkFailure());
+      await w.start();
+      expect(w.fakes.pushTimers.active, hasLength(1));
+      expect(w.puts, hasLength(1));
+
+      w.coordinator.onPaused();
+      expect(w.fakes.pushTimers.active, isEmpty, reason: 'cancelled at once');
+
+      // A request that was already on its way fails while the app is away: no retry
+      // is scheduled for a phone that is in a pocket.
+      w.fakes.devices.failures.add(const NetworkFailure());
+      w.fakes.push.currentToken = _newToken;
+      await w.coordinator.sync();
+      await pumpEventQueue();
+      expect(w.fakes.pushTimers.active, isEmpty);
+
+      // Coming back brings the registration up to date at once, and a failure then
+      // schedules the first retry again (the count starts over).
+      w.fakes.devices.failures.add(const NetworkFailure());
+      await w.resume();
+      expect(w.fakes.pushTimers.active, hasLength(1));
+      expect(w.fakes.pushTimers.delays.last, const Duration(minutes: 1));
+    });
+
+    test('paused before start, or after dispose, is nothing', () async {
+      final w = _World();
+      w.coordinator.onPaused();
+      await w.start();
+      expect(w.puts, hasLength(1));
+    });
+
     test(
       'a retry that is no longer wanted is cancelled by signing out',
       () async {

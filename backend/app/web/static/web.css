@@ -95,3 +95,16 @@ input[type="text"] {
   .no-print, .brand { display: none; }
   .instruction { break-inside: avoid; border-color: #000; }
 }
+
+main.wide { max-width: 46rem; }
+.legal h1 { margin-bottom: 0.25rem; }
+.legal .meta { margin: 0 0 1rem; color: var(--muted); font-size: 0.9375rem; }
+.legal ul, .legal ol { padding-left: 1.4rem; }
+.legal li { margin: 0.35rem 0; }
+.legal .table-wrap { overflow-x: auto; margin: 1rem 0; }
+.legal table { width: 100%; border-collapse: collapse; font-size: 0.9375rem; }
+.legal th, .legal td { padding: 0.5rem 0.6rem; text-align: left; vertical-align: top; border: 1px solid var(--border); }
+.legal th { background: var(--notice-bg); }
+.legal-links { margin-top: 2rem; padding-top: 1rem; border-top: 1px solid var(--border); }
+.legal-links a { margin-right: 1rem; }
+a { color: var(--accent); }

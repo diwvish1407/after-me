@@ -354,13 +354,10 @@ class _ContactFormState extends ConsumerState<ContactForm> {
         ),
         Gap.md,
         if (editing && _emailChanged)
-          Semantics(
+          StatusBanner(
+            kind: StatusBannerKind.attention,
+            message: l10n.contactFormEmailChangeWarning,
             liveRegion: true,
-            container: true,
-            child: StatusBanner(
-              kind: StatusBannerKind.attention,
-              message: l10n.contactFormEmailChangeWarning,
-            ),
           )
         else if (!editing)
           BodyText(l10n.contactFormInviteExplain),

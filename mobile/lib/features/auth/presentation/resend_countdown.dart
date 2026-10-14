@@ -1,11 +1,10 @@
-import 'dart:async';
-
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../../../app/theme/tokens.dart';
 import '../../../core/design_system/app_button.dart';
 import '../../../core/time/clock.dart';
+import '../../../core/time/foreground_ticker.dart';
 import '../../../l10n/gen/app_localizations.dart';
 
 /// "Send a new code in 0:42" which becomes a button when the wait is over.
@@ -30,22 +29,51 @@ class ResendCountdown extends ConsumerStatefulWidget {
 }
 
 class _ResendCountdownState extends ConsumerState<ResendCountdown> {
-  Timer? _timer;
+  late final ForegroundTicker _ticker = ForegroundTicker(
+    period: const Duration(seconds: 1),
+    onTick: _tick,
+    onForeground: _tick,
+  );
 
   @override
   void initState() {
     super.initState();
-    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (mounted) {
-        setState(() {});
-      }
-    });
+    _syncTicker();
+  }
+
+  @override
+  void didUpdateWidget(ResendCountdown oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.availableAt != widget.availableAt) {
+      _syncTicker();
+    }
   }
 
   @override
   void dispose() {
-    _timer?.cancel();
+    _ticker.stop();
     super.dispose();
+  }
+
+  /// The timer runs only while there is something to count down (and only while the app
+  /// is in the foreground, see [ForegroundTicker]): once the wait is over the button
+  /// replaces the text and nothing ticks any more.
+  void _syncTicker() {
+    if (_secondsLeft() > 0) {
+      _ticker.start();
+    } else {
+      _ticker.stop();
+    }
+  }
+
+  void _tick() {
+    if (!mounted) {
+      return;
+    }
+    setState(() {});
+    if (_secondsLeft() == 0) {
+      _ticker.stop();
+    }
   }
 
   /// Whole seconds left, rounded up; 0 when the wait is over.

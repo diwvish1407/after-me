@@ -94,7 +94,14 @@ class Web:
         return self.ip_limit is not None
 
 
-Policy = Public | Authenticated | Owned | Reauth | FreshReauth | Web
+@dataclass(frozen=True)
+class PublicPage(Public):
+    """A server-rendered GET page that is public by design (``/legal/*``, ``/support``): no
+    session, no cookie, no form, no database, nothing about any person. It carries the page
+    security headers like every other page, and may be cached for a few minutes by anyone."""
+
+
+Policy = Public | PublicPage | Authenticated | Owned | Reauth | FreshReauth | Web
 
 CONTACT_TABLES = ("trusted_contacts", "contact_verifications", "email_suppressions", "audit_logs")
 
@@ -222,6 +229,10 @@ ROUTE_POLICY: dict[tuple[str, str], Policy] = {
         factory="instruction",
         tables=("instructions", "instruction_recipients", "release_events"),
     ),
+    ("GET", "/legal"): PublicPage(),
+    ("GET", "/legal/privacy"): PublicPage(),
+    ("GET", "/legal/terms"): PublicPage(),
+    ("GET", "/support"): PublicPage(),
     ("GET", "/a/reset"): Web(),
     ("POST", "/a/reset"): Web(
         form={"token": "pr_" + "A" * 43, "new_password": "a new passphrase 42"}, ip_limit=10

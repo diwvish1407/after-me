@@ -101,6 +101,11 @@ def _prod(**over: Any) -> dict[str, Any]:
         "maintenance_database_url": "postgresql+psycopg://m:secret@db/afterme?sslmode=require",
         "probe_token": "p" * 48,
         "kms_provider": "gcp_kms",
+        "kms_key_name": (
+            "projects/afterme-prod/locations/asia-south1/keyRings/afterme/cryptoKeys/instruction-kek"
+        ),
+        "support_email": "support@afterme.example",
+        "abuse_email": "abuse@afterme.example",
         "email_provider": "resend",
         "email_api_key": KEY,
         "email_webhook_secret": "whsec_" + "A" * 32,

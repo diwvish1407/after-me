@@ -137,48 +137,43 @@ class _ExportDataScreenState extends ConsumerState<ExportDataScreen> {
           BodyText(l10n.exportNeedsPassword),
           Gap.lg,
           if (_requesting || _saving) ...[
-            Semantics(
+            StatusBanner(
+              kind: StatusBannerKind.info,
+              message: _saving ? l10n.exportSaving : l10n.exportWorking,
               liveRegion: true,
-              container: true,
-              child: StatusBanner(
-                kind: StatusBannerKind.info,
-                message: _saving ? l10n.exportSaving : l10n.exportWorking,
-              ),
             ),
             Gap.md,
           ],
           if (_outcome != _Outcome.none) ...[
-            Semantics(
-              liveRegion: true,
-              container: true,
-              child: switch (_outcome) {
-                _Outcome.saved => StatusBanner(
-                  kind: StatusBannerKind.ok,
-                  message: l10n.exportSaved,
+            // Each notice is a live region that carries its own words (see
+            // `StatusBanner.liveRegion`); a wrapper around it would have none.
+            switch (_outcome) {
+              _Outcome.saved => StatusBanner(
+                kind: StatusBannerKind.ok,
+                message: l10n.exportSaved,
+                liveRegion: true,
+              ),
+              _Outcome.cancelled => StatusBanner(
+                kind: StatusBannerKind.info,
+                message: l10n.exportCancelled,
+                liveRegion: true,
+              ),
+              _Outcome.tooLarge => FailureNotice(message: l10n.exportTooLarge),
+              _Outcome.noSaveApp => FailureNotice(
+                message: l10n.exportNoSaveApp,
+              ),
+              _Outcome.saveFailed => FailureNotice(
+                message: l10n.exportSaveFailed,
+              ),
+              _Outcome.requestFailed => FailureNotice(
+                message: actionFailureMessage(
+                  l10n,
+                  failure ?? const UnknownFailure(),
+                  UnconfirmedAction.export,
                 ),
-                _Outcome.cancelled => StatusBanner(
-                  kind: StatusBannerKind.info,
-                  message: l10n.exportCancelled,
-                ),
-                _Outcome.tooLarge => FailureNotice(
-                  message: l10n.exportTooLarge,
-                ),
-                _Outcome.noSaveApp => FailureNotice(
-                  message: l10n.exportNoSaveApp,
-                ),
-                _Outcome.saveFailed => FailureNotice(
-                  message: l10n.exportSaveFailed,
-                ),
-                _Outcome.requestFailed => FailureNotice(
-                  message: actionFailureMessage(
-                    l10n,
-                    failure ?? const UnknownFailure(),
-                    UnconfirmedAction.export,
-                  ),
-                ),
-                _Outcome.none => const SizedBox.shrink(),
-              },
-            ),
+              ),
+              _Outcome.none => const SizedBox.shrink(),
+            },
             const SizedBox(height: AppSpacing.md),
           ],
           AppButton.primary(

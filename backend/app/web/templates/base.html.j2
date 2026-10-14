@@ -9,7 +9,7 @@
 <link rel="stylesheet" href="/a/assets/web.css">
 </head>
 <body>
-<main>
+<main{% block main_attrs %}{% endblock %}>
 <p class="brand">AfterMe</p>
 {% block content %}{% endblock %}
 <p class="footnote">AfterMe is not an emergency service.</p>

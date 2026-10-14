@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
 
+import '../../../app/leave_guards.dart';
 import '../../../app/theme/dimens.dart';
 import '../../../app/theme/tokens.dart';
 import '../../../core/api/failures/app_failure.dart';
@@ -121,188 +122,267 @@ class _PlanEditor extends ConsumerWidget {
     final canAdd = draft.stages.length < rules.stageLimit(base.stages.length);
     final canSave = editable && state.dirty && !blocking && !draft.isEmpty;
 
-    return SecureScreen(
-      // Titles are content: the window is secure while one is on screen.
-      enabled: inUseTitles.isNotEmpty,
-      child: PopScope(
-        canPop: !state.dirty && !state.saving,
-        onPopInvokedWithResult: (didPop, _) async {
-          if (didPop || state.saving) {
-            return;
-          }
-          if (await actions.confirmLeave() && context.mounted) {
-            context.pop();
-          }
-        },
-        child: FormPage(
-          title: l10n.planEditTitle,
-          children: [
-            if (locked) ...[
-              StatusBanner(
-                kind: StatusBannerKind.attention,
-                title: l10n.planEditLockedTitle,
-                message: l10n.planEditLockedBody,
-              ),
-              Gap.md,
-            ],
-            if (notice != null) ...[
-              _NoticeView(
-                notice: notice,
-                titles: inUseTitles,
-                onUseLatest: actions.discard,
-                // The names need the password when the list could not be read.
-                onShowTitles:
-                    notice.kind == PlanEditorNoticeKind.inUse &&
-                        inUseTitles.isEmpty &&
-                        ref.watch(instructionsControllerProvider).needsPassword
-                    ? actions.revealNotice
-                    : null,
-              ),
-              Gap.md,
-            ],
-            if (planAdviceLine != null) ...[
-              StatusBanner(
-                kind: StatusBannerKind.attention,
-                message: planAdviceText(l10n, planAdviceLine),
-              ),
-              Gap.md,
-            ],
-            if (!locked) ...[
-              BodyText(l10n.planEditIntro),
-              if (isFree) ...[
-                Gap.xs,
-                BodyText(l10n.planEditFreeNote(base.rules.maxStages)),
+    return _LeaveGuardRegistration(
+      // The same question as Back, for a notification tap that can wait (which replaces
+      // the stack). A tap about an incident does not ask: Home goes on top of this screen.
+      guarding: state.dirty,
+      isBusy: () => ref.read(planEditorControllerProvider).saving,
+      ask: () async {
+        final now = ref.read(planEditorControllerProvider);
+        if (!now.dirty) {
+          return true;
+        }
+        // A save on the wire is not interrupted (Back does not leave then either).
+        if (now.saving || !await actions.confirmLeave()) {
+          return false;
+        }
+        // "Leave" means the changes go: a screen that stays alive (a tab keeps its
+        // stack) must not keep them and ask again at the next tap.
+        ref.read(planEditorControllerProvider.notifier).discard();
+        return true;
+      },
+      child: SecureScreen(
+        // Titles are content: the window is secure while one is on screen.
+        enabled: inUseTitles.isNotEmpty,
+        child: PopScope(
+          canPop: !state.dirty && !state.saving,
+          onPopInvokedWithResult: (didPop, _) async {
+            if (didPop || state.saving) {
+              return;
+            }
+            if (await actions.confirmLeave() && context.mounted) {
+              context.pop();
+            }
+          },
+          child: FormPage(
+            title: l10n.planEditTitle,
+            children: [
+              if (locked) ...[
+                StatusBanner(
+                  kind: StatusBannerKind.attention,
+                  title: l10n.planEditLockedTitle,
+                  message: l10n.planEditLockedBody,
+                ),
+                Gap.md,
               ],
-              Gap.md,
-            ],
-            _GraceCard(
-              draft: draft,
-              rules: rules,
-              editable: editable,
-              showChoices: !locked,
-              issues: [
-                for (final issue in issues)
-                  if (issue.stageKey == null &&
-                      issue.kind != PlanIssueKind.noStage)
-                    issue,
+              if (notice != null) ...[
+                _NoticeView(
+                  notice: notice,
+                  titles: inUseTitles,
+                  onUseLatest: actions.discard,
+                  // The names need the password when the list could not be read.
+                  onShowTitles:
+                      notice.kind == PlanEditorNoticeKind.inUse &&
+                          inUseTitles.isEmpty &&
+                          ref
+                              .watch(instructionsControllerProvider)
+                              .needsPassword
+                      ? actions.revealNotice
+                      : null,
+                ),
+                Gap.md,
               ],
-              onChoose: actions.setGrace,
-              onOther: () => actions.changeGrace(state),
-            ),
-            Gap.lg,
-            Semantics(
-              header: true,
-              child: Text(
-                l10n.planStagesTitle,
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-            ),
-            Gap.sm,
-            for (var i = 0; i < draft.stages.length; i++) ...[
-              _StageCard(
-                position: i + 1,
-                stage: draft.stages[i],
-                names: [
-                  for (final id in draft.stages[i].contactIds)
-                    for (final contact in contacts)
-                      if (contact.id == id) contact.displayName,
+              if (planAdviceLine != null) ...[
+                StatusBanner(
+                  kind: StatusBannerKind.attention,
+                  message: planAdviceText(l10n, planAdviceLine),
+                ),
+                Gap.md,
+              ],
+              if (!locked) ...[
+                BodyText(l10n.planEditIntro),
+                if (isFree) ...[
+                  Gap.xs,
+                  BodyText(l10n.planEditFreeNote(base.rules.maxStages)),
                 ],
-                advice: [
-                  for (final line in advice)
-                    if (line.stageKey == draft.stages[i].key) line,
-                ],
+                Gap.md,
+              ],
+              _GraceCard(
+                draft: draft,
+                rules: rules,
+                editable: editable,
+                showChoices: !locked,
                 issues: [
                   for (final issue in issues)
-                    if (issue.stageKey == draft.stages[i].key) issue,
+                    if (issue.stageKey == null &&
+                        issue.kind != PlanIssueKind.noStage)
+                      issue,
                 ],
-                rules: base.rules,
-                editable: editable,
-                canRemove: draft.stages.length > 1,
-                onTime: () => actions.changeTime(state, draft.stages[i], i),
-                onWho: () => actions.chooseWho(draft.stages[i], i + 1),
-                onRemove: () => actions.remove(
-                  draft.stages[i],
-                  i + 1,
-                  titlesByStage[draft.stages[i].id] ?? const [],
-                ),
+                onChoose: actions.setGrace,
+                onOther: () => actions.changeGrace(state),
               ),
-              Gap.sm,
-            ],
-            if (!locked) ...[
-              AppButton.secondary(
-                label: l10n.planEditAdd,
-                icon: Icons.add_rounded,
-                onPressed: editable && canAdd
-                    ? () => actions.addStage(state)
-                    : null,
-                expand: true,
-              ),
-              if (!canAdd) ...[
-                Gap.xs,
-                BodyText(
-                  isFree
-                      ? l10n.planEditLimitFree(base.rules.maxStages)
-                      : l10n.planEditLimitMax(base.rules.maxStages),
-                ),
-              ],
-            ],
-            if (schedule != null && !draft.isEmpty) ...[
               Gap.lg,
               Semantics(
                 header: true,
                 child: Text(
-                  l10n.planPreviewTitle,
+                  l10n.planStagesTitle,
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
               ),
-              Gap.xs,
-              if (!locked && state.dirty) ...[
-                BodyText(l10n.planEditPreviewNote),
-                Gap.sm,
-              ] else
-                Gap.sm,
-              PlanPreview(
-                lines: buildPlanPreview(
-                  context,
-                  dueMinutes: schedule.dueMinutes,
-                  plan: draft.toPlanDraft(),
-                  contacts: contacts,
-                  releaseCounts: {
-                    for (final stage in draft.stages)
-                      if (stage.id != null) stage.id!: stage.releaseCount,
-                  },
+              Gap.sm,
+              for (var i = 0; i < draft.stages.length; i++) ...[
+                _StageCard(
+                  position: i + 1,
+                  stage: draft.stages[i],
+                  names: [
+                    for (final id in draft.stages[i].contactIds)
+                      for (final contact in contacts)
+                        if (contact.id == id) contact.displayName,
+                  ],
+                  advice: [
+                    for (final line in advice)
+                      if (line.stageKey == draft.stages[i].key) line,
+                  ],
+                  issues: [
+                    for (final issue in issues)
+                      if (issue.stageKey == draft.stages[i].key) issue,
+                  ],
+                  rules: base.rules,
+                  editable: editable,
+                  canRemove: draft.stages.length > 1,
+                  onTime: () => actions.changeTime(state, draft.stages[i], i),
+                  onWho: () => actions.chooseWho(draft.stages[i], i + 1),
+                  onRemove: () => actions.remove(
+                    draft.stages[i],
+                    i + 1,
+                    titlesByStage[draft.stages[i].id] ?? const [],
+                  ),
                 ),
-              ),
-            ],
-            if (!locked) ...[
-              Gap.lg,
-              if (blocking && state.dirty) ...[
-                Semantics(
-                  liveRegion: true,
-                  child: BodyText(l10n.planEditFixFirst),
-                ),
-                Gap.xs,
+                Gap.sm,
               ],
-              AppButton.primary(
-                label: l10n.planEditSave,
-                isLoading: state.saving,
-                onPressed: canSave ? actions.save : null,
-                expand: true,
-              ),
-              if (state.dirty) ...[
-                Gap.xs,
-                AppButton.text(
-                  label: l10n.planEditDiscard,
-                  onPressed: state.saving ? null : actions.discard,
+              if (!locked) ...[
+                AppButton.secondary(
+                  label: l10n.planEditAdd,
+                  icon: Icons.add_rounded,
+                  onPressed: editable && canAdd
+                      ? () => actions.addStage(state)
+                      : null,
                   expand: true,
                 ),
+                if (!canAdd) ...[
+                  Gap.xs,
+                  BodyText(
+                    isFree
+                        ? l10n.planEditLimitFree(base.rules.maxStages)
+                        : l10n.planEditLimitMax(base.rules.maxStages),
+                  ),
+                ],
+              ],
+              if (schedule != null && !draft.isEmpty) ...[
+                Gap.lg,
+                Semantics(
+                  header: true,
+                  child: Text(
+                    l10n.planPreviewTitle,
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                ),
+                Gap.xs,
+                if (!locked && state.dirty) ...[
+                  BodyText(l10n.planEditPreviewNote),
+                  Gap.sm,
+                ] else
+                  Gap.sm,
+                PlanPreview(
+                  lines: buildPlanPreview(
+                    context,
+                    dueMinutes: schedule.dueMinutes,
+                    plan: draft.toPlanDraft(),
+                    contacts: contacts,
+                    releaseCounts: {
+                      for (final stage in draft.stages)
+                        if (stage.id != null) stage.id!: stage.releaseCount,
+                    },
+                  ),
+                ),
+              ],
+              if (!locked) ...[
+                Gap.lg,
+                if (blocking && state.dirty) ...[
+                  Semantics(
+                    liveRegion: true,
+                    child: BodyText(l10n.planEditFixFirst),
+                  ),
+                  Gap.xs,
+                ],
+                AppButton.primary(
+                  label: l10n.planEditSave,
+                  isLoading: state.saving,
+                  onPressed: canSave ? actions.save : null,
+                  expand: true,
+                ),
+                if (state.dirty) ...[
+                  Gap.xs,
+                  AppButton.text(
+                    label: l10n.planEditDiscard,
+                    onPressed: state.saving ? null : actions.discard,
+                    expand: true,
+                  ),
+                ],
               ],
             ],
-          ],
+          ),
         ),
       ),
     );
   }
+}
+
+/// Keeps the editor's "Leave without saving?" question in [LeaveGuards] while the draft
+/// has changes, so that navigation that does not go through Back (a notification tap)
+/// asks it too. Removed as soon as there is nothing to lose and when the screen goes.
+class _LeaveGuardRegistration extends ConsumerStatefulWidget {
+  const _LeaveGuardRegistration({
+    required this.guarding,
+    required this.ask,
+    required this.isBusy,
+    required this.child,
+  });
+
+  final bool guarding;
+  final Future<bool> Function() ask;
+  final bool Function() isBusy;
+  final Widget child;
+
+  @override
+  ConsumerState<_LeaveGuardRegistration> createState() =>
+      _LeaveGuardRegistrationState();
+}
+
+class _LeaveGuardRegistrationState
+    extends ConsumerState<_LeaveGuardRegistration> {
+  late final LeaveGuards _guards;
+
+  @override
+  void initState() {
+    super.initState();
+    _guards = ref.read(leaveGuardsProvider);
+    _sync();
+  }
+
+  @override
+  void didUpdateWidget(_LeaveGuardRegistration oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _sync();
+  }
+
+  void _sync() {
+    if (widget.guarding) {
+      // Always the latest closure: it reads the providers when it runs.
+      _guards.register(this, () => widget.ask(), isBusy: () => widget.isBusy());
+    } else {
+      _guards.unregister(this);
+    }
+  }
+
+  @override
+  void dispose() {
+    _guards.unregister(this);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }
 
 /// The things the editor does in answer to a tap. They read the providers when they run
@@ -594,7 +674,11 @@ class _EditorActions {
         result == PlanEditorSaveResult.matchesServer) {
       // Said only now: the server answered with the plan.
       messenger.showSnackBar(SnackBar(content: Text(l10n.planEditSaved)));
-      context.pop();
+      // Not while something was put on top of this screen meanwhile (Home, for a
+      // notification about an incident): that page is what the person is looking at.
+      if (ModalRoute.of(context)?.isCurrent ?? true) {
+        context.pop();
+      }
     }
   }
 }
@@ -885,36 +969,30 @@ class _NoticeView extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     return switch (notice.kind) {
-      PlanEditorNoticeKind.stale => Semantics(
-        liveRegion: true,
-        container: true,
-        child: StatusBanner(
-          kind: StatusBannerKind.attention,
-          message: l10n.planEditStale,
-          action: AppButton.text(
-            label: l10n.planEditUseLatest,
-            onPressed: onUseLatest,
-          ),
+      PlanEditorNoticeKind.stale => StatusBanner(
+        kind: StatusBannerKind.attention,
+        message: l10n.planEditStale,
+        action: AppButton.text(
+          label: l10n.planEditUseLatest,
+          onPressed: onUseLatest,
         ),
+        liveRegion: true,
       ),
       PlanEditorNoticeKind.notFound => FailureNotice(
         message: l10n.planEditNotFound,
       ),
-      PlanEditorNoticeKind.inUse => Semantics(
+      PlanEditorNoticeKind.inUse => StatusBanner(
+        kind: StatusBannerKind.attention,
+        message: titles.isEmpty
+            ? l10n.planInUseNotice
+            : '${l10n.planInUseNotice}\n${titles.join('\n')}',
+        action: onShowTitles == null
+            ? null
+            : AppButton.text(
+                label: l10n.planInUseShowTitles,
+                onPressed: onShowTitles,
+              ),
         liveRegion: true,
-        container: true,
-        child: StatusBanner(
-          kind: StatusBannerKind.attention,
-          message: titles.isEmpty
-              ? l10n.planInUseNotice
-              : '${l10n.planInUseNotice}\n${titles.join('\n')}',
-          action: onShowTitles == null
-              ? null
-              : AppButton.text(
-                  label: l10n.planInUseShowTitles,
-                  onPressed: onShowTitles,
-                ),
-        ),
       ),
       PlanEditorNoticeKind.limit => FailureNotice(
         message: l10n.errorPlanLimitStages,

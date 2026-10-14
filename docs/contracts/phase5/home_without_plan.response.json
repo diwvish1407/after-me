@@ -44,5 +44,8 @@
       "action": "contact.created",
       "occurred_at": "2026-10-08T09:00:00Z"
     }
-  ]
+  ],
+  "service": {
+    "interruption": false
+  }
 }

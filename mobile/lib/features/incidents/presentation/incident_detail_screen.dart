@@ -120,6 +120,7 @@ class _Detail extends ConsumerWidget {
     final textTheme = Theme.of(context).textTheme;
     final timezone = ref.watch(incidentTimezoneProvider);
     final now = ref.watch(serverNowProvider)();
+    final interruption = ref.watch(serviceInterruptionProvider);
     final closedAt = incident.closedAt;
     final outcome = incidentOutcomeText(
       l10n,
@@ -151,6 +152,7 @@ class _Detail extends ConsumerWidget {
           incident: incident,
           now: now,
           timezone: timezone,
+          paused: interruption,
           heading: l10n.incidentDetailTimelineHeading,
         ),
         IncidentReleasesView(incident: incident, now: now, timezone: timezone),

@@ -1,3 +1,4 @@
+import 'package:afterme/app/router.dart';
 import 'package:afterme/core/api/api_client.dart';
 import 'package:afterme/core/api/failures/app_failure.dart';
 import 'package:afterme/core/auth/auth_controller.dart';
@@ -6,6 +7,7 @@ import 'package:afterme/core/storage/preferences_store.dart';
 import 'package:afterme/core/storage/secure_store.dart';
 import 'package:afterme/features/contacts/data/contacts_repository.dart';
 import 'package:afterme/features/instructions/application/instructions_controller.dart';
+import 'package:afterme/features/onboarding/application/onboarding_controller.dart';
 import 'package:afterme/features/onboarding/application/setup_controller.dart';
 import 'package:afterme/features/plan/data/plan_repository.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -66,17 +68,22 @@ Map<String, Object?> _home() => {
 /// the contact are served by the same "servers" the widget tests use, so what is on the
 /// wire is what those rules answer. [routes] answers by "METHOD /path" before them.
 class _Step {
-  _Step({this.lateStage = true, this.instructionsListFails = false})
-    : contact = testContact(id: 'c-1') {
+  _Step({
+    this.lateStage = true,
+    this.instructionsListFails = false,
+    this.listAsksPassword = false,
+  }) : contact = testContact(id: 'c-1') {
     plan = FakePlanServer(contacts: () => [contact], tier: () => tier)
       ..seedStandard(['c-1'], offsetMinutes: lateStage ? 1440 : 180);
     server = FakeInstructionsServer(
       contacts: () => [contact],
       plan: () => plan,
       tier: () => tier,
-    );
+      reauthenticated: listAsksPassword ? () => false : null,
+    )..readsNeedPassword = listAsksPassword;
   }
 
+  final bool listAsksPassword;
   final bool lateStage;
   final bool instructionsListFails;
   final String tier = 'free';
@@ -437,6 +444,42 @@ void main() {
         isTrue,
       );
     });
+
+    testWidgets(
+      'a fresh sign-up whose list read asks for the password: the form '
+      'is offered, the save works, and the step knows it saved one',
+      (tester) async {
+        final step = _Step(listAsksPassword: true);
+        await step.open(tester);
+        // The read was refused (403 reauth_required): not an error, the form is there.
+        expect(step.to('GET', '/v1/instructions'), hasLength(1));
+        expect(find.text('Add a first instruction'), findsOneWidget);
+        expect(find.text('Who to call first'), findsOneWidget);
+        expect(find.textContaining('went wrong'), findsNothing);
+
+        await tapText(tester, 'Home and keys');
+        await tester.pumpAndSettle();
+        await typeInto(tester, 'Title', 'House keys');
+        await _chooseDay(tester);
+        await tapText(tester, 'Save instruction');
+        await tester.pumpAndSettle();
+
+        expect(step.to('POST', '/v1/instructions'), hasLength(1));
+        expect(find.text('Stay protected'), findsOneWidget);
+        // The list still cannot be read, yet the account is known to have saved one, in
+        // memory and as a summary only.
+        final setup = step.container.read(setupControllerProvider).value!;
+        expect(setup.instructions.single.title, 'House keys');
+        expect(setup.instructions.single.toJson().containsKey('body'), isFalse);
+
+        // Back at the step (the person went back): saved, not a blank form to save a
+        // second one by mistake.
+        step.container.read(routerProvider).go(OnboardingStep.instruction.path);
+        await tester.pumpAndSettle();
+        expect(find.textContaining('Saved: House keys'), findsOneWidget);
+        expect(find.text('Save instruction'), findsNothing);
+      },
+    );
 
     testWidgets('one that already exists is shown as saved', (tester) async {
       final step = _Step();

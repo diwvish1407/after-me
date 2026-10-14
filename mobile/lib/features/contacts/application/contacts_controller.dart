@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/repository_providers.dart';
@@ -6,6 +7,7 @@ import '../../../core/api/failures/failure_mapper.dart';
 import '../../../core/auth/auth_controller.dart';
 import '../../../core/auth/session_epoch.dart';
 import '../../../core/freshness/stale_data.dart';
+import '../../home/application/home_inputs.dart';
 import '../data/contacts_repository.dart';
 
 /// Orders contacts like the server does: priority, then creation time.
@@ -48,6 +50,15 @@ class ContactsController extends AsyncNotifier<List<TrustedContact>> {
     if (ref.watch(authControllerProvider) != AuthStatus.signedIn) {
       return const [];
     }
+    // Home follows this counter (not this controller, whose read a listener would
+    // start): the aggregate counts verified contacts.
+    listenSelf((previous, next) {
+      final before = previous?.value;
+      final after = next.value;
+      if (before != null && after != null && !listEquals(before, after)) {
+        ref.read(homeInputChangesProvider.notifier).bump();
+      }
+    });
     final repository = ref.watch(contactsRepositoryProvider);
     try {
       return sortContacts(await repository.list());

@@ -4,6 +4,10 @@
   "@appName": {
     "description": "Product name. Not translated."
   },
+  "screenshotModeBanner": "Screenshot mode",
+  "@screenshotModeBanner": {
+    "description": "A strip on every screen of a build made to capture store screenshots (never the production build). Marks the build so that it cannot be mistaken for the real app."
+  },
   "tagline": "If you can't answer, your instructions can.",
   "@tagline": {
     "description": "Product tagline shown on the welcome screen."
@@ -886,6 +890,50 @@
   "@aboutLicenses": {
     "description": "Row that opens the licences page."
   },
+  "aboutBuildHeading": "About this build",
+  "@aboutBuildHeading": {
+    "description": "Heading of the facts a tester can quote in a bug report."
+  },
+  "aboutBuildVersion": "Version: {version}",
+  "@aboutBuildVersion": {
+    "description": "Diagnostic line: the app's version (major.minor.patch).",
+    "placeholders": {
+      "version": {"type": "String", "example": "0.1.0"}
+    }
+  },
+  "aboutBuildNumber": "Build number: {number}",
+  "@aboutBuildNumber": {
+    "description": "Diagnostic line: the build number.",
+    "placeholders": {
+      "number": {"type": "String", "example": "12"}
+    }
+  },
+  "aboutBuildEnvironment": "Environment: {environment}",
+  "@aboutBuildEnvironment": {
+    "description": "Diagnostic line: the flavor this build was made for (dev, staging or prod). Not translated.",
+    "placeholders": {
+      "environment": {"type": "String", "example": "staging"}
+    }
+  },
+  "aboutBuildApiHost": "Server: {host}",
+  "@aboutBuildApiHost": {
+    "description": "Diagnostic line: the host the app talks to (never a token or an account).",
+    "placeholders": {
+      "host": {"type": "String", "example": "api.staging.example.com"}
+    }
+  },
+  "aboutCopyDiagnostics": "Copy diagnostic text",
+  "@aboutCopyDiagnostics": {
+    "description": "Button: copies the four lines above to the clipboard."
+  },
+  "aboutDiagnosticsCopied": "Copied. You can paste it into your bug report.",
+  "@aboutDiagnosticsCopied": {
+    "description": "Snackbar after the diagnostic text was copied."
+  },
+  "aboutDiagnosticsCopyFailed": "We couldn't copy that. You can type the lines above instead.",
+  "@aboutDiagnosticsCopyFailed": {
+    "description": "Snackbar when the clipboard refused the diagnostic text."
+  },
   "signOut": "Sign out",
   "@signOut": {
     "description": "Sign-out action."
@@ -1092,7 +1140,7 @@
   "@appLockTimeoutTitle": {
     "description": "Heading of the timeout choices."
   },
-  "appLockTimeoutNow": "Immediately when I leave the app",
+  "appLockTimeoutNow": "As soon as I leave the app",
   "@appLockTimeoutNow": {
     "description": "Timeout choice."
   },
@@ -3223,7 +3271,7 @@
   "@starterPersonalWhatMattersMostHint": {
     "description": "Example instruction: what it is for."
   },
-  "starterPersonalWhatMattersMostBody": "The most urgent thing is…\nThe next most important thing is…\nSomething that can wait is…",
+  "starterPersonalWhatMattersMostBody": "The first thing to deal with is…\nThe next most important thing is…\nSomething that can wait is…",
   "@starterPersonalWhatMattersMostBody": {
     "description": "Example instruction: text to fill in. Examples only."
   },
@@ -3355,7 +3403,7 @@
   "@starterWorkHandoverHint": {
     "description": "Example instruction: what it is for."
   },
-  "starterWorkHandoverBody": "The most urgent thing at work is…\nMy manager is…\nFiles and tools are in…",
+  "starterWorkHandoverBody": "The first thing to deal with at work is…\nMy manager is…\nFiles and tools are in…",
   "@starterWorkHandoverBody": {
     "description": "Example instruction: text to fill in. Examples only."
   },
@@ -3634,6 +3682,26 @@
   "starterDigitalSocialBody": "My social media accounts are…\nSubscriptions to cancel are…\nMy photos and files are stored in…",
   "@starterDigitalSocialBody": {
     "description": "Example instruction: text to fill in. Examples only."
+  },
+  "homeInterruptionTitle": "We're having a service interruption",
+  "@homeInterruptionTitle": {
+    "description": "Title of the calm banner at the top of Home (and of the incident timeline) while the service is in a Hold: `service.interruption` of GET /v1/home is true. Announced once when it appears. No alarm words, no exclamation mark."
+  },
+  "homeInterruptionBody": "Nothing is sent to your contacts, and your deadlines move later. You can still check in.",
+  "@homeInterruptionBody": {
+    "description": "Body of the service-interruption banner: what the person can rely on (nobody is told, deadlines are shifted later by the length of the interruption) and that I'M OK still works. Kept to three lines so I'M OK stays near the top of a small phone."
+  },
+  "incidentPausedNote": "Paused during the interruption.",
+  "@incidentPausedNote": {
+    "description": "Added after a sentence that says who will be notified, in place of the time, while a service interruption is on: the earlier time is out of date and no time is promised."
+  },
+  "incidentNextUnnamedPaused": "The next step is paused during the interruption.",
+  "@incidentNextUnnamedPaused": {
+    "description": "What happens next when the stage's contacts are not listed, while a service interruption is on (no time is stated)."
+  },
+  "incidentTimelinePaused": "Paused during the interruption",
+  "@incidentTimelinePaused": {
+    "description": "Where an upcoming stage's time would be on the incident timeline (the line's date and time heading), while a service interruption is on. The old time is out of date and is not shown."
   },
   "incidentWhenToday": "at {time}",
   "@incidentWhenToday": {

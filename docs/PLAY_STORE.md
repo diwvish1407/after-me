@@ -102,7 +102,7 @@ Copy rules: never "end-to-end encrypted", never "zero-knowledge", no death image
 | Phone screenshots | 2–8; JPG or 24-bit PNG; each side 320–3840 px; aspect ratio ≤ 2:1 | 1) Home "You're checked in" 2) One-tap I'M OK 3) Plan timeline 4) Who gets what (instruction + recipient + stage) 5) Grace state "We'll remind you first" 6) Contact accepted 7) Privacy summary |
 | Tablet screenshots | Optional | Skip unless tablets are supported well |
 
-Screenshots are captured from the **staging/screenshot flavor** (FLAG_SECURE off) with fictional demo data. Never real user data.
+Screenshots are captured from a **dev or staging build with `SCREENSHOT_MODE=true`** (Phase 10: FLAG_SECURE off and a visible "Screenshot mode" strip; configuration refuses it with `APP_ENV=prod` and `tool/build_release.sh` refuses it in a prod config; commands in `mobile/README.md` → "Screenshots for the store") with fictional demo data. Never real user data.
 
 ## 6. App content declarations (Play Console → App content)
 
@@ -131,7 +131,7 @@ Screenshots are captured from the **staging/screenshot flavor** (FLAG_SECURE off
 | Personal info → Phone number | User's and contacts' phone (optional) | Optional | App functionality | No |
 | App activity → Other user-generated content | Instructions (title/body) | Optional | App functionality | Yes, released only to contacts the user chose |
 | App activity → Other actions | Check-in events, incident history | Required | App functionality | No |
-| App info & performance → Crash logs, Diagnostics | Scrubbed crash reports | Required (not user-optional) | Analytics (stability) | No |
+| ~~App info & performance → Crash logs, Diagnostics~~ | **Not collected in 1.0** (owner decision 2026-10-12: no crash-reporting SDK; Play Console's Android vitals are Google's own). Add this row, the privacy policy row and the processor if a reporter is ever integrated | – | – | – |
 | Device or other IDs | Push token / Firebase installation ID | Required | App functionality (notifications) | No |
 | Financial info → Purchase history | Subscription status (if billing is enabled) | Optional | App functionality | No |
 
@@ -154,7 +154,7 @@ Both need **review by a lawyer** in the launch jurisdiction. This is a sensitive
 | Track | Use | Notes |
 |---|---|---|
 | Internal testing | Owner + small team; every build | Up to 100 testers; available within minutes |
-| **Closed testing** | Beta; **satisfies the 12 × 14-day rule** | Testers opt in via a link with a Google account; keep ≥ 12 active (aim for 20+ for margin); collect feedback in a simple form |
+| **Closed testing** | Beta; **satisfies the 12 × 14-day rule** | Testers opt in via a link with a Google account; keep ≥ 12 active (aim for 20+ for margin); collect feedback in a simple form. **The track belongs to the application ID `app.afterme`, i.e. to the `prod` flavor, so the beta talks to the production backend**: the `staging` flavor (`app.afterme.staging`) can only be sideloaded. See [BETA_PLAN §1](BETA_PLAN.md#1-the-sequencing-problem-you-need-to-decide-first) |
 | Open testing | Optional | Only if a public beta is wanted |
 | Production | Staged rollout 10% → 25% → 50% → 100% | Halt on crash/ANR spikes or any S1 |
 

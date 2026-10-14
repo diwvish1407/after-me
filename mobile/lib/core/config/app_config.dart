@@ -86,6 +86,7 @@ class AppConfig {
     required this.sentryDsn,
     required this.playStoreUrl,
     required this.firebase,
+    required this.screenshotMode,
   });
 
   /// Builds a configuration from raw strings, validating every value.
@@ -112,6 +113,11 @@ class AppConfig {
   ///   and reports it calmly) or all set. Some of them without the others is a mistake
   ///   in the build's configuration and is refused like any other, with the missing
   ///   names.
+  /// * `SCREENSHOT_MODE` is `false` (or absent) in every build that people use. `true`
+  ///   makes the window capturable (`FLAG_SECURE` is not set) so that store screenshots
+  ///   can be taken, and shows a "Screenshot mode" strip on every screen. It is refused
+  ///   with `APP_ENV` prod, and any value that is not `true` or `false` is refused: a
+  ///   typo must never switch a protection off, nor be silently read as "on".
   factory AppConfig.parse({
     required String appEnv,
     required String apiBaseUrl,
@@ -122,8 +128,10 @@ class AppConfig {
     String firebaseAppId = '',
     String firebaseMessagingSenderId = '',
     String firebaseProjectId = '',
+    String screenshotMode = '',
   }) {
     final env = AppEnv.parse(appEnv);
+    final screenshots = _parseScreenshotMode(screenshotMode, env);
     final baseUrl = _parseBaseUrl(apiBaseUrl, env, name: 'API_BASE_URL');
     final publicUrl = publicBaseUrl.trim().isEmpty && env == AppEnv.dev
         ? baseUrl
@@ -143,6 +151,7 @@ class AppConfig {
       sentryDsn: dsn,
       playStoreUrl: store,
       firebase: firebase,
+      screenshotMode: screenshots,
     );
   }
 
@@ -159,6 +168,7 @@ class AppConfig {
       'FIREBASE_MESSAGING_SENDER_ID',
     ),
     firebaseProjectId: const String.fromEnvironment('FIREBASE_PROJECT_ID'),
+    screenshotMode: const String.fromEnvironment('SCREENSHOT_MODE'),
   );
 
   /// The app's own page in Google Play (the production application id).
@@ -185,6 +195,11 @@ class AppConfig {
   /// is then "not configured": nothing is registered and nothing arrives, and the app
   /// says so calmly).
   final FirebaseSettings? firebase;
+
+  /// A build made to capture store screenshots: instruction screens are not
+  /// `FLAG_SECURE`, and every screen carries a "Screenshot mode" strip. Never true in
+  /// prod ([parse] refuses it).
+  final bool screenshotMode;
 
   bool get isDev => env == AppEnv.dev;
 
@@ -278,6 +293,14 @@ class AppConfig {
       );
     }
     final flavor = envOfPackage(id);
+    if (screenshotMode && flavor == AppEnv.prod) {
+      // Parse already refuses this with APP_ENV prod; the installed id is the second
+      // line: the production application id never runs without FLAG_SECURE.
+      throw const AppConfigException(
+        'SCREENSHOT_MODE is on in the production application. It is for the '
+        'staging and dev flavors only.',
+      );
+    }
     if (flavor != env) {
       throw AppConfigException(
         'APP_ENV is ${env.name} but this is the ${flavor.name} flavor ("$id"). '
@@ -405,6 +428,25 @@ class AppConfig {
     );
   }
 
+  static bool _parseScreenshotMode(String raw, AppEnv env) {
+    final value = raw.trim().toLowerCase();
+    if (value.isEmpty || value == 'false') {
+      return false;
+    }
+    if (value != 'true') {
+      throw AppConfigException(
+        'SCREENSHOT_MODE "${raw.trim()}" must be true or false.',
+      );
+    }
+    if (env == AppEnv.prod) {
+      throw const AppConfigException(
+        'SCREENSHOT_MODE must not be true in a prod build: it switches off the '
+        'protection of instruction screens.',
+      );
+    }
+    return true;
+  }
+
   static Uri? _parseSentryDsn(String raw, AppEnv env) {
     final value = raw.trim();
     if (value.isEmpty) {
@@ -429,7 +471,8 @@ class AppConfig {
       other.publicBaseUrl == publicBaseUrl &&
       other.sentryDsn == sentryDsn &&
       other.playStoreUrl == playStoreUrl &&
-      other.firebase == firebase;
+      other.firebase == firebase &&
+      other.screenshotMode == screenshotMode;
 
   @override
   int get hashCode => Object.hash(
@@ -439,6 +482,7 @@ class AppConfig {
     sentryDsn,
     playStoreUrl,
     firebase,
+    screenshotMode,
   );
 
   @override

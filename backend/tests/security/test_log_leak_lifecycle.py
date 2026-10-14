@@ -168,7 +168,8 @@ async def test_a_whole_lifecycle_leaks_nothing_to_the_logs_or_the_operator_table
     assert "http.request" in output  # the capture really saw the access log
     assert "incident.opened" in output
     assert person.user_id in output  # positive control: identifiers are what logs are for
-    assert output.count("\n") >= 40
+    # a sanity floor (httpx's own per-request line is no longer logged: it carried the URL)
+    assert output.count("\n") >= 30
 
     web_ids = [v for v in web_values if len(v) >= 16]
     forbidden = [

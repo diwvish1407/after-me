@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/api/failures/failure_mapper.dart';
 import '../../../core/auth/auth_controller.dart';
 import '../../../core/auth/session_epoch.dart';
+import '../../home/application/home_inputs.dart';
 import '../data/auth_repository.dart';
 import '../data/models/account_models.dart';
 
@@ -21,6 +22,22 @@ class MeController extends AsyncNotifier<MeResponse?> {
     if (ref.watch(authControllerProvider) != AuthStatus.signedIn) {
       return null;
     }
+    // Home follows this counter (not this controller, whose read a listener would
+    // start): a new timezone moves the deadline, a new name is shown on Home.
+    listenSelf((previous, next) {
+      final before = previous?.value?.profile;
+      final after = next.value?.profile;
+      if (before == null || after == null) {
+        return;
+      }
+      if (before.timezone != after.timezone) {
+        ref.read(timezoneChangesProvider.notifier).bump();
+      }
+      if (before.timezone != after.timezone ||
+          before.displayName != after.displayName) {
+        ref.read(homeInputChangesProvider.notifier).bump();
+      }
+    });
     try {
       return await ref.read(authRepositoryProvider).me();
     } on Object catch (error) {
@@ -64,4 +81,19 @@ class MeController extends AsyncNotifier<MeResponse?> {
 
 final meControllerProvider = AsyncNotifierProvider<MeController, MeResponse?>(
   MeController.new,
+);
+
+/// Goes up when the profile's timezone changed. The schedule follows this counter (a new
+/// timezone recomputes the deadline on the server and with it the schedule's version),
+/// not [meControllerProvider]: a listener on the account would start `GET /v1/me` every
+/// time the schedule is opened.
+class TimezoneChanges extends Notifier<int> {
+  @override
+  int build() => 0;
+
+  void bump() => state++;
+}
+
+final timezoneChangesProvider = NotifierProvider<TimezoneChanges, int>(
+  TimezoneChanges.new,
 );

@@ -113,6 +113,15 @@ enum PushType {
     return null;
   }
 
+  /// Whether a tap on this type must **always** end with Home on screen, never held up
+  /// by a question and never dropped: it is about a check-in or an incident (a reminder,
+  /// a missed check-in, contacts told or about to be, the final warning, an
+  /// interruption), and Home is where I'M OK and I'M SAFE are. Only a notice that asks
+  /// for nothing now (a contact that could not be reached, an all-clear) may wait for
+  /// the person to answer "Leave without saving?".
+  bool get isUrgent =>
+      destination == PushDestination.home && this != allClearConfirmation;
+
   /// A stable notification id per type, so a second push of a kind replaces the first.
   int get notificationId => 7000 + index;
 }
@@ -183,3 +192,9 @@ class PushMessage {
 PushDestination tapDestination(Map<String, String> data) =>
     PushMessage.tryParse(IncomingPush(data: data))?.type.destination ??
     PushDestination.home;
+
+/// Whether a tap on a notification with [data] must always reach Home at once. A type this
+/// version does not know opens Home and counts as urgent: it is better to arrive than to
+/// be asked a question.
+bool tapIsUrgent(Map<String, String> data) =>
+    PushMessage.tryParse(IncomingPush(data: data))?.type.isUrgent ?? true;

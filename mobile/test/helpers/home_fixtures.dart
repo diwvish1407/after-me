@@ -13,6 +13,7 @@ HomeSnapshot homeSnapshot({
   PlanSummary planSummary = const PlanSummary(contactsTotal: 1),
   String timezone = 'Asia/Kolkata',
   String name = 'Diwakar',
+  bool interruption = false,
 }) => HomeSnapshot(
   serverTime: serverTime ?? DateTime.utc(2026, 10, 8, 12),
   user: HomeUser(displayName: name, timezone: timezone),
@@ -29,6 +30,7 @@ HomeSnapshot homeSnapshot({
   incident: incident,
   planSummary: planSummary,
   readiness: Readiness(ready: issues.isEmpty, issues: issues),
+  service: HomeService(interruption: interruption),
 );
 
 ReadinessIssue issue(ReadinessCode code, [String? contactId]) =>

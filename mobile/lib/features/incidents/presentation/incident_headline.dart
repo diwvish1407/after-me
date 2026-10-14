@@ -37,6 +37,11 @@ class IncidentHeadline {
 /// timeline names no stage); the phone computes none. A stage whose time has arrived but
 /// has not run is never described with a time in the past: it "will be notified unless
 /// you check in". A stage the server holds is said to be on hold.
+///
+/// While a service [interruption] is on (a Hold: nothing is sent, and the stages move
+/// later by the length of it) no sentence states a time at which anybody will be told:
+/// the time on hand is out of date, and the sentence says it is paused instead. Times of
+/// things that already happened are facts and stay.
 /// The incident on hand is a moment behind the server: a check-in was just answered with
 /// `safe_required` ([needsSafe] because of that) while the incident still says nobody was
 /// told. Its timeline would contradict the headline, so screens leave it out until Home
@@ -50,6 +55,7 @@ IncidentHeadline incidentHeadline(
   required DateTime now,
   required bool needsSafe,
   String? timezone,
+  bool interruption = false,
 }) {
   final l10n = AppLocalizations.of(context);
   if (incidentIsBehind(incident, needsSafe: needsSafe)) {
@@ -63,8 +69,8 @@ IncidentHeadline incidentHeadline(
     );
   }
   return needsSafe || incident.contactsMessaged
-      ? _notified(context, l10n, incident, now, timezone)
-      : _grace(context, l10n, incident, now, timezone);
+      ? _notified(context, l10n, incident, now, timezone, interruption)
+      : _grace(context, l10n, incident, now, timezone, interruption);
 }
 
 IncidentHeadline _grace(
@@ -73,6 +79,7 @@ IncidentHeadline _grace(
   Incident incident,
   DateTime now,
   String? timezone,
+  bool interruption,
 ) {
   final stage = incident.nextStage;
   final missed = formatClockTime(
@@ -91,6 +98,17 @@ IncidentHeadline _grace(
   final at = stage?.scheduledFor ?? incident.graceEndsAt;
   final due = !at.isAfter(now);
   final names = stage == null ? <String>[] : stageNames(stage);
+  if (interruption) {
+    // The time (which may be past) is not shown: nothing is sent until it is over.
+    final who = names.isNotEmpty
+        ? l10n.incidentGraceBodyNamesDue(joinNames(l10n, names))
+        : l10n.incidentGraceBodyGenericDue;
+    return IncidentHeadline(
+      kind: StatusBannerKind.attention,
+      title: title,
+      body: '$who ${l10n.incidentPausedNote}',
+    );
+  }
   final when = incidentWhen(context, l10n, at, now: now, timezone: timezone);
   final body = names.isNotEmpty
       ? (due
@@ -112,6 +130,7 @@ IncidentHeadline _notified(
   Incident incident,
   DateTime now,
   String? timezone,
+  bool interruption,
 ) {
   String when(DateTime at) =>
       incidentWhen(context, l10n, at, now: now, timezone: timezone);
@@ -146,17 +165,24 @@ IncidentHeadline _notified(
     final names = stageNames(next);
     final joined = joinNames(l10n, names);
     final count = next.releaseCount ?? 0;
-    final due = !next.scheduledFor.isAfter(now);
-    final at = when(next.scheduledFor);
+    // While a service interruption is on, the time-free wording is used and its time is
+    // paused (the "due" sentences are not used: nothing is due while nothing is sent).
+    final due = interruption || !next.scheduledFor.isAfter(now);
+    final at = interruption ? '' : when(next.scheduledFor);
+    final note = interruption ? ' ${l10n.incidentPausedNote}' : '';
     sentences.add(
       names.isEmpty
-          ? (due ? l10n.incidentNextUnnamedDue : l10n.incidentNextUnnamed(at))
+          ? (interruption
+                ? l10n.incidentNextUnnamedPaused
+                : due
+                ? l10n.incidentNextUnnamedDue
+                : l10n.incidentNextUnnamed(at))
           : count > 0
           ? (due
-                ? l10n.incidentNextNotifyShareDue(joined, count)
+                ? '${l10n.incidentNextNotifyShareDue(joined, count)}$note'
                 : l10n.incidentNextNotifyShare(joined, at, count))
           : (due
-                ? l10n.incidentNextNotifyDue(joined)
+                ? '${l10n.incidentNextNotifyDue(joined)}$note'
                 : l10n.incidentNextNotify(joined, at)),
     );
   }

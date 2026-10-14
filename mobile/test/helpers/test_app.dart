@@ -7,6 +7,7 @@ import 'package:afterme/core/config/app_config.dart';
 import 'package:afterme/core/device/device_info_source.dart';
 import 'package:afterme/core/links/url_opener.dart';
 import 'package:afterme/core/permissions/notification_permission.dart';
+import 'package:afterme/core/platform/clipboard_gateway.dart';
 import 'package:afterme/core/platform/contact_picker.dart';
 import 'package:afterme/core/platform/file_export.dart';
 import 'package:afterme/core/push/local_notification_gateway.dart';
@@ -101,6 +102,10 @@ class TestFakes {
   /// What the screens that show instruction content asked of the window.
   final FakeSecureScreenGateway secureScreen = FakeSecureScreenGateway();
   final FakeUrlOpener urls = FakeUrlOpener();
+  final FakeClipboardGateway clipboard = FakeClipboardGateway();
+
+  /// Use the production [PlatformClipboardGateway] on the (mocked) platform channel.
+  bool realClipboard = false;
   final FakeContactPicker picker = FakeContactPicker();
   final FakeDeviceInfoSource device = FakeDeviceInfoSource();
   final FakeClock clock = FakeClock();
@@ -123,6 +128,10 @@ class TestFakes {
   }
 
   late InMemoryContactsRepository _contacts;
+
+  /// Use the production [authRepositoryProvider] (the Dio one: `GET /v1/me`, ...)
+  /// instead of [auth]. Only the request-log tests do this.
+  bool realAuthRepository = false;
 
   /// Use the production [contactsRepositoryProvider] (the Dio one) instead of
   /// [contacts]. Only the wiring tests do this.
@@ -256,10 +265,11 @@ class TestFakes {
   });
 
   List<Override> get overrides => [
-    authRepositoryProvider.overrideWithValue(auth),
+    if (!realAuthRepository) authRepositoryProvider.overrideWithValue(auth),
     localAuthGatewayProvider.overrideWithValue(localAuth),
     screenPrivacyProvider.overrideWithValue(privacy),
     secureScreenGatewayProvider.overrideWithValue(secureScreen),
+    if (!realClipboard) clipboardGatewayProvider.overrideWithValue(clipboard),
     notificationPermissionGatewayProvider.overrideWithValue(notifications),
     urlOpenerProvider.overrideWithValue(urls),
     contactPickerProvider.overrideWithValue(picker),

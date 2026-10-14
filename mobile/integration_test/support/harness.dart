@@ -25,6 +25,7 @@ class TestAccount {
     required this.email,
     required this.password,
     required this.contactEmail,
+    required this.secondContactEmail,
   });
 
   factory TestAccount.fresh() {
@@ -33,15 +34,20 @@ class TestAccount {
       email: 'it+$stamp@example.com',
       password: 'integration glacier $stamp maple',
       contactEmail: 'mom+$stamp@example.com',
+      secondContactEmail: 'brother+$stamp@example.com',
     );
   }
 
   static const name = 'Iris Tester';
   static const contactName = 'Mom';
 
+  /// The second trusted contact of the tests that need two (a premium account).
+  static const secondContactName = 'Brother';
+
   final String email;
   final String password;
   final String contactEmail;
+  final String secondContactEmail;
 }
 
 /// A test with a [Harness] whose failures always say what the screen and the server held,

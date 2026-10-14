@@ -1,0 +1,72 @@
+{% extends "base.html.j2" %}
+{% block title %}Terms of service · AfterMe{% endblock %}
+{% block main_attrs %} class="wide legal"{% endblock %}
+{# Converted from docs/legal/TERMS_DRAFT.md. Counsel's notes and the "open points" section live in
+   the docs only. Left out until the decision exists: the paid-features section (no billing yet),
+   the liability cap and indemnity (counsel to write), and the governing law (shown when
+   LEGAL_GOVERNING_LAW is set). Sections after the paid-features one are numbered without it. #}
+{% block content %}
+<h1>Terms of service</h1>
+{% include "_legal_top.html.j2" %}
+
+<h2>1. Agreement</h2>
+<p>These terms are between you and {{ legal.operator }} ("<strong>we</strong>"). By creating an account or using AfterMe you agree to them and to the <a href="/legal/privacy">privacy policy</a>. If you do not agree, do not use AfterMe.</p>
+
+<h2>2. Who may use AfterMe</h2>
+<p>You must be <strong>18 or older</strong> and able to enter into a contract. You must provide accurate information and keep your password secret. You are responsible for what happens under your account.</p>
+
+<h2>3. What AfterMe does</h2>
+<p>AfterMe lets you set a check-in schedule, choose trusted contacts, prepare instructions, and decide who is told what and when if you do not check in. We carry out <strong>the plan you set</strong>. We do not decide for you, and we cannot know why a check-in was missed.</p>
+
+<h2>4. What we promise, and what we do not</h2>
+<ul>
+<li><strong>AfterMe is not an emergency service.</strong> We do not contact police, ambulance or any authority. If you or anyone is in danger, call your local emergency number.</li>
+<li><strong>Best effort.</strong> We work hard to follow your plan at the times you chose, with safeguards that delay or pause actions when our own systems are unwell. We <strong>do not guarantee</strong> that every reminder, alert or message is delivered, or delivered on time: email, push and phone networks are outside our control. Do not rely on AfterMe as your only way for someone to reach you or to learn that you are unreachable.</li>
+<li><strong>Not a will or a legal instrument.</strong> Instructions in AfterMe do not have legal effect, do not replace a will, power of attorney, medical directive or any legal document, and do not transfer any property or right.</li>
+<li><strong>Not advice.</strong> Nothing in AfterMe is legal, medical, financial or safety advice.</li>
+<li><strong>Information shared with contacts is shared as you configured it.</strong> Once a contact has read an instruction, we cannot take it back.</li>
+<li>We may change, suspend or stop features, and will tell you in advance of changes that affect your plan.</li>
+</ul>
+
+<h2>5. Your responsibilities</h2>
+<ul>
+<li>Keep your check-in schedule, contacts, plan and instructions accurate and up to date.</li>
+<li>Only add people whom you may lawfully contact and who would expect to hear from you. You are responsible for having the right to give us their details.</li>
+<li>Make sure what you write in instructions is lawful and does not infringe anyone's rights. Do not store information in AfterMe that you are not allowed to share.</li>
+<li>Keep your phone and email secure. Enable your phone's screen lock. Tell us promptly if you think your account was accessed by someone else.</li>
+<li>Tell your contacts that AfterMe may email them, and what it means.</li>
+</ul>
+
+<h2>6. Acceptable use</h2>
+<p>You will not use AfterMe to harass, threaten, deceive or spam anyone; to impersonate someone; to send messages to people who have not agreed or who have opted out; to attack, probe or overload the service; to bypass limits or security; or to break the law. We may suspend or end accounts that do, and we may refuse to send a message if we believe it would cause harm.</p>
+
+<h2>7. Contacts</h2>
+<p>People you add as trusted contacts may accept, decline or opt out at any time from any AfterMe email. If someone chooses "never contact me about AfterMe again", AfterMe will not message them for any user; if they only stop emails from you, that applies to you. Their choice overrides your plan.</p>
+
+<h2>8. Your data</h2>
+<p>How we handle your information is described in the <a href="/legal/privacy">privacy policy</a>. You can export it and delete your account at any time (in the app, or at <a href="/a/delete">{{ legal.site }}/a/delete</a>). We keep what we must to run the service, protect it and meet the law, for the periods in the policy.</p>
+
+<h2>9. Our rights</h2>
+<p>AfterMe and its software belong to {{ legal.operator }}. We give you a personal, non-transferable, revocable licence to use the app for its intended purpose. Do not copy, modify, reverse engineer or resell it except as the law allows. You keep ownership of what you put into AfterMe and give us the right to store, process and transmit it as needed to provide the service.</p>
+
+<h2>10. Suspension and ending</h2>
+<p>You may stop using AfterMe and delete your account at any time. We may suspend or end your access if you break these terms, if the law requires, or if continuing would put the service or others at risk. If we end your account without cause we will give you notice and a chance to export your data. When an account is closed, any alert that was already sent is <strong>withdrawn</strong> with a message to the contacts who received it; the message does not say that you are safe unless you told us so.</p>
+
+<h2>11. Disclaimers and limits of liability</h2>
+<ol>
+<li>AfterMe is provided "as is" and "as available" to the extent the law allows.</li>
+<li>We are not liable for losses that arise from a message not being sent, being delayed, being sent when you did not intend it, or being read by someone you chose; except where the law does not allow the limit (for example death or personal injury caused by negligence, fraud, and consumer rights that cannot be excluded).</li>
+</ol>
+
+<h2>12. Changes to these terms</h2>
+<p>We may update these terms. We will tell you in the app or by email before changes take effect; if you do not agree, you can delete your account.</p>
+
+{% if legal.governing_law %}
+<h2>13. Governing law and disputes</h2>
+<p>{{ legal.governing_law }}</p>
+{% endif %}
+
+<h2>{{ 14 if legal.governing_law else 13 }}. Contact</h2>
+<p><a href="mailto:{{ legal.support_email }}">{{ legal.support_email }}</a>{% if legal.postal_address %} · {{ legal.postal_address }}{% endif %}</p>
+{% include "_legal_links.html.j2" %}
+{% endblock %}

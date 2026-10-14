@@ -59,6 +59,7 @@ async def test_a_new_account(h: Harness) -> None:
             ],
         },
         "recent_activity": [],
+        "service": {"interruption": False},
     }
 
 

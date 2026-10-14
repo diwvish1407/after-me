@@ -26,12 +26,14 @@ Future<ProviderContainer> pumpAfterMe(
   double textScale = 1,
   bool settle = true,
   List<Override> extraOverrides = const [],
+  List<ProviderObserver> observers = const [],
 }) async {
   usePhoneScreen(tester, size: size);
   tester.platformDispatcher.textScaleFactorTestValue = textScale;
   addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
   final container = ProviderContainer.test(
     retry: (retryCount, error) => null,
+    observers: observers,
     overrides: [
       ...testOverrides(
         config: config,

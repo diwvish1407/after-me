@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Phase 7 integration suite (TEST_PLAN §6, MOB-61..65): the real app on an Android
+# Phase 7/10 integration suite (TEST_PLAN §6, MOB-61..68): the real app on an Android
 # emulator against the real dev backend, with the test clock.
 #
 # What it does, and always cleans up after:
@@ -7,21 +7,26 @@
 #   2. starts the API (127.0.0.1:8000) and the worker against it, both with test support on
 #      and one shared random token, rate limits off and a 2-second worker tick; their logs
 #      and the mail directory go to a temporary directory;
-#   3. uses the attached emulator/device, or boots the AVD headless and waits for it;
-#   4. runs every integration_test/mob6*_test.dart (or the ones named), one app install each;
-#   5. on a failure prints the tail of the worker and API logs (the tests, which run on the
-#      phone, cannot read them); stops what it started.
+#   3. starts tool/it_host.py (127.0.0.1:8001): the two things the phone cannot do, the
+#      operator's `hold enter|exit` (MOB-68) and raising the account's plan (MOB-67);
+#   4. uses the attached emulator/device, or boots the AVD headless and waits for it;
+#   5. runs every integration_test/mob6*_test.dart (or the ones named), one app install each;
+#   6. on a failure prints the tail of the worker, API and host logs (the tests, which run on
+#      the phone, cannot read them); stops what it started.
 #
 # Usage (from anywhere):
-#   mobile/tool/integration.sh                         # all five tests
+#   mobile/tool/integration.sh                         # every mob6*_test.dart
 #   mobile/tool/integration.sh --only mob63_missed_grace_test.dart
 #   mobile/tool/integration.sh --keep-emulator         # leave a booted emulator running
 #   mobile/tool/integration.sh --device emulator-5554  # a specific attached device
+#   mobile/tool/integration.sh --perf                  # also the PROFILE-mode frame-time run (below)
+#   mobile/tool/integration.sh --perf-only             # only that run
 #
 # Needs: uv and the backend's .venv (make setup), PostgreSQL running locally with a
 # superuser reachable by `psql -d postgres` (your OS user), Flutter, the Android SDK with the
 # AVD named by AFTERME_IT_AVD (default AfterMe_API_36). Port 8000 must be free: the app's
-# dev flavor (config/dev.json) talks to http://10.0.2.2:8000.
+# dev flavor (config/dev.json) talks to http://10.0.2.2:8000. Port 8001 (the host helper,
+# AFTERME_IT_HOST_PORT) must be free too.
 #
 # Safe to run twice: the database is dropped and recreated, nothing is left running.
 set -euo pipefail
@@ -31,6 +36,7 @@ BACKEND_DIR="$(cd "$MOBILE_DIR/../backend" && pwd)"
 
 IT_DB="afterme_it" # fixed on purpose: this script drops it.
 PORT=8000
+HOST_PORT="${AFTERME_IT_HOST_PORT:-8001}" # tool/it_host.py; the emulator sees it as 10.0.2.2
 AVD="${AFTERME_IT_AVD:-AfterMe_API_36}"
 SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-$HOME/Library/Android/sdk}}"
 ADB="${ADB:-$SDK/platform-tools/adb}"
@@ -41,14 +47,18 @@ WORKER_PW="${AFTERME_WORKER_DB_PASSWORD:-afterme_worker_dev}"
 BOOT_TIMEOUT=300
 
 KEEP_EMULATOR=0
+PERF=0
+PERF_ONLY=0
 DEVICE=""
 ONLY=()
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --keep-emulator) KEEP_EMULATOR=1 ;;
+    --perf) PERF=1 ;;
+    --perf-only) PERF=1; PERF_ONLY=1 ;;
     --device) DEVICE="${2:?--device needs a serial}"; shift ;;
     --only) ONLY+=("${2:?--only needs a file name}"); shift ;;
-    -h|--help) sed -n '2,29p' "${BASH_SOURCE[0]}"; exit 0 ;;
+    -h|--help) sed -n '2,36p' "${BASH_SOURCE[0]}"; exit 0 ;;
     *) echo "unknown option: $1" >&2; exit 2 ;;
   esac
   shift
@@ -67,6 +77,7 @@ done
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/afterme-it.XXXXXX")"
 API_PID=""
 WORKER_PID=""
+HOST_PID=""
 EMULATOR_PID=""
 STARTED_EMULATOR=0
 TOKEN="$(openssl rand -hex 32)" # 64 characters; never printed
@@ -84,6 +95,7 @@ cleanup() {
   local code=$?
   set +e
   say "Cleaning up"
+  kill_tree "$HOST_PID"
   kill_tree "$WORKER_PID"
   kill_tree "$API_PID"
   if [[ "$STARTED_EMULATOR" == 1 && "$KEEP_EMULATOR" == 0 ]]; then
@@ -107,7 +119,16 @@ if curl -fsS -o /dev/null --max-time 2 "http://127.0.0.1:$PORT/health/live" 2>/d
   die "something already answers on 127.0.0.1:$PORT. Stop it first: the app's dev flavor (config/dev.json) needs this port for the throwaway backend."
 fi
 
+if curl -fsS -o /dev/null --max-time 2 "http://127.0.0.1:$HOST_PORT/ping" 2>/dev/null; then
+  die "something already answers on 127.0.0.1:$HOST_PORT (the host helper's port, AFTERME_IT_HOST_PORT)."
+fi
+
 # --- 1. database ---------------------------------------------------------------------
+case "${PGHOST:-}" in
+  ""|localhost|127.0.0.1|::1|/*) ;;
+  *) die "PGHOST=${PGHOST} is not this machine: this script drops and recreates $IT_DB and alters database roles on whatever PG* points at. Unset PGHOST (or use localhost)." ;;
+esac
+
 say "Database $IT_DB (recreated)"
 if [[ ! -x "$BACKEND_DIR/.venv/bin/uvicorn" ]]; then
   (cd "$BACKEND_DIR" && uv sync --frozen)
@@ -162,6 +183,18 @@ API_PID=$!
 ) >"$WORK/worker.log" 2>&1 &
 WORKER_PID=$!
 
+# The host helper: operator Hold and the account's plan, for the tests that need them.
+# It runs under the backend's interpreter (psycopg, the CLI's imports) with the backend's
+# environment, so the CLI uses the same database and the same test clock as the worker.
+(
+  cd "$BACKEND_DIR"
+  exec env "${backend_env[@]}" \
+    IT_HOST_TOKEN="$TOKEN" IT_HOST_PORT="$HOST_PORT" IT_BACKEND_DIR="$BACKEND_DIR" \
+    IT_OWNER_URL="postgresql://afterme_owner:$OWNER_PW@$DB_HOST/$IT_DB" \
+    .venv/bin/python "$MOBILE_DIR/tool/it_host.py"
+) >"$WORK/host.log" 2>&1 &
+HOST_PID=$!
+
 wait_for() { # description timeout_seconds command...
   local what="$1" timeout="$2" waited=0
   shift 2
@@ -175,12 +208,15 @@ wait_for() { # description timeout_seconds command...
     fi
     kill -0 "$API_PID" 2>/dev/null || die "the API process exited (see $WORK/api.log)"
     kill -0 "$WORKER_PID" 2>/dev/null || die "the worker process exited (see $WORK/worker.log)"
+    kill -0 "$HOST_PID" 2>/dev/null || die "the host helper exited (see $WORK/host.log)"
   done
 }
 wait_for "the API to be ready" 60 curl -fsS "http://127.0.0.1:$PORT/health/ready"
 wait_for "the worker to start" 60 grep -q "worker.started" "$WORK/worker.log"
 wait_for "test support (GET /test/clock)" 20 \
   curl -fsS -H "X-Test-Token: $TOKEN" "http://127.0.0.1:$PORT/test/clock"
+wait_for "the host helper (GET /ping)" 20 \
+  curl -fsS -H "X-Test-Token: $TOKEN" "http://127.0.0.1:$HOST_PORT/ping"
 
 # --- 3. the device ----------------------------------------------------------------------
 SERIAL="$DEVICE"
@@ -233,7 +269,10 @@ fi
 
 declare -a RESULTS=()
 FAILED=0
-for file in "${FILES[@]}"; do
+if [[ "$PERF_ONLY" == 1 ]]; then
+  FILES=()
+fi
+for file in ${FILES[@]+"${FILES[@]}"}; do
   [[ -f "$file" ]] || die "no such test file: $file"
   name="$(basename "$file" .dart)"
   say "Running $name on $SERIAL"
@@ -241,6 +280,7 @@ for file in "${FILES[@]}"; do
   set +e
   flutter test "$file" -d "$SERIAL" --flavor dev \
     --dart-define-from-file=config/dev.json --dart-define="TEST_TOKEN=$TOKEN" \
+    --dart-define="HOST_CONTROL_URL=http://10.0.2.2:$HOST_PORT" \
     >"$WORK/$name.log" 2>&1
   code=$?
   set -e
@@ -255,8 +295,45 @@ for file in "${FILES[@]}"; do
     tail -n 20 "$WORK/worker.log" | sed "s/$TOKEN/<test-token>/g"
     echo "--- last 20 lines of the API log ($WORK/api.log)"
     tail -n 20 "$WORK/api.log" | sed "s/$TOKEN/<test-token>/g"
+    echo "--- last 20 lines of the host helper log ($WORK/host.log)"
+    tail -n 20 "$WORK/host.log" | sed "s/$TOKEN/<test-token>/g"
   fi
 done
+
+# --- 5. frame times (PERF-05), PROFILE mode ------------------------------------------------
+# Frame times of a debug build mean nothing, so this is `flutter drive --profile` with the
+# host half in test_driver/perf_driver.dart; the numbers land in build/perf_frames.json.
+# On an emulator they are indicative only (it is not a mid-range phone).
+#
+# KNOWN LIMIT (Phase 11): on the AfterMe_API_36 emulator `flutter drive --profile` could not
+# get through the sign-up screens: `tester.enterText` did not register in a profile build,
+# so the test timed out at "Enter your code". AFTERME_PERF_MODE=debug runs the same test
+# (the wiring and build/perf_frames.json are proven), but debug frame times mean nothing.
+# Needs a look on a real phone, or a way to sign in without typing (a session seeded into
+# secure storage).
+if [[ "$PERF" == 1 ]]; then
+  name="perf_home_test"
+  say "Running $name on $SERIAL (${AFTERME_PERF_MODE:-profile} mode)"
+  start=$SECONDS
+  rm -f build/perf_frames.json
+  set +e
+  flutter drive --no-dds --driver=test_driver/perf_driver.dart \
+    --target=integration_test/perf_home_test.dart -d "$SERIAL" "--${AFTERME_PERF_MODE:-profile}" --flavor dev \
+    --dart-define-from-file=config/dev.json --dart-define="TEST_TOKEN=$TOKEN" \
+    --dart-define="HOST_CONTROL_URL=http://10.0.2.2:$HOST_PORT" \
+    >"$WORK/$name.log" 2>&1
+  code=$?
+  set -e
+  took=$((SECONDS - start))
+  scrub "$WORK/$name.log" | grep -E "PERF_FRAMES|All tests passed|Some tests failed|Error|error" | tail -n 10
+  if [[ $code -eq 0 && -f build/perf_frames.json ]]; then
+    RESULTS+=("PASS  $name  (${took}s, ${AFTERME_PERF_MODE:-profile} mode; numbers in build/perf_frames.json)")
+  else
+    FAILED=1
+    RESULTS+=("FAIL  $name  (${took}s, exit $code)")
+    scrub "$WORK/$name.log" | tail -n 30
+  fi
+fi
 
 echo
 say "Results"

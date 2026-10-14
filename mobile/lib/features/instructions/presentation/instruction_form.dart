@@ -551,13 +551,10 @@ class _InstructionFormState extends ConsumerState<InstructionForm> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (_stageKept) ...[
-          Semantics(
+          StatusBanner(
+            kind: StatusBannerKind.attention,
+            message: l10n.instructionStageKept,
             liveRegion: true,
-            container: true,
-            child: StatusBanner(
-              kind: StatusBannerKind.attention,
-              message: l10n.instructionStageKept,
-            ),
           ),
           Gap.md,
         ],

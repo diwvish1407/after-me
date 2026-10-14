@@ -23,6 +23,8 @@ class AuditLog(Base):
         CheckConstraint(in_list("actor_type", ACTOR_TYPES), name="actor_type"),
         Index("ix_audit_subject_time", "subject_user_id", text("occurred_at DESC")),
         Index("ix_audit_action_time", "action", text("occurred_at DESC")),
+        # The retention purge reads the oldest rows of every account (migration 0011).
+        Index("ix_audit_occurred", "occurred_at"),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)

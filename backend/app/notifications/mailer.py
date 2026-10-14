@@ -126,11 +126,21 @@ ReceiptSink = Callable[[EmailMessage, ProviderResult], Awaitable[None]]
 
 class Mailer:
     def __init__(
-        self, provider: EmailProvider, *, sender: str, receipts: ReceiptSink | None = None
+        self,
+        provider: EmailProvider,
+        *,
+        sender: str,
+        receipts: ReceiptSink | None = None,
+        support_url: str = "https://afterme.invalid/support",
+        abuse_email: str = "abuse@afterme.invalid",
     ) -> None:
         self.provider = provider
         self._receipts = receipts
         self._sender = sender
+        # Available to every template (a caller's own value of the same name wins): the line
+        # that tells a stranger who got one of our messages where to report it (SECURITY_REVIEW
+        # F-09).
+        self._defaults: dict[str, str] = {"support_url": support_url, "abuse_email": abuse_email}
         self._env = Environment(
             loader=FileSystemLoader(_TEMPLATE_DIR),
             # Plain-text templates; HTML templates (Phase 8) are escaped automatically.
@@ -140,7 +150,9 @@ class Mailer:
         )
 
     def render(self, template: EmailTemplate, *, to: str, **context: Any) -> EmailMessage:
-        body = self._env.get_template(f"{template.value}.txt.j2").render(**context)
+        body = self._env.get_template(f"{template.value}.txt.j2").render(
+            **{**self._defaults, **context}
+        )
         return EmailMessage(
             to=to,
             subject=_SUBJECTS[template].format(**context),

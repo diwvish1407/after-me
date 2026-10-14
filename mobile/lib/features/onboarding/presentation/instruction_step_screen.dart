@@ -7,6 +7,7 @@ import '../../../core/security/secure_screen.dart';
 import '../../../l10n/gen/app_localizations.dart';
 import '../../auth/presentation/reauth_sheet.dart';
 import '../../instructions/application/instruction_autosave.dart';
+import '../../instructions/application/instructions_controller.dart';
 import '../../instructions/presentation/instruction_form.dart';
 import '../../instructions/presentation/instruction_starter_cards.dart';
 import '../../instructions/presentation/instruction_starters.dart';
@@ -68,13 +69,18 @@ class _InstructionStepScreenState extends ConsumerState<InstructionStepScreen> {
     final l10n = AppLocalizations.of(context);
     final setup =
         ref.watch(setupControllerProvider).value ?? const SetupState();
-    if (setup.instructions.isNotEmpty) {
+    // The list is read here, where it is used (and not at start-up for Home): what was
+    // just saved is known to the setup controller even while the list waits for the
+    // password.
+    final saved =
+        ref.watch(instructionsControllerProvider).value ?? setup.instructions;
+    if (saved.isNotEmpty) {
       // The title is content, so this page is secure too.
       return SecureScreen(
         child: OnboardingScaffold(
           step: OnboardingStep.instruction,
           title: l10n.instructionStepTitle,
-          subtitle: l10n.instructionStepSaved(setup.instructions.first.title),
+          subtitle: l10n.instructionStepSaved(saved.first.title),
           primaryLabel: l10n.actionContinue,
           onPrimary: () =>
               advanceFrom(context, ref, OnboardingStep.instruction),

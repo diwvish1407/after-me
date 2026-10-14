@@ -95,9 +95,15 @@ class SetupController extends AsyncNotifier<SetupState> {
 
   bool _alive(int session) => ref.mounted && _session.isCurrent(session);
 
+  /// The instructions this account saved in onboarding on this run (summaries). Emptied
+  /// whenever the controller is rebuilt (sign-in, sign-out, another account), so on a
+  /// shared phone one person's titles never show as "saved" for the next.
+  List<InstructionSummary> _created = const [];
+
   @override
   Future<SetupState> build() {
     _session.next();
+    _created = const [];
     // Rebuilt (and so emptied) whenever the sign-in status changes (and with it every
     // repository, which each watch it too).
     ref
@@ -126,13 +132,11 @@ class SetupController extends AsyncNotifier<SetupState> {
         if (plan != null && state.hasValue) {
           state = AsyncData(_current.copyWith(plan: plan));
         }
-      })
-      ..listen(instructionsControllerProvider, (previous, next) {
-        final instructions = next.value;
-        if (instructions != null && state.hasValue) {
-          state = AsyncData(_current.copyWith(instructions: instructions));
-        }
       });
+    // The instructions are not read here (Phase 9: reading the list needs the password,
+    // and the checklist on Home does not need them). The onboarding steps that show them
+    // watch the instructions controller themselves, and `createInstruction` keeps the
+    // one just saved.
     return _load();
   }
 
@@ -141,20 +145,12 @@ class SetupController extends AsyncNotifier<SetupState> {
       final contacts = await ref.read(contactsControllerProvider.future);
       final snapshot = await ref.read(scheduleControllerProvider.future);
       final plan = await ref.read(planControllerProvider.future);
-      // Optional in onboarding: a list that cannot be read now must not hide the
-      // contacts, the schedule and the plan. The controller keeps its own failure and
-      // the setup state follows it once it has the list.
-      var instructions = const <InstructionSummary>[];
-      try {
-        instructions = await ref.read(instructionsControllerProvider.future);
-      } on Object {
-        // Shown as none yet.
-      }
       return SetupState(
         contacts: contacts,
         snapshot: snapshot,
         plan: plan,
-        instructions: instructions,
+        // Only what this account saved on this run is known here.
+        instructions: _created,
       );
     } on Object catch (error) {
       throw toAppFailure(error);
@@ -166,7 +162,10 @@ class SetupController extends AsyncNotifier<SetupState> {
     await ref.read(contactsControllerProvider.notifier).reload();
     await ref.read(scheduleControllerProvider.notifier).reload();
     await ref.read(planControllerProvider.notifier).reload();
-    await ref.read(instructionsControllerProvider.notifier).reload();
+    // The list is read again only when something else has already started it.
+    if (ref.exists(instructionsControllerProvider)) {
+      await ref.read(instructionsControllerProvider.notifier).reload();
+    }
     final result = await AsyncValue.guard(_load);
     if (_alive(session)) {
       state = result;
@@ -229,7 +228,7 @@ class SetupController extends AsyncNotifier<SetupState> {
     required List<RecipientChoice> recipients,
   }) async {
     final session = _session.current;
-    await ref
+    final created = await ref
         .read(instructionsControllerProvider.notifier)
         .addInstructionWithTimes(
           category: category,
@@ -238,9 +237,19 @@ class SetupController extends AsyncNotifier<SetupState> {
           recipients: recipients,
         );
     if (_alive(session)) {
+      // Remembered here, in memory, from the server's own answer to the create: the list
+      // behind the instructions controller may be unreadable right now (it asks for the
+      // password, and a fresh sign-up has not entered it for this read), and the step
+      // must still know that this account saved one on this run. Only the summary (no
+      // text) and never on disk; it goes with the controller (sign-out, another account).
+      _created = [
+        created.summary,
+        for (final item in _created)
+          if (item.id != created.id) item,
+      ];
       state = AsyncData(
         _current.copyWith(
-          instructions: ref.read(instructionsControllerProvider).value,
+          instructions: _created,
           plan: ref.read(planControllerProvider).value,
         ),
       );

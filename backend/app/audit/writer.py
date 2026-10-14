@@ -8,6 +8,7 @@ hold identifiers, reason codes and counts: the writer rejects anything that look
 from __future__ import annotations
 
 import re
+import unicodedata
 import uuid
 from collections.abc import Mapping
 from dataclasses import dataclass, field
@@ -92,6 +93,16 @@ OPERATOR_HOLD_ENTER: Final = "operator.hold_enter"
 OPERATOR_HOLD_EXIT: Final = "operator.hold_exit"
 OPERATOR_VOID_INCIDENT: Final = "operator.void_incident"
 OPERATOR_RETRY_ACTION: Final = "operator.retry_action"
+# Work package 3 (Phase 10): the operator's per-account commands (``user set-tier`` / ``suspend`` /
+# ``unsuspend``). Never shown to the account holder: the reason is the operator's own text.
+OPERATOR_SET_TIER: Final = "operator.set_tier"
+OPERATOR_SUSPEND_USER: Final = "operator.suspend_user"
+OPERATOR_UNSUSPEND_USER: Final = "operator.unsuspend_user"
+# Phase 12: key management (``kms rewrap`` writes one per key it rewrote; ``kms rotate-user``
+# takes the operator's reason). Neither is shown to the account holder, and neither carries key
+# material, a key name or a wrapped value: versions and counts only.
+OPERATOR_KMS_REWRAP: Final = "operator.kms_rewrap"
+OPERATOR_KMS_ROTATE_USER: Final = "operator.kms_rotate_user"
 
 # --- Phase 7 actions ------------------------------------------------------------------------
 ACCOUNT_EXPORTED: Final = "account.exported"
@@ -180,6 +191,11 @@ PHASE5_ACTIONS: Final = frozenset(
         OPERATOR_HOLD_EXIT,
         OPERATOR_VOID_INCIDENT,
         OPERATOR_RETRY_ACTION,
+        OPERATOR_SET_TIER,
+        OPERATOR_SUSPEND_USER,
+        OPERATOR_UNSUSPEND_USER,
+        OPERATOR_KMS_REWRAP,
+        OPERATOR_KMS_ROTATE_USER,
     }
 )
 PHASE7_ACTIONS: Final = frozenset(
@@ -238,6 +254,16 @@ USER_VISIBLE_ACTIONS: Final = frozenset(
     }
 )
 
+# The operator commands that carry the operator's own words (``--reason``). Everything else in
+# the metadata is an identifier, a reason code or a count; this one value is free text and has
+# its own rule: one line of at most 200 printable characters. It is never shown to the account
+# holder (these actions are not user-visible) and never written to a log.
+OPERATOR_TEXT_ACTIONS: Final = frozenset(
+    {OPERATOR_SET_TIER, OPERATOR_SUSPEND_USER, OPERATOR_UNSUSPEND_USER, OPERATOR_KMS_ROTATE_USER}
+)
+OPERATOR_TEXT_KEY: Final = "operator_note"
+MAX_OPERATOR_TEXT: Final = 200
+
 _METADATA_KEY_RE: Final = re.compile(r"^[a-z][a-z0-9_]{0,39}$")
 _FORBIDDEN_KEY_PARTS: Final = (
     "password",
@@ -288,6 +314,18 @@ def validate_metadata(metadata: Mapping[str, object]) -> dict[str, MetadataValue
     return clean
 
 
+def validate_operator_text(value: object) -> str:
+    """One line of printable text, 1 to ``MAX_OPERATOR_TEXT`` characters: no control, format,
+    surrogate or private-use characters (so no newline, no bidi override, no terminal escape)."""
+    if not isinstance(value, str) or not 1 <= len(value) <= MAX_OPERATOR_TEXT:
+        msg = f"operator text must be 1 to {MAX_OPERATOR_TEXT} characters"
+        raise AuditMetadataError(msg)
+    if any(unicodedata.category(c).startswith("C") for c in value):
+        msg = "operator text may hold printable characters only"
+        raise AuditMetadataError(msg)
+    return value
+
+
 @dataclass(frozen=True)
 class AuditEvent:
     action: str
@@ -311,6 +349,15 @@ class AuditEvent:
             if self.user_visible is not None
             else self.action in USER_VISIBLE_ACTIONS
         )
+        metadata = dict(self.metadata)
+        # The operator's reason is the one free-text value, and only for the commands that take
+        # one: on any other action the key goes through the ordinary rules and is refused.
+        note = (
+            metadata.pop(OPERATOR_TEXT_KEY, None) if self.action in OPERATOR_TEXT_ACTIONS else None
+        )
+        stored = validate_metadata(metadata)
+        if note is not None:
+            stored[OPERATOR_TEXT_KEY] = validate_operator_text(note)
         return AuditLog(
             occurred_at=self.occurred_at,
             actor_type=self.actor_type,
@@ -322,7 +369,7 @@ class AuditEvent:
             request_id=self.request_id,
             ip_hash=self.ip_hash,
             user_visible=visible,
-            metadata_=validate_metadata(self.metadata),
+            metadata_=stored,
         )
 
 

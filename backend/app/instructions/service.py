@@ -11,6 +11,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.container import AppServices
@@ -21,7 +22,13 @@ from app.auth.guards import ensure_owner_active
 from app.checkins.models import CheckinConfiguration
 from app.checkins.repository import CheckinConfigRepository
 from app.contacts.repository import ContactRepository
-from app.core.errors import NotFound, PlanLimitReached, ReauthRequired, ValidationFailed
+from app.core.errors import (
+    NotFound,
+    PlanLimitReached,
+    ReauthRequired,
+    ServiceUnavailable,
+    ValidationFailed,
+)
 from app.instructions.models import Instruction
 from app.instructions.repository import InstructionRepository, RecipientRow
 from app.instructions.schemas import (
@@ -41,6 +48,10 @@ from app.releases.repository import ReleaseRepository
 from app.security.envelope import DecryptionError
 from app.security.vault import VaultUnavailableError
 from app.users.entitlements import limits_for
+
+# The key service is down or refused: the content is fine and comes back when it does. A 503 with
+# Retry-After ("temporarily unavailable"), not the 500 of content that cannot be opened at all.
+_RETRY_AFTER_KMS = {"Retry-After": "5"}
 
 
 class ContentUnavailableError(Exception):
@@ -114,6 +125,7 @@ class InstructionService(AuthServiceBase):
 
     async def create(self, current: CurrentUser, body: InstructionCreateRequest) -> InstructionOut:
         now = await self._now()
+        await self._warm(current.user_id)  # the KMS call, before the lock is taken
         config = await self._lock(current)
         if not await self.items.category_exists(body.category):
             raise ValidationFailed(
@@ -167,6 +179,8 @@ class InstructionService(AuthServiceBase):
         self, current: CurrentUser, instruction_id: uuid.UUID, body: InstructionPatchRequest
     ) -> InstructionOut:
         now = await self._now()
+        if {"title", "body"} & body.model_fields_set:
+            await self._warm(current.user_id)  # the KMS call, before the lock is taken
         config = await self._lock(current)
         row = await self.items.get(
             owner_id=current.user_id, instruction_id=instruction_id, for_update=True
@@ -373,6 +387,18 @@ class InstructionService(AuthServiceBase):
             raise ValidationFailed(errors)
         return wanted
 
+    async def _warm(self, user_id: uuid.UUID) -> None:
+        """Unwrap the user's key before the per-user lock is taken: a slow or failing KMS must
+        not make a check-in (which takes the same lock) wait for it."""
+        try:
+            await self.services.vault.warm(self.session, user_id=user_id)
+        except VaultUnavailableError:
+            raise ServiceUnavailable(headers=_RETRY_AFTER_KMS) from None
+        except DBAPIError:
+            # Creating the key was refused by the database (the account was closed meanwhile).
+            # This is only a head start: the locked path that follows gives the real answer.
+            return
+
     async def _seal(
         self, user_id: uuid.UUID, instruction_id: uuid.UUID, title: str, body: str
     ) -> tuple[bytes, int]:
@@ -385,7 +411,7 @@ class InstructionService(AuthServiceBase):
                 body=body,
             )
         except VaultUnavailableError:
-            raise ContentUnavailableError from None
+            raise ServiceUnavailable(headers=_RETRY_AFTER_KMS) from None
 
     async def _content(self, row: Instruction) -> tuple[str, str]:
         if row.content_ciphertext is None:
@@ -398,8 +424,10 @@ class InstructionService(AuthServiceBase):
                 ciphertext=row.content_ciphertext,
                 key_version=row.content_key_version,
             )
-        except (DecryptionError, VaultUnavailableError):
+        except DecryptionError:
             raise ContentUnavailableError from None
+        except VaultUnavailableError:
+            raise ServiceUnavailable(headers=_RETRY_AFTER_KMS) from None
 
     async def _summary(
         self, row: Instruction, recipients: list[RecipientRow]

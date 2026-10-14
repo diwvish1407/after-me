@@ -273,8 +273,9 @@ void main() {
     });
 
     testWidgets('afterwards the phone keeps nothing of the account: no '
-        'session, no pending check-in, no preferences, no app lock; and '
-        'nothing that is not the account\'s was swept away', (tester) async {
+        'session, no pending check-in, no onboarding progress; the phone\'s '
+        'own settings (app lock, notification pre-prompt) stay; and nothing '
+        'that is not the account\'s was swept away', (tester) async {
       final fakes = TestFakes();
       final store = _store();
       final container = await _open(
@@ -313,13 +314,30 @@ void main() {
       );
       expect(container.read(sessionStoreProvider).accessToken, isNull);
 
-      // Preferences: everything AfterMe keeps there.
+      // Preferences: what is the account's (onboarding progress and the id it belongs
+      // to) is gone; what is the phone's (the app lock and the notification pre-prompt
+      // result) is not account data and stays: the next person to sign in on this
+      // phone, or the same person with a new account, is not left without the lock
+      // they chose.
       final prefs = container.read(preferencesStoreProvider);
-      for (final key in PreferenceKey.values) {
+      const accountBound = {
+        PreferenceKey.onboardingStep,
+        PreferenceKey.onboardingCompleted,
+        PreferenceKey.onboardingUserId,
+      };
+      for (final key in accountBound) {
         expect(await _anyPreference(prefs, key), isNull, reason: key.name);
       }
-      // And what the app holds in memory from them.
-      expect(container.read(appLockControllerProvider).enabled, isFalse);
+      expect(await prefs.getBool(PreferenceKey.appLockEnabled), isTrue);
+      expect(await prefs.getInt(PreferenceKey.appLockTimeoutMinutes), 1);
+      expect(
+        await prefs.getString(PreferenceKey.notificationPermissionResult),
+        'granted',
+      );
+      // And what the app holds in memory: the lock is untouched (no lock screen jumps
+      // over the closed-account page), the onboarding position is reset.
+      expect(container.read(appLockControllerProvider).enabled, isTrue);
+      expect(container.read(appLockControllerProvider).locked, isFalse);
       expect(
         container.read(onboardingControllerProvider).step,
         OnboardingStep.contact,

@@ -1,0 +1,164 @@
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:flutter_test/flutter_test.dart';
+
+/// The wording rules of USER_FLOWS.md §15 as a test, for every string in the app
+/// (`lib/l10n/app_en.arb`). The backend has the same test for emails, web pages and push
+/// copy (`backend/tests/unit/test_copy_rules.py`); this is the phone's half.
+///
+/// A machine can check three things: no vocabulary the product promised never to use, no
+/// exclamation marks, and no shouting (ALL CAPS) except the two buttons that are named
+/// that way. Whether a sentence is *kind* still takes a person (the manual copy review).
+
+/// USER_FLOWS §15, "Avoid" column. Word boundaries, case-insensitive.
+final _forbidden = RegExp(
+  r'\b('
+  r'death|dead|die|died|dies|dying|deceased|passed away|pass away|late husband|late wife|'
+  r'beneficiar\w*|heirs?|next of kin|'
+  r'countdown|ticking|time is running out|'
+  r'unlock (?:the )?secrets?|reveal\w*|'
+  r'triggers?|triggered|payload|'
+  r'urgent|immediately|hurry|act now|danger(?:ous)?'
+  r')\b',
+  caseSensitive: false,
+);
+
+/// Phrases that may contain a forbidden word because the product must say them, with the
+/// reason. Every entry must still occur in the strings (a stale allowance fails).
+const _allowedPhrases = <String, String>{
+  'in danger':
+      'The emergency line every alert carries: "If you believe someone is in danger, '
+      'contact your local emergency services." It is the only place the word appears.',
+};
+
+/// Keys whose value may contain an exclamation mark, with the reason. None today: the
+/// product never raises its voice.
+const _exclamationAllowed = <String, String>{};
+
+/// All-caps words that are allowed: the two buttons, written the way the product names
+/// them (USER_FLOWS §4, §7), and the abbreviations a person meets elsewhere.
+const _capsAllowed = <String>{
+  "I'M OK",
+  "I'M SAFE",
+  'OK',
+  // The word the person types to confirm deleting the account: it is an instruction
+  // about what to type exactly, not a raised voice.
+  'DELETE',
+  'PIN',
+  // Abbreviations (not shouting): file formats, protocols and standards.
+  'AM',
+  'PM',
+  'PDF',
+  'JSON',
+  'SMS',
+  'URL',
+  'ID',
+  'FAQ',
+  'UTC',
+  'GMT',
+  'IANA',
+  'SOS',
+  'USB',
+  'NFC',
+  'FCM',
+};
+
+Map<String, String> _strings() {
+  final raw = jsonDecode(
+    File('lib/l10n/app_en.arb').readAsStringSync(),
+  ) as Map<String, Object?>;
+  return {
+    for (final entry in raw.entries)
+      if (!entry.key.startsWith('@') && entry.value is String)
+        entry.key: entry.value! as String,
+  };
+}
+
+/// The words a reader sees: the placeholders are not copy.
+String _plain(String message) =>
+    message.replaceAll(RegExp(r'\{[A-Za-z_]+\}'), 'X');
+
+String _scrub(String text) {
+  var out = text;
+  for (final phrase in _allowedPhrases.keys) {
+    out = out.replaceAll(phrase, '');
+  }
+  return out;
+}
+
+/// Words of three letters or more that are all capitals, after removing the allowed ones.
+List<String> _shouting(String text) {
+  var rest = text;
+  for (final phrase in _capsAllowed.where(
+    (p) => p.contains(' ') || p.contains("'"),
+  )) {
+    rest = rest.replaceAll(phrase, '');
+  }
+  return [
+    for (final m in RegExp(r"[A-Z][A-Z']{2,}").allMatches(rest))
+      if (!_capsAllowed.contains(m.group(0))) m.group(0)!,
+  ];
+}
+
+void main() {
+  final strings = _strings();
+
+  test('the scan reads the whole file', () {
+    expect(strings.length, greaterThan(1000));
+    expect(strings['appName'], 'AfterMe');
+  });
+
+  test('no vocabulary the product promised never to use', () {
+    final found = <String>[];
+    strings.forEach((key, value) {
+      final match = _forbidden.firstMatch(_scrub(_plain(value)));
+      if (match != null) {
+        found.add('$key: "${match.group(0)}" in "$value"');
+      }
+    });
+    expect(found, isEmpty, reason: found.join('\n'));
+  });
+
+  test('every allowed phrase still occurs (no stale allowance)', () {
+    for (final phrase in _allowedPhrases.keys) {
+      expect(
+        strings.values.any((v) => v.contains(phrase)),
+        isTrue,
+        reason: '"$phrase" is allowed but no string has it any more',
+      );
+    }
+  });
+
+  test('no exclamation marks', () {
+    final found = <String>[];
+    strings.forEach((key, value) {
+      if (value.contains('!') && !_exclamationAllowed.containsKey(key)) {
+        found.add('$key: "$value"');
+      }
+    });
+    expect(found, isEmpty, reason: found.join('\n'));
+  });
+
+  test(
+    'no shouting: ALL CAPS only for I\'M OK and I\'M SAFE (and abbreviations)',
+    () {
+      final found = <String>[];
+      strings.forEach((key, value) {
+        final words = _shouting(_plain(value));
+        if (words.isNotEmpty) {
+          found.add('$key: $words in "$value"');
+        }
+      });
+      expect(found, isEmpty, reason: found.join('\n'));
+    },
+  );
+
+  test('the two named buttons are spelled the way the product names them', () {
+    final values = strings.values.join('\n');
+    expect(values, contains("I'M OK"));
+    expect(values, contains("I'M SAFE"));
+    expect(values, isNot(contains("I'm OK")));
+    expect(values, isNot(contains("I'm SAFE")));
+  });
+}

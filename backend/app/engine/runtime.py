@@ -11,8 +11,10 @@ other user is unaffected.
 
 from __future__ import annotations
 
+import asyncio
 import socket
 import uuid
+from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import dataclass, field
 from datetime import datetime
 
@@ -29,7 +31,7 @@ from app.engine.executor import ActionExecutor, UnitReport
 from app.engine.hold import HoldMonitor, HoldReport
 from app.engine.opener import OpenResult, open_incident
 from app.engine.releases import InstructionReleases, ReleaseSource
-from app.engine.store import DueDeadline, EngineStore
+from app.engine.store import DueDeadline, EngineStore, pre_reminder_stamp
 from app.notifications import outbox
 from app.notifications.outbox import Draft
 
@@ -37,6 +39,11 @@ _log = get_logger("afterme.engine")
 
 BATCH = 200
 MAX_PAGES = 10  # per step and tick: 2000 users; a full last page marks a backlog
+# Units of work (one person each, each in its own transaction) of one page that run at the same
+# time. They touch nothing in common but the audit log and the outbox, and take no lock but the
+# person's own (SKIP LOCKED); 10,000 people due in one minute took longer than the 2 minutes of
+# PERF-02 one after another (backend/tests/perf/PLANS.md).
+UNIT_CONCURRENCY = 4
 SERVICE_NAME = "engine"
 HOLD_SERVICE_NAME = "hold_monitor"  # beats only when Hold evaluation succeeded
 ENGINE_VERSION = "5.0"
@@ -73,6 +80,23 @@ class TickReport:
         self.locked_out += 1 if unit.skipped_locked else 0
         for gate, count in unit.gates.items():
             self.gates[gate] = self.gates.get(gate, 0) + count
+
+
+async def run_units[T](items: Iterable[T], work: Callable[[T], Awaitable[None]]) -> None:
+    """``work(item)`` for every item, at most ``UNIT_CONCURRENCY`` at a time. ``work`` handles its
+    own failures (a unit that raises must not stop the others). Should one raise anyway, every
+    other unit still runs to its end before the first such error is raised here: nothing is left
+    running detached, half way through someone's unit, while the tick moves on."""
+    gate = asyncio.Semaphore(UNIT_CONCURRENCY)
+
+    async def one(item: T) -> None:
+        async with gate:
+            await work(item)
+
+    outcomes = await asyncio.gather(*(one(item) for item in items), return_exceptions=True)
+    for outcome in outcomes:
+        if isinstance(outcome, BaseException):
+            raise outcome
 
 
 def _is_transient(exc: BaseException) -> bool:
@@ -162,8 +186,9 @@ class Engine:
     ) -> None:
         # Users that were looked at stay out of the later pages of this tick, so rows that
         # cannot be opened (no plan, inconsistent) never starve the users behind them.
-        for deadline in due:
-            seen.add(deadline.user_id)
+        seen.update(deadline.user_id for deadline in due)
+
+        async def open_one(deadline: DueDeadline) -> None:
             try:
                 async with self.db.sessionmaker() as session, session.begin():
                     unit_now = await self.clock.now(session)
@@ -182,11 +207,13 @@ class Engine:
                     user_id=str(deadline.user_id),
                     error_class=type(exc).__name__,
                 )
-                continue
+                return
             if result is OpenResult.OPENED:
                 report.opened += 1
             else:
                 report.open_skipped[result.value] = report.open_skipped.get(result.value, 0) + 1
+
+        await run_units(due, open_one)
 
     # ------------------------------------------------------------------ executing
 
@@ -205,7 +232,7 @@ class Engine:
                 report.backlog = True
 
     async def _execute_page(self, users: list[uuid.UUID], report: TickReport) -> None:
-        for user_id in users:
+        async def execute_one(user_id: uuid.UUID) -> None:
             current: list[uuid.UUID] = []
             try:
                 async with self.db.sessionmaker() as session, session.begin():
@@ -231,6 +258,8 @@ class Engine:
                 # for actions that fail for their own reasons and never clear (FS-23).
                 if current and not _is_transient(exc):
                     await self._count_failed_attempt(user_id, current[0], type(exc).__name__)
+
+        await run_units(users, execute_one)
 
     async def _count_failed_attempt(
         self, user_id: uuid.UUID, action_id: uuid.UUID, error_class: str
@@ -290,7 +319,8 @@ class Engine:
     async def _remind_page(
         self, candidates: list[tuple[uuid.UUID, datetime, int]], report: TickReport
     ) -> None:
-        for user_id, due_at, _lead in candidates:
+        async def remind_one(candidate: tuple[uuid.UUID, datetime, int]) -> None:
+            user_id, due_at, _lead = candidate
             try:
                 async with self.db.sessionmaker() as session, session.begin():
                     unit_now = await self.clock.now(session)
@@ -303,6 +333,8 @@ class Engine:
                     user_id=str(user_id),
                     error_class=type(exc).__name__,
                 )
+
+        await run_units(candidates, remind_one)
 
     async def _pre_reminder(
         self, session: AsyncSession, user_id: uuid.UUID, due_at: datetime, now: datetime
@@ -319,7 +351,7 @@ class Engine:
         user = await EngineStore.user(session, user_id)
         if user is None or user.status != "active":
             return 0
-        stamp = due_at.isoformat()
+        stamp = pre_reminder_stamp(due_at)
         drafts: list[Draft] = []
         for device_id in await EngineStore.push_devices(session, user_id):
             drafts.append(
@@ -332,7 +364,7 @@ class Engine:
                     send_after=now,
                     dedupe_key=f"prereminder:{user_id}:{stamp}:push:{device_id}",
                     device_id=device_id,
-                    params={"due_at": stamp},
+                    params={"due_at": due_at.isoformat()},
                 )
             )
         drafts.append(
@@ -344,7 +376,7 @@ class Engine:
                 template_key=outbox.USER_PRE_REMINDER,
                 send_after=now,
                 dedupe_key=f"prereminder:{user_id}:{stamp}:email",
-                params={"due_at": stamp},
+                params={"due_at": due_at.isoformat()},
             )
         )
         return await outbox.enqueue(session, drafts, now=now)

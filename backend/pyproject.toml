@@ -128,6 +128,7 @@ addopts = [
 filterwarnings = ["error"]
 markers = [
     "no_rate_limit: run the test with rate limiting disabled",
+    "perf: query plans and round trips of the hot paths (tests/perf; a few seconds each)",
 ]
 
 [tool.coverage.run]

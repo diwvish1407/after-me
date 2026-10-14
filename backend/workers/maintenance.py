@@ -51,7 +51,11 @@ async def run(every: int | None) -> None:
         while not stop.is_set():
             try:
                 scrubbed, purged = await _once(
-                    db, clock, audit_writer, settings.account_deletion_days
+                    db,
+                    clock,
+                    audit_writer,
+                    settings.account_deletion_days,
+                    settings.audit_retention_days,
                 )
                 log.info("maintenance.done", contacts_scrubbed=scrubbed, accounts_purged=purged)
             except Exception as exc:  # the loop itself must survive one bad run
@@ -67,7 +71,11 @@ async def run(every: int | None) -> None:
 
 
 async def _once(
-    db: Database, clock: Clock, writer: AuditWriter, retention_days: int
+    db: Database,
+    clock: Clock,
+    writer: AuditWriter,
+    retention_days: int,
+    audit_retention_days: int = 365,
 ) -> tuple[int, int]:
     """One pass. Every step is its own transaction (``independent_session`` commits on exit)."""
     log = get_logger("afterme.maintenance")
@@ -77,8 +85,13 @@ async def _once(
         scrubbed = await scrub_settled_contacts(session, now=now)
     async with db.independent_session() as session:
         now = await clock.now(session)
-        retained = await purge_all(session, now=now)
-    log.info("maintenance.retention", **retained)
+        retained = await purge_all(session, now=now, audit_retention_days=audit_retention_days)
+    # (not as keyword arguments: "refresh_tokens" would be redacted by name, count and all)
+    log.info(
+        "maintenance.retention",
+        removed=[f"{name}={count}" for name, count in retained.items()],
+        total=sum(retained.values()),
+    )
     while True:
         async with db.independent_session() as session:
             now = await clock.now(session)

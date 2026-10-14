@@ -4,7 +4,8 @@
 #
 #   * Dart obfuscation with the debug symbols split out (--obfuscate --split-debug-info);
 #   * the prod flavor with config/prod.json, whose APP_ENV must be prod and whose API URL
-#     must be https (a dev file in a prod build is the mistake this exists to stop);
+#     must be https (a dev file in a prod build is the mistake this exists to stop), and
+#     which must not turn SCREENSHOT_MODE on (a screenshot build is never a release);
 #   * the upload key (android/key.properties) must exist, or the build stops with a clear
 #     message. --allow-debug-signing is the explicit, loud way to build without it: the
 #     result is signed with the public DEBUG key and can never be uploaded to Play. CI
@@ -60,6 +61,17 @@ grep -Eq '"APP_ENV"[[:space:]]*:[[:space:]]*"prod"' "$CONFIG" ||
   fail "$CONFIG must set \"APP_ENV\": \"prod\" (a release is built from the prod configuration only)"
 grep -Eq '"API_BASE_URL"[[:space:]]*:[[:space:]]*"https://' "$CONFIG" ||
   fail "$CONFIG must set an https API_BASE_URL"
+
+# A screenshot build (SCREENSHOT_MODE, README "Screenshots for the store") makes the
+# window capturable and is for staging and dev only. The app itself refuses it with
+# APP_ENV prod; this stops the release before anything is built. The key does not belong
+# in the prod file at all: if it is there, its value must be false.
+if grep -Eiq 'SCREENSHOT_MODE' "$CONFIG"; then
+  grep -Eiq '"SCREENSHOT_MODE"[[:space:]]*:[[:space:]]*"?false"?[[:space:]]*,?[[:space:]]*$' "$CONFIG" ||
+    fail "$CONFIG mentions SCREENSHOT_MODE with a value other than false. A screenshot build is never a release: it switches off FLAG_SECURE (use config/staging.json for screenshots)."
+  [ "$(grep -Eic 'SCREENSHOT_MODE' "$CONFIG")" -eq 1 ] ||
+    fail "$CONFIG mentions SCREENSHOT_MODE more than once; a release configuration does not carry it."
+fi
 
 # --- The signing key --------------------------------------------------------------------
 if [ ! -f android/key.properties ]; then

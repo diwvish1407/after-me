@@ -16,7 +16,7 @@ from app.checkins.schedule import format_hhmm
 from app.contacts.models import TrustedContact
 from app.contacts.repository import ContactRepository
 from app.core.errors import NotFound
-from app.home.repository import ActivityRepository
+from app.home.repository import ActivityRepository, service_interruption
 from app.home.schemas import (
     ActivityItem,
     HomeCheckin,
@@ -27,6 +27,7 @@ from app.home.schemas import (
     Readiness,
     ReadinessCode,
     ReadinessIssue,
+    ServiceStatus,
 )
 from app.incidents.repository import IncidentRepository
 from app.incidents.service import IncidentService
@@ -95,6 +96,7 @@ class HomeService(AuthServiceBase):
             incident_view = (await incidents.view(current.user_id, open_incident, now)).model_dump(
                 mode="json"
             )
+        interruption = await service_interruption(self.session)
         await self.session.commit()
 
         issues = readiness_issues(cfg.status, contacts, stage_rows)
@@ -124,4 +126,5 @@ class HomeService(AuthServiceBase):
             recent_activity=[
                 ActivityItem(action=a.action, occurred_at=a.occurred_at) for a in activity
             ],
+            service=ServiceStatus(interruption=interruption),
         )

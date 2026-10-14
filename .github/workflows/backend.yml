@@ -110,3 +110,54 @@ jobs:
 
       - name: Dependency audit
         run: uv run python scripts/audit_deps.py
+
+  # TEST_PLAN §10 "Build: Docker image build". Builds backend/Dockerfile (nothing is pushed:
+  # there is no registry in this workflow) and proves the image is usable: the production
+  # environment resolves, every process entry point imports, the process is not root, and the
+  # API command still carries --no-proxy-headers (docs/SECURITY_REVIEW.md F10).
+  docker:
+    name: Container image (build only, nothing is pushed)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      IMAGE: afterme-backend:ci
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      # The Dockerfile takes the interpreter version as a build argument and refuses to build
+      # if it differs from this file.
+      - name: Read the Python version (backend/.python-version)
+        id: python
+        run: echo "version=$(tr -d '[:space:]' < backend/.python-version)" >> "$GITHUB_OUTPUT"
+
+      - name: Build the image
+        run: >-
+          docker build
+          --build-arg PYTHON_VERSION=${{ steps.python.outputs.version }}
+          --tag "$IMAGE"
+          backend
+
+      - name: Import the application inside the image
+        run: docker run --rm "$IMAGE" python -c "import app.main"
+
+      - name: Every process entry point imports, and the CLI starts
+        run: |
+          docker run --rm "$IMAGE" python -c "import app.main, workers.engine, workers.maintenance, cli.admin"
+          docker run --rm "$IMAGE" python -m cli.admin --help > /dev/null
+
+      - name: Runs as a non-root user
+        run: |
+          uid="$(docker run --rm "$IMAGE" id -u)"
+          echo "uid=$uid"
+          test "$uid" != "0"
+
+      - name: The API command passes --no-proxy-headers
+        run: |
+          cmd="$(docker inspect --format '{{json .Config.Cmd}}' "$IMAGE")"
+          echo "$cmd"
+          echo "$cmd" | grep -q -- '--no-proxy-headers'
+          echo "$cmd" | grep -q -- '0.0.0.0'

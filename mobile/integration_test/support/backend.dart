@@ -52,6 +52,23 @@ class ProbeSession {
   Map<String, String> get headers => {'Authorization': 'Bearer $accessToken'};
 }
 
+/// A trusted contact's browser session in the release portal: the CSRF pair and the
+/// portal cookie. Held by the tests so they can open the same page again later.
+class PortalSession {
+  PortalSession._({required this.csrf, required this.csrfCookie});
+
+  final String csrf;
+  final String csrfCookie;
+  String portalCookie = '';
+
+  /// The page the code was accepted with (the content).
+  String page = '';
+
+  String get _cookies =>
+      '${Backend.csrfCookieName}=$csrfCookie'
+      '${portalCookie.isEmpty ? '' : '; ${Backend.portalCookieName}=$portalCookie'}';
+}
+
 /// The backend answered something the test did not expect.
 class BackendFailure implements Exception {
   BackendFailure(this.message);
@@ -71,19 +88,22 @@ class BackendFailure implements Exception {
 /// `http://10.0.2.2:8000` the app itself talks to (cleartext is allowed for that host in
 /// the dev flavor's network security config).
 class Backend {
-  Backend({required this.baseUrl, required this._testToken})
-    : _dio = Dio(
-        BaseOptions(
-          baseUrl: baseUrl,
-          connectTimeout: const Duration(seconds: 10),
-          sendTimeout: const Duration(seconds: 10),
-          receiveTimeout: const Duration(seconds: 30),
-          responseType: ResponseType.plain,
-          followRedirects: false,
-          // Every status is an answer the tests look at themselves.
-          validateStatus: (_) => true,
-        ),
-      );
+  Backend({
+    required this.baseUrl,
+    required this._testToken,
+    this.hostControlUrl = '',
+  }) : _dio = Dio(
+         BaseOptions(
+           baseUrl: baseUrl,
+           connectTimeout: const Duration(seconds: 10),
+           sendTimeout: const Duration(seconds: 10),
+           receiveTimeout: const Duration(seconds: 30),
+           responseType: ResponseType.plain,
+           followRedirects: false,
+           // Every status is an answer the tests look at themselves.
+           validateStatus: (_) => true,
+         ),
+       );
 
   /// From `--dart-define`: `API_BASE_URL` (the same value the app was built with) and
   /// `TEST_TOKEN` (the backend's `AFTERME_TEST_SUPPORT_TOKEN`).
@@ -101,10 +121,19 @@ class Backend {
         "backend's AFTERME_TEST_SUPPORT_TOKEN> (tool/integration.sh does this).",
       );
     }
-    return Backend(baseUrl: base, testToken: token);
+    return Backend(
+      baseUrl: base,
+      testToken: token,
+      // Only the tests that need the host (Hold, premium) read it.
+      hostControlUrl: const String.fromEnvironment('HOST_CONTROL_URL'),
+    );
   }
 
   final String baseUrl;
+
+  /// `tool/it_host.py`'s address as the emulator sees it (`HOST_CONTROL_URL`); empty when
+  /// the run was not started by `tool/integration.sh`.
+  final String hostControlUrl;
   final String _testToken;
   final Dio _dio;
 
@@ -306,6 +335,167 @@ class Backend {
       throw BackendFailure('The page holds no csrf field.');
     }
     return match.group(1)!;
+  }
+
+  // --- the host (tool/it_host.py): what the phone cannot do ---------------------------
+
+  Future<Map<String, dynamic>> _host(
+    String path, [
+    Map<String, Object?> body = const {},
+  ]) async {
+    if (hostControlUrl.isEmpty) {
+      throw BackendFailure(
+        'HOST_CONTROL_URL is not set. This test needs the host-side helper that '
+        'tool/integration.sh starts (operator Hold, account plan); run it through '
+        'that script.',
+      );
+    }
+    final response = await _dio.post<String>(
+      '$hostControlUrl$path',
+      data: body,
+      options: Options(
+        headers: _testHeaders,
+        contentType: Headers.jsonContentType,
+      ),
+    );
+    final decoded = _json(response);
+    if (response.statusCode != 200 || decoded['ok'] != true) {
+      throw BackendFailure(
+        'host $path: HTTP ${response.statusCode}: ${response.data}',
+      );
+    }
+    return decoded;
+  }
+
+  /// The operator enters the Hold circuit breaker (`afterme-admin hold enter`).
+  Future<void> holdEnter() => _host('/hold/enter');
+
+  /// The operator ends the manual Hold (`afterme-admin hold exit`); the worker then
+  /// rolls back, shifts and tells each affected person on its next tick.
+  Future<void> holdExit() => _host('/hold/exit');
+
+  /// `afterme-admin hold status`: whether a Hold is active, from the engine's own view.
+  Future<bool> holdActive() async {
+    final status =
+        (await _host('/hold/status'))['status'] as Map<String, dynamic>;
+    return status['hold_active'] == true;
+  }
+
+  /// Sets the account's plan (there is no billing to do it with): `free` or `premium`.
+  Future<void> setTier(String userId, String tier) =>
+      _host('/tier', {'user_id': userId, 'tier': tier});
+
+  // --- the release portal, as the trusted contact's browser (API_SPEC §13.1) ----------
+
+  static const portalCookieName = '__Host-afterme_portal';
+
+  /// The newest release link mailed to [contactEmail] (the `rt_...` token of
+  /// `/c/release#rt_...`, in a `contact_alert_with_release` or `contact_release` mail).
+  Future<String> releaseLinkToken(
+    String contactEmail, {
+    Duration timeout = const Duration(seconds: 40),
+  }) async {
+    final deadline = DateTime.now().add(timeout);
+    final pattern = RegExp(r'/c/release#(rt_[A-Za-z0-9_-]+)');
+    while (true) {
+      for (final message in await mail(to: contactEmail, limit: 30)) {
+        final match = pattern.firstMatch(message.text);
+        if (match != null) {
+          return match.group(1)!;
+        }
+      }
+      if (DateTime.now().isAfter(deadline)) {
+        final any = await mail(to: contactEmail, limit: 30);
+        throw BackendFailure(
+          'No release link was mailed to $contactEmail after '
+          '${timeout.inSeconds}s. Templates sent to that address: '
+          '${any.map((m) => m.template).toList()}',
+        );
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+    }
+  }
+
+  /// What a contact does with a release link: the landing page (CSRF cookie and field),
+  /// the token exchanged for a portal session (cookie), a code mailed to the verified
+  /// address and read from the mail directory, and the code entered. Every step is
+  /// checked. Returns the session, still usable for [portalView], and the page with the
+  /// content.
+  Future<PortalSession> openRelease(
+    String token, {
+    required String contactEmail,
+  }) async {
+    final landing = await _get('/c/release');
+    _expect(landing, 200, 'GET /c/release');
+    final csrf = _csrfField(landing.data ?? '');
+    final csrfCookie = _cookieValue(landing, csrfCookieName);
+
+    final session = PortalSession._(csrf: csrf, csrfCookie: csrfCookie);
+    final opened = await _postForm(
+      '/c/release/session',
+      fields: {'token': token, 'csrf': csrf},
+      headers: {'Cookie': session._cookies},
+    );
+    _expect(opened, 200, 'POST /c/release/session');
+    session.portalCookie = _cookieValue(opened, portalCookieName);
+    if (!(opened.data ?? '').contains('one-time code')) {
+      throw BackendFailure('The release session page does not offer a code.');
+    }
+
+    final before = (await mail(
+      to: contactEmail,
+      template: 'portal_code',
+      limit: 30,
+    )).length;
+    final sent = await _postForm(
+      '/c/release/code',
+      fields: {'csrf': csrf},
+      headers: {'Cookie': session._cookies},
+    );
+    _expect(sent, 200, 'POST /c/release/code');
+    final codes = await waitForMail(
+      to: contactEmail,
+      template: 'portal_code',
+      count: before + 1,
+    );
+    final match = RegExp(r'Your code is (\d{6})').firstMatch(codes.first.text);
+    if (match == null) {
+      throw BackendFailure('The portal_code mail holds no 6-digit code.');
+    }
+
+    final verified = await _postForm(
+      '/c/release/verify',
+      fields: {'csrf': csrf, 'code': match.group(1)!},
+      headers: {'Cookie': session._cookies},
+    );
+    _expect(verified, 200, 'POST /c/release/verify');
+    session.page = verified.data ?? '';
+    return session;
+  }
+
+  /// `POST /c/release/view` with the session [openRelease] returned: the content again
+  /// while it is still shown to this contact, otherwise what the page says instead.
+  Future<String> portalView(PortalSession session) async {
+    final response = await _postForm(
+      '/c/release/view',
+      fields: {'csrf': session.csrf},
+      headers: {'Cookie': session._cookies},
+    );
+    if (response.statusCode != 200 && response.statusCode != 400) {
+      throw BackendFailure(
+        'POST /c/release/view: HTTP ${response.statusCode}: ${response.data}',
+      );
+    }
+    return response.data ?? '';
+  }
+
+  String _cookieValue(Response<String> response, String name) {
+    for (final cookie in response.headers['set-cookie'] ?? const <String>[]) {
+      if (cookie.startsWith('$name=')) {
+        return cookie.substring(name.length + 1).split(';').first;
+      }
+    }
+    throw BackendFailure('The response set no $name cookie.');
   }
 
   // --- a probe session: what the server holds ---------------------------------------

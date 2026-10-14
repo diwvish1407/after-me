@@ -13,7 +13,7 @@ from collections.abc import Collection
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
-from sqlalchemy import and_, exists, func, or_, select, text, update
+from sqlalchemy import BigInteger, Text, and_, cast, exists, func, or_, select, text, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -30,6 +30,19 @@ from app.plans.models import EscalationPlan, EscalationStep, EscalationStepConta
 class DueDeadline:
     user_id: uuid.UUID
     next_due_at: datetime
+
+
+# The largest ``reminder_lead_minutes`` the CHECK on ``checkin_configurations`` allows. A
+# deadline further away than this cannot be inside any person's reminder window, so the
+# candidate scan stops there instead of reading every deadline of the next days.
+MAX_REMINDER_LEAD_MINUTES = 240
+
+
+def pre_reminder_stamp(due_at: datetime) -> str:
+    """What identifies one deadline in a pre-deadline reminder's dedupe key: whole seconds since
+    the epoch. SQL builds the same text (``reminder_candidates``), so the candidate scan can tell
+    which deadlines were already reminded without a column of its own."""
+    return str(int(due_at.timestamp()))
 
 
 class EngineStore:
@@ -374,6 +387,39 @@ class EngineStore:
         exclude: Collection[uuid.UUID] = (),
     ) -> list[tuple[uuid.UUID, datetime, int]]:
         lead = CheckinConfiguration.reminder_lead_minutes * text("interval '1 minute'")
+        # A person is done for this deadline when its e-mail reminder exists (in any state, a
+        # cancelled one too: the dedupe key would refuse a second) AND a push reminder exists
+        # for every device that has a push token now. Without the first, every person inside a
+        # window was read, locked and re-checked on every tick until the deadline, and a full
+        # last page kept the worker from ever sleeping. Without the second, a phone whose
+        # token arrived after the e-mail reminder (permission granted late, a reinstall, a new
+        # phone) never got its push (review E-2). The device test is the same as
+        # ``push_devices`` (not revoked, has a token), so a person that is a candidate always
+        # gets at least one new row and is never rescanned forever. Cost: one index probe for
+        # the e-mail, then the person's devices (ix_devices_user) and one probe per device.
+        key_prefix = func.concat(
+            "prereminder:",
+            cast(CheckinConfiguration.user_id, Text),
+            ":",
+            cast(cast(func.extract("epoch", CheckinConfiguration.next_due_at), BigInteger), Text),
+        )
+        email_key = func.concat(key_prefix, ":email")
+        push_key = func.concat(key_prefix, ":push:", cast(Device.id, Text))
+        device_without_push = exists().where(
+            Device.user_id == CheckinConfiguration.user_id,
+            Device.revoked_at.is_(None),
+            Device.push_token.is_not(None),
+            # correlated to BOTH outer rows (the device and the person two levels up), never a
+            # second scan of checkin_configurations
+            ~exists()
+            .where(Notification.dedupe_key == push_key)
+            .correlate(CheckinConfiguration, Device),
+        )
+        # ``_pre_reminder`` queues nothing for an account that is not active (suspended, being
+        # deleted): such a person would otherwise be a candidate on every tick of the window.
+        active_account = exists().where(
+            User.id == CheckinConfiguration.user_id, User.status == "active"
+        )
         stmt = (
             select(
                 CheckinConfiguration.user_id,
@@ -384,7 +430,11 @@ class EngineStore:
                 CheckinConfiguration.status == "active",
                 CheckinConfiguration.reminder_lead_minutes > 0,
                 CheckinConfiguration.next_due_at > now,
+                CheckinConfiguration.next_due_at
+                <= now + timedelta(minutes=MAX_REMINDER_LEAD_MINUTES),
                 and_(CheckinConfiguration.next_due_at - lead <= now),
+                active_account,
+                or_(~exists().where(Notification.dedupe_key == email_key), device_without_push),
             )
             .order_by(CheckinConfiguration.next_due_at, CheckinConfiguration.user_id)
             .limit(limit)

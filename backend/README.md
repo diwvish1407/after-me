@@ -61,7 +61,9 @@ make setup
 | `make maintenance` | the retention job once (`python -m workers.maintenance`, `--every N` loops): scrubs the contacts of closed accounts once their all-clear has left and hard-deletes accounts 30 days after the request |
 | `make admin ARGS="email-test --to ADDRESS"` / `ARGS="push-test --token TOKEN"` | prove a provider configuration end to end (DNS, keys, project) without touching an account: prints `ok: provider=… message_id=…` or the failure kind |
 | `make admin ARGS="status"` | operator CLI: `status` (exit 1 if anything would page), `hold status`, `hold enter --reason "…"`, `hold exit [--include-ingestion]`, `incident void <id>`, `action retry <id>` |
+| `make admin ARGS="beta-report [--since YYYY-MM-DD] [--until YYYY-MM-DD] [--json]"` | the closed-beta review (TEST_PLAN §12): metrics for the period, then every incident in which a contact was messaged, with a timeline in minutes from the due time, per-contact delivery (`contact-1`, `contact-2`) and deterministic verdict hints; incidents that tripped a wrongful-alert-candidate rule say `NEEDS HUMAN REVIEW`. Read-only (a `READ ONLY` transaction, no audit row); only UUIDs, counts, template keys, statuses and times. Dates are UTC days, both inclusive |
 | `make engine-gate` | the Phase 5 exit gate: the T0-T8 lifecycle 100 times in a row, then every engine suite |
+| `make gameday` | the game-day rehearsal of OPS-01..03 against the real API and worker processes on a throwaway database (`afterme_gameday`, ports from 8010); prints a PASS/FAIL table, exit 0 only if all pass; `ARGS="--only ops-02"` for one scenario (see below and `docs/GAMEDAYS.md`) |
 | `make check` | format check, lint, types, tests with the coverage gate, audit (CI additionally runs the migration round trip: `make migrate-check`) |
 
 Coverage is not on by default, so a single file or `-k` run exits 0 when its tests pass:
@@ -224,7 +226,7 @@ is held as `SecretStr`, and never appears in logs or validation errors.
 | `SESSION_ABSOLUTE_DAYS` | `365` | no | 1 to 730. |
 | `HMAC_PEPPER` **(S)** | none | yes (all envs) | At least 32 bytes. Keys code, IP, e-mail and rate-limit hashes. |
 | `HMAC_PEPPER_PREVIOUS` **(S)** | none | no | Optional, at least 32 bytes; accepted during pepper rotation. |
-| `EMAIL_PROVIDER` | `console` | yes | `console` (dev) or `recording` (tests); both are refused in staging/prod until Phase 8. |
+| `EMAIL_PROVIDER` | `console` | yes | `console` (dev) or `recording` (tests); both are refused in staging/prod. Real providers: `resend`, `postmark`, `smtp` (+ an optional fallback). |
 | `EMAIL_FROM` | `AfterMe <no-reply@afterme.invalid>` | yes | Sender address. |
 | `DEV_MAIL_DIR` | `backend/.dev_mail` | no | Where the console provider writes messages (git-ignored). |
 | `TRUSTED_PROXY_HOPS` | `0` | yes | Number of trusted reverse proxies in front of the app. `0` means no proxy (the socket peer is the client); `1` for a single load balancer such as Cloud Run. Must be set explicitly in staging/prod; a wrong value makes every per-IP rate limit and every stored `ip_hash` use the proxy address (too low) or lets clients choose their own address (too high). 0 to 10. |
@@ -250,8 +252,13 @@ per /64 network, not per address.
 
 ### Production start command
 
-No Dockerfile exists yet (the image build is deferred, see the CI notes below). The process is
-started like this, with the environment variables above supplied by the platform:
+`backend/Dockerfile` builds one image for every process (`uv sync --frozen --no-dev`, the Python
+version of `.python-version`, a non-root user, no secrets in any layer); the command chooses the
+process: the API by default, `python -m workers.engine`, `python -m workers.maintenance --every
+900`, `python -m cli.admin …`, `alembic upgrade head`. The API command is the one below with the
+port taken from `PORT` (default 8080). The image is built, and checked to import, by the `docker`
+job of `.github/workflows/backend.yml`. Outside a container the process is started like this, with
+the environment variables above supplied by the platform:
 
 ```bash
 uv run alembic upgrade head          # migration job, as afterme_owner, before the rollout
@@ -283,6 +290,34 @@ make admin ARGS="status"
   The next tick (15 s) opens the incident; stages follow at `grace` and `offset` minutes, and a
   contact message waits 5 minutes (`AFTERME_SETTLE_DELAY_SECONDS`) before it is sent.
 * Configuration: `docs/ESCALATION_ENGINE.md` §13 and §13.1 (every parameter is `AFTERME_<NAME>`).
+
+### Game-day rehearsal (Phase 10)
+
+`make gameday` rehearses the operational game days of `docs/TEST_PLAN.md` §7 locally, against the
+**real** processes: OPS-01 (probe path and ingress down for 15 simulated minutes: Hold, backdated
+start, rollback and shift on exit), OPS-02 (the worker `SIGKILL`ed for 30 simulated minutes:
+heartbeat page, anchor rule, a stage put back with `incident_delayed`, nothing sent twice) and
+OPS-03 (the Resend credentials rejected, then both providers: fallback, backoff, the backlog page,
+the drain), in about five minutes.
+
+```bash
+make gameday                         # all three; exit 0 only if every check passes
+make gameday ARGS="--only ops-02"    # ops-01, ops-02, ops-03
+```
+
+* It needs the `.venv` and a local PostgreSQL reachable as a superuser by `psql -d postgres` (like
+  `mobile/tool/integration.sh`). It creates, migrates and drops **only** `afterme_gameday` (never
+  `afterme_dev`, `afterme_test`, `afterme_it`) and starts uvicorn and `python -m workers.engine` on
+  the first free ports from 8010, with test support on (a random shared token), rate limits off, a
+  one-second worker tick and the test clock. `APP_ENV=test` keeps `backend/.env` out of it.
+* Each scenario starts from a freshly created database and fresh users. OPS-03 drives the real
+  `Engine` and `Dispatcher` in-process (a worker subprocess cannot take an injected HTTP transport)
+  with an `httpx.MockTransport` for the two providers.
+* A check that asserts something a design document promises and fails prints `FAIL (defect)`.
+  Everything it started is stopped on exit, on Ctrl-C and on the next run; run it twice if in doubt.
+* What it cannot prove (real providers, a real uptime check, a real pager, two replicas) is the
+  staging procedure in `docs/GAMEDAYS.md`. The pure parts of the harness are unit-tested
+  (`tests/unit/test_gameday_checks.py`).
 
 ### Endpoints (Phases 1 to 5)
 
@@ -382,6 +417,7 @@ scripts/           dev_db_setup.sh        roles and databases (idempotent, run a
                    generate_jwt_key.py    new Ed25519 key (+ pepper with --with-pepper)
                    migrate_check.sh       migration round trip on a throwaway database
                    audit_deps.py          pip-audit wrapper (fails only on fixable advisories)
+                   gameday.py             the OPS-01..03 game-day rehearsal (+ gameday_support/)
 ```
 
 Each module follows `router → service → repository → models` (ARCHITECTURE §4.3). Repository
@@ -404,9 +440,13 @@ migrated schema, including CHECK constraints and partial indexes.
 
 `.github/workflows/backend.yml` runs on a PostgreSQL 17 service: format check, ruff, mypy, the
 migration round trip, pytest with the coverage gate, and the dependency audit. A second job runs
-the gitleaks secret scan over the full history. The Docker image build listed in
-`docs/TEST_PLAN.md` §10 is deferred to Phase 12 (deployment), together with a Dockerfile; until
-then the start command above is the reference.
+the gitleaks secret scan over the full history. The `docker` job builds `backend/Dockerfile`
+(nothing is pushed) and runs `python -c "import app.main"` inside it, checks that the image does
+not run as root and that its API command carries `--no-proxy-headers`.
+`.github/workflows/nightly.yml` runs the T0-T8 lifecycle and every engine suite 100 times
+(`make engine-gate`) and the concurrency suite 100 times, every night.
+`.github/workflows/emulator.yml` runs `mobile/tool/integration.sh` on an Android emulator, weekly
+and on demand.
 
 ## Known limitations
 
@@ -436,11 +476,18 @@ then the start command above is the reference.
   not by database column defaults (`now()` in DDL), so a few `created_at` values are real time
   while a test clock is on. Mail reading works with the `console` provider on the same machine
   only. Both exist for the integration suite and are refused in production.
-* Retention (Phase 7): the maintenance job removes closed accounts and scrubs their contacts. The
-  other retention rows of DATABASE §5 (old check-in events, notifications, probes, expired
-  tokens and sessions) have their grants but no job yet.
-* Only the `console` (dev) and `recording` (tests) email providers exist, so `staging`/`prod`
-  cannot start until Phase 8 adds a real provider. This is deliberate.
+* Retention (`app/maintenance/retention.py`, the maintenance job): closed accounts are removed and
+  their contacts scrubbed; messages and their log 90 days after their incident closed (never
+  while it is open), direct-mail receipts 90 days, probes 30 days, check-in events 400 days,
+  expired invitations and portal tokens, sessions and codes 30 days after they ended; login
+  sessions and their refresh tokens 30 days after they expired, were revoked or were used
+  (never a live session, never a closing account's); devices 90 days after they were last seen
+  when no live session runs on them and their owner has no open incident; audit records after
+  `AUDIT_RETENTION_DAYS` (default 365, at least 90; counsel confirms the period), except the trail
+  of an incident that is still open and anything about an account that is being deleted. Not
+  purged: `email_suppressions` (hashes only) and `rate_limit_counters` (trimmed on use).
+* `staging`/`prod` need a real email provider (`resend`, `postmark` or `smtp`) and a push
+  provider (`fcm`): the `console` and `recording` providers are refused there on purpose.
 * The maintenance job (Phase 7) does not yet purge unverified signups older than 24 h, expired
   tokens and expired rate-limit windows (rate-limit rows of a key are trimmed when that key is
   hit).

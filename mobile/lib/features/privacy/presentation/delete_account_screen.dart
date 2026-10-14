@@ -157,13 +157,10 @@ class _DeleteAccountScreenState extends ConsumerState<DeleteAccountScreen> {
             ),
             Gap.md,
             if (_busy) ...[
-              Semantics(
+              StatusBanner(
+                kind: StatusBannerKind.info,
+                message: l10n.deleteWorking,
                 liveRegion: true,
-                container: true,
-                child: StatusBanner(
-                  kind: StatusBannerKind.info,
-                  message: l10n.deleteWorking,
-                ),
               ),
               Gap.md,
             ],

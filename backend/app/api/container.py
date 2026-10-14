@@ -15,8 +15,9 @@ from app.notifications.email import EmailMessage, EmailProvider, ProviderResult
 from app.notifications.mailer import Mailer, ReceiptSink
 from app.notifications.models import EmailReceipt
 from app.notifications.providers.factory import build_email_provider
+from app.security.gcp_kms import build_gcp_kms
 from app.security.hashing import Pepper
-from app.security.kms import LocalKms
+from app.security.kms import KmsProvider, LocalKms, UnavailableKms
 from app.security.passwords import PasswordHasher
 from app.security.rate_limit import RateLimiter
 from app.security.vault import InstructionVault
@@ -61,10 +62,10 @@ def _receipt_writer(db: Database) -> ReceiptSink:
     return write
 
 
-def _vault(settings: Settings, db: Database) -> InstructionVault:
-    if settings.kms_provider != "local":
-        msg = f"KMS provider {settings.kms_provider!r} is not available in this build"
-        raise ValueError(msg)
+def build_kms(settings: Settings) -> KmsProvider:
+    """The configured key-wrapping provider (``KMS_PROVIDER``)."""
+    if settings.kms_provider == "gcp_kms":
+        return build_gcp_kms(settings)
     active = decode_kek(settings.kms_local_key.get_secret_value())
     previous = (
         decode_kek(settings.kms_local_key_previous.get_secret_value())
@@ -74,7 +75,11 @@ def _vault(settings: Settings, db: Database) -> InstructionVault:
     if active is None:  # pragma: no cover - Settings already refuses this
         msg = "KMS_LOCAL_KEY is invalid"
         raise ValueError(msg)
-    return InstructionVault(LocalKms(active, previous), independent_session=db.independent_session)
+    return LocalKms(active, previous)
+
+
+def _vault(settings: Settings, db: Database) -> InstructionVault:
+    return InstructionVault(build_kms(settings), independent_session=db.independent_session)
 
 
 def build_services(
@@ -84,6 +89,7 @@ def build_services(
     email_provider: EmailProvider | None = None,
     database_url: str | None = None,
     application_name: str = "afterme-api",
+    vault: InstructionVault | None = None,
 ) -> AppServices:
     if settings.hmac_pepper is None:  # pragma: no cover - Settings already refuses this
         msg = "HMAC_PEPPER is required"
@@ -116,8 +122,10 @@ def build_services(
             email_provider or _email_provider(settings),
             sender=settings.email_from,
             receipts=_receipt_writer(db),
+            support_url=f"{settings.public_base_url}/support",
+            abuse_email=settings.abuse_email,
         ),
-        vault=_vault(settings, db),
+        vault=vault if vault is not None else _vault(settings, db),
     )
 
 
@@ -128,11 +136,17 @@ def build_worker_services(
     email_provider: EmailProvider | None = None,
 ) -> AppServices:
     """The escalation worker's services: the same container, connected as ``afterme_worker``
-    (which can create incidents; the API role cannot, INV-1)."""
+    (which can create incidents; the API role cannot, INV-1).
+
+    The worker decides releases and never reads content (SECURITY §6.2; BD-5): its database role
+    has no privilege on ``user_keys`` or on ``instructions.content_ciphertext``, and its vault is
+    :class:`UnavailableKms`: no KMS client, no credentials, no network call to a KMS is ever made
+    from this container, whatever ``KMS_PROVIDER`` says."""
     return build_services(
         settings,
         clock=clock,
         email_provider=email_provider,
         database_url=settings.worker_database_url.get_secret_value(),
         application_name="afterme-worker",
+        vault=InstructionVault(UnavailableKms()),
     )

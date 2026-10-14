@@ -11,6 +11,7 @@ import '../../../core/time/time_format.dart';
 import '../../../l10n/gen/app_localizations.dart';
 import '../../checkin/presentation/schedule_labels.dart';
 import '../../contacts/presentation/contact_labels.dart';
+import '../../instructions/application/instructions_controller.dart';
 import '../application/onboarding_controller.dart';
 import '../application/setup_controller.dart';
 import 'onboarding_scaffold.dart';
@@ -77,6 +78,9 @@ class _DoneStepScreenState extends ConsumerState<DoneStepScreen> {
     final t = context.tokens;
     final setup =
         ref.watch(setupControllerProvider).value ?? const SetupState();
+    // Read here, where the summary shows it: Home never starts this read.
+    final instructions =
+        ref.watch(instructionsControllerProvider).value ?? setup.instructions;
     final schedule = setup.schedule;
     final first = setup.contacts.isEmpty ? null : setup.contacts.first;
     final String message;
@@ -107,15 +111,12 @@ class _DoneStepScreenState extends ConsumerState<DoneStepScreen> {
           Gap.md,
         ],
         if (message.isNotEmpty) ...[
-          Semantics(
+          StatusBanner(
+            kind: _activated
+                ? StatusBannerKind.info
+                : StatusBannerKind.attention,
+            message: message,
             liveRegion: true,
-            container: true,
-            child: StatusBanner(
-              kind: _activated
-                  ? StatusBannerKind.info
-                  : StatusBannerKind.attention,
-              message: message,
-            ),
           ),
           Gap.md,
         ],
@@ -167,10 +168,10 @@ class _DoneStepScreenState extends ConsumerState<DoneStepScreen> {
               : l10n.summaryNoPlan,
         ),
         _SummaryRow(
-          done: setup.instructions.isNotEmpty,
-          text: setup.instructions.isEmpty
+          done: instructions.isNotEmpty,
+          text: instructions.isEmpty
               ? l10n.summaryNoInstruction
-              : l10n.summaryInstructions(setup.instructions.length),
+              : l10n.summaryInstructions(instructions.length),
         ),
         const SizedBox(height: AppSpacing.xs),
         Text(

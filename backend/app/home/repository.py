@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import uuid
 
-from sqlalchemy import select
+from sqlalchemy import exists, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.models import AuditLog
+from app.ops.models import SystemHold
 
 
 class ActivityRepository:
@@ -23,3 +24,14 @@ class ActivityRepository:
             .limit(limit)
         )
         return list((await self._session.execute(stmt)).scalars())
+
+
+async def service_interruption(session: AsyncSession) -> bool:
+    """Is a Hold blocking contact-facing work? Same definition as the engine's own (a Hold blocks
+    until its exit has been *processed*, not merely ended), written here because the API process
+    never imports the engine (INV-1). The API role may read ``system_holds`` and nothing else
+    about it."""
+    stmt = select(
+        exists().where(or_(SystemHold.ended_at.is_(None), SystemHold.exit_processed_at.is_(None)))
+    )
+    return bool((await session.execute(stmt)).scalar_one())

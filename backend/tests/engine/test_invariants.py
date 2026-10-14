@@ -52,8 +52,11 @@ def test_the_api_never_imports_the_engine() -> None:
         for module in _imports(path):
             if module == "app.engine" or module.startswith("app.engine."):
                 offenders.append(f"{relative} imports {module}")
-    # the only non-engine modules allowed to use it are the operator tooling and the worker
-    allowed = {"ops/admin.py"}
+    # the only non-engine modules allowed to use it are the operator tooling and the worker;
+    # ops/users.py is CLI-only (never imported by the API process) and takes the per-user lock
+    # through EngineStore.lock_user, so that its change follows the engine's lock order; so is
+    # ops/kms.py (the key re-wrap and rotation commands), for the same reason
+    allowed = {"ops/admin.py", "ops/users.py", "ops/kms.py"}
     assert [o for o in offenders if o.split(" ")[0] not in allowed] == []
 
 

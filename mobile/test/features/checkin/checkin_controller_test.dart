@@ -920,5 +920,8 @@ class _BrokenSecureStore implements SecureStore {
   Future<void> delete(String key) async => throw StateError('storage');
 
   @override
+  Future<Set<String>> keys() async => throw StateError('storage');
+
+  @override
   Future<void> deleteAll() async => throw StateError('storage');
 }

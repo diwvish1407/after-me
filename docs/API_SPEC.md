@@ -205,7 +205,8 @@ Security emails (Phase 1): a login from a new device, a refresh-token reuse that
   "incident": null,
   "plan_summary": { "stages": 2, "contacts_total": 1, "contacts_verified": 1, "instructions_active": 3 },
   "readiness": { "ready": true, "issues": [] },
-  "recent_activity": [ { "action": "checkin.recorded", "occurred_at": "2026-10-13T14:00:00Z" } ]
+  "recent_activity": [ { "action": "checkin.recorded", "occurred_at": "2026-10-13T14:00:00Z" } ],
+  "service": { "interruption": false }
 }
 ```
 
@@ -217,6 +218,7 @@ During an incident, `incident` is the object described in §9.
 * `incident` is always `null` until Phase 5. `plan_summary.stages` and `instructions_active` are `0` until Phases 5 and 6.
 * `readiness.issues` is a list of `{ "code": …, "contact_id": uuid | null }`. `contact_id` names the contact an issue is about (`contact_pending`, `contact_declined`, `contact_bounced`, `contact_opted_out`) and is `null` otherwise. Only contacts that are switched on (`is_active`) are judged. `no_stages`, `stage_empty` and `release_contact_unverified` arrive with Phases 5 and 6. `ready` is `true` exactly when `issues` is empty.
 * `recent_activity` is the newest five **user-visible** audit records (the Activity feed, SECURITY §9), newest first.
+* `service.interruption` (Phase 10) is the same for everyone: `true` while a Hold blocks contact-facing work, **until its exit has been processed** (deadlines shifted), the engine's own definition. It carries no reason, time or operator. A client that does not know the field ignores it; a server that predates it omits it (read as `false`).
 * `user.tier` and `checkin.status` are the server's view; the client never derives them.
 
 ## 6. Check-in
@@ -567,9 +569,9 @@ Every `/a` page carries `Content-Security-Policy: default-src 'none'; script-src
 
 **Phase 8, implemented.** `provider` is `resend` or `postmark`; one that is not configured (no webhook secret) is a bare `404`. Verification: **Resend**: Svix (`svix-id`, `svix-timestamp` within 5 minutes, `svix-signature` = `v1,` + base64 HMAC-SHA256 of `{id}.{timestamp}.{body}` with the base64 key of `whsec_…`); **Postmark**: HTTP Basic auth, the password of the webhook URL is the secret. A failed check is a bare `401` and changes nothing; a verified but unreadable body is `400`; otherwise `204`, whatever the event (events about messages we did not send through the outbox are acknowledged and ignored). Mapped events: delivered → log `delivered`; hard bounce (Resend `Permanent`; Postmark `HardBounce`/`BadEmailAddress`) → log `bounced`, address suppressed, every live contact with that address `bounced`, queued messages cancelled, each owner told; soft bounce, `email.failed`, `email.suppressed` → log `error` and the person is told the message could not be delivered (the contact's status is left alone); complaint → log `complained`, suppressed and `opted_out` everywhere, releases taken back, every owner told. The event's recipient must still be the contact's address, or it changes nothing. Events find their message by our `notification_id` tag/metadata first, then by the provider's message id, then (for mail sent straight to a contact) by the receipt written when it was sent. The route is rate-limited per IP (600/min), accepts bodies up to 512 KiB, and a signature with non-ASCII bytes is a `401`. A provider event id is applied once. A bounce of the person's own email is logged and changes nothing. The webhook can only add knowledge: it creates no incident, no stage and no release.
 | `GET /health/live` | none | Process alive |
-| `GET /health/ready` | none | DB reachable, migrations at head → `200`/`503` |
+| `GET /health/ready` | none | `200` when the DB is reachable and its revision is this image's head **or newer** (unknown to the image: logged `health.schema_ahead`, so a rollback after a migration still starts); `503` when the revision is older (not migrated), missing, or the DB is unreachable (Phase 12) |
 
-Admin operations (Hold enter/exit, key rotation) are **not** exposed over HTTP. They run via the `afterme-admin` CLI with operator credentials, and are audited.
+Admin operations (Hold enter/exit, key rotation) are **not** exposed over HTTP. They run via the operator CLI (`python -m cli.admin …`; in production the Cloud Run jobs `afterme-oncall-*`, `afterme-admin` and, for key rotation, `afterme-kms`, which runs as the API identity) and are audited.
 
 ## 15. Deliberately absent
 

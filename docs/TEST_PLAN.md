@@ -330,7 +330,7 @@ Release APK inspection: no secrets or API keys beyond public Firebase config; `a
 | MOB-46…50 | Accessibility | `androidTapTargetGuideline`, `labeledTapTargetGuideline`, `textContrastGuideline` on key screens; layouts at text scale 2.0 without overflow; semantics labels for status |
 | MOB-51…55 | App lock | Lock on cold start/timeout (fake auth service); fallback path; disabled state |
 | MOB-56…60 | Notifications | Payload → route mapping; foreground display; token refresh → `PUT /devices/current` *(Phase 8, built: `test/contracts/phase8_contract_test.dart` reads `push_payloads.json` so a server type without an app mapping fails; `test/features/notifications/` (push message parsing and routing, the coordinator's token life, flows, privacy: no token or payload in any log), `test/core/push/` (both adapters against a fake platform and mocked channels); manual on a real phone with the dev Firebase project: real token, delivery foreground/background/killed, the three channels and PRIVATE lock-screen rendering, `getInitialMessage` on Android 13+, no `VIBRATE`)* |
-| MOB-61…65 | Integration (`integration_test`, dev backend + test clock) | Onboarding → active plan; check-in; simulated miss → grace UI → I'M OK; escalation → I'M SAFE with reauth |
+| MOB-61…68 | Integration (`integration_test`, dev backend + test clock) | Onboarding → active plan; check-in; simulated miss → grace UI → I'M OK; escalation → I'M SAFE with reauth; export and delete; **Phase 10:** MOB-66 release to the contact's portal and its revocation, MOB-67 two stages with two contacts (+ I'M SAFE after stage 1 only), MOB-68 operator Hold (grace stays, nothing reaches the contact, I'M OK still closes it). The Hold is entered through a host-side helper (`mobile/tool/it_host.py`, 127.0.0.1, token-guarded, fixed commands) because the phone cannot run the operator CLI |
 
 **Phase 4 status of MOB-11…30 (built).** The check-in state machine (MOB-11…20) is `test/features/checkin/checkin_controller_test.dart` (success only after a 200; the key is stored before the request, reused on every retry, after process death and on resume; 409, 429, 426, 401, 503 and storage failures); Home state mapping (MOB-21…30) is `home_status_test.dart`, `home_controller_test.dart` and `home_screen_test.dart`. Repositories are tested over a fake Dio adapter (`checkin_data_test.dart`, `home_data_test.dart`); `phase4_contract_test.dart` parses every file in `docs/contracts/phase4` and asserts the recorded headers. Coverage gates added: `lib/features/checkin`, `lib/features/home`, `lib/core/time` (90%). Review and owner-decision additions: a pending tap survives a real sign-out (`pending_survives_signout_test.dart`), is dropped after 12 h on restore and before every retry (boundaries 12 h exactly / 11 h 59 m / negative age; open offline, resume, "Try again", 429 wait; mutation-checked), and the schedule screen follows a confirmed check-in; the password sheet for a longer interval (sheet then one retry with the same `If-Match`, cancel keeps the edits, wrong password, shortening / time-only / inactive need none; `problem_reauth_required_lengthen` in the contract test). MOB-61…65 (integration against the dev backend) were manual in Phase 4 (walked on the emulator, including an offline tap, process kill and relaunch) and are automated from Phase 7 (`mobile/integration_test/`, `mobile/tool/integration.sh`).
 
@@ -338,17 +338,20 @@ Release APK inspection: no secrets or API keys beyond public Firebase config; `a
 
 | ID | Scenario |
 |---|---|
-| E2E-01 | Full lifecycle with a real device, real email to test inboxes, real FCM (staging project), using the staging test-clock router |
+| E2E-01 | Full lifecycle with a real device, real email to test inboxes and real FCM (staging project), **in real time**: configuration refuses the test clock together with a real email provider (`config.py`, Phase 9), so the staging run uses the shortest grace period the product allows (60 minutes, a Premium test account, and the deadline placed by a database UPDATE: about 1 h 10 min per rehearsal) and, for a release, a stage 24 h out: about a day. The emulator suite (MOB-61…68, test clock, real processes) is where the whole lifecycle is proven at speed |
 | E2E-02 | Lost phone: escalation running → web `/a/checkin` → I'M SAFE → all-clear |
 | E2E-03 | Contact journey on mobile browsers (Chrome Android, Safari iOS, Gmail in-app browser) |
-| OPS-01 | **Game day: ingress outage.** Block the probe/ingress for 15 min → Hold → recovery → shift verified |
+| OPS-01 | **Game day: ingress outage.** Block the probe/ingress for 15 min → Hold → recovery → shift verified for incidents that were open, and the anchor rule for a deadline that passed inside the Hold (rehearsed by `make gameday`) |
 | OPS-02 | Kill all workers 30 min → heartbeat page → restart → correct catch-up |
 | OPS-03 | Invalid email-provider credentials → retries → fallback provider → backlog alert |
 | OPS-04 | Database failover (managed HA) during load → no duplicate effects; API 503s retried by clients |
 | OPS-05 | Backup restore into a scratch instance; app boots against it; data spot-checked |
 
+**Phase 10 status.** What can be rehearsed without your accounts is built: `make gameday` (backend/scripts/gameday.py) runs OPS-01, OPS-02 and OPS-03 against a throwaway database with the real API and worker processes ([GAMEDAYS.md](GAMEDAYS.md) is the procedure for the real thing in staging); `python -m cli.admin beta-report` produces the incident review the beta needs ([BETA_PLAN §7](BETA_PLAN.md#7-reviewing-an-escalated-incident)); `.github/workflows/nightly.yml` runs the lifecycle 100× every night and `.github/workflows/emulator.yml` the emulator suite weekly. **Not run, because they need what only you can supply:** E2E-01…03, OPS-03/04/05 against real providers and infrastructure, and the manual sheet on real phones ([MANUAL_TEST_SHEET.md](MANUAL_TEST_SHEET.md)).
+
 ## 8. Manual test checklist (before each beta/production release)
 
+- *The executable version of this list, with steps, expected results and severities, is [MANUAL_TEST_SHEET.md](MANUAL_TEST_SHEET.md).*
 - **Devices:** Pixel (stock Android 15/16), Samsung (One UI), Xiaomi/Redmi (HyperOS, aggressive battery), Oppo/OnePlus (ColorOS); one low-end device (≤ 3 GB RAM); Android 8.0 (minSdk) emulator.
 - **Accessibility:** TalkBack full journey (onboarding → check-in → I'M SAFE); font size max + display size max; dark mode; reduce motion.
 - **Permissions:** notifications denied/granted/revoked later; no biometrics enrolled; device without screen lock.
@@ -367,6 +370,8 @@ Release APK inspection: no secrets or API keys beyond public Firebase config; `a
 | PERF-03 | Dispatcher ≥ 50 messages/s with a fake provider |
 | PERF-04 | `GET /v1/home` p95 < 300 ms |
 | PERF-05 | App cold start < 2 s on a mid-range device; no jank (> 16 ms frames) on Home |
+
+**Phase 11 status.** `make perf` (backend/scripts/perf.py, 100,000 seeded users, real API and worker on a throwaway database) measured on an Apple M2 laptop with PostgreSQL 14, everything local, so indicative only: PERF-01 p95 19 ms (0 errors of 3,000, each stored once), PERF-04 p95 ≤ 25 ms in four Home states, PERF-02 10,000 incidents opened by +71 s with no duplicates, PERF-03 176 msg/s with 20–50 ms simulated provider latency. PERF-01 and PERF-02 **failed** before Phase 11 (p95 1,132 ms; last incident +534 s): fixed by migration `0011` (13 indexes, plans in `backend/tests/perf/PLANS.md`), concurrent engine units (4 at a time, each its own per-user transaction), a narrower reminder scan and an outbox drain loop. `tests/perf/test_hot_path_plans.py` keeps the hot paths on indexes and pins per-request round trips. **Re-measure on staging (Cloud SQL, Cloud Run).** PERF-05: on the emulator, time to first frame fell from 908 to 632 ms (profile build) and cold start now makes 2 requests instead of 7; **a real mid-range phone is still needed** for the target and for frame timings (`mobile/tool/perf_startup.sh --device <serial>`).
 
 ## 10. CI gates
 

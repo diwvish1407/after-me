@@ -123,6 +123,27 @@ def redact(_logger: WrappedLogger, _method: str, event_dict: EventDict) -> Event
     return event_dict
 
 
+_SEVERITY: dict[str, str] = {
+    "debug": "DEBUG",
+    "info": "INFO",
+    "warning": "WARNING",
+    "warn": "WARNING",
+    "error": "ERROR",
+    "exception": "ERROR",
+    "critical": "CRITICAL",
+    "fatal": "CRITICAL",
+}
+
+
+def add_severity(_: Any, __: str, event_dict: EventDict) -> EventDict:
+    """Cloud Logging reads the severity of a JSON log line from the ``severity`` key (upper case)
+    and shows every line as DEFAULT without it, so a severity-based alert would never see our
+    errors. ``level`` stays for readers of the plain log."""
+    level = str(event_dict.get("level", "info")).lower()
+    event_dict["severity"] = _SEVERITY.get(level, "DEFAULT")
+    return event_dict
+
+
 def _timestamper() -> Processor:
     return structlog.processors.TimeStamper(fmt="iso", utc=True)
 
@@ -144,6 +165,7 @@ def build_formatter(*, json: bool) -> logging.Formatter:
         processors=[
             structlog.stdlib.ProcessorFormatter.remove_processors_meta,
             structlog.processors.format_exc_info,
+            add_severity,
             redact,
             renderer,
         ],
@@ -196,6 +218,11 @@ def configure_logging(settings: Settings) -> None:
     # SQL statements and parameters are never logged, whatever LOG_LEVEL says.
     logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
     logging.getLogger("sqlalchemy.pool").setLevel(logging.WARNING)
+    # httpx logs every request as "POST <full URL> <status>" at INFO: for Cloud KMS that URL
+    # names the project, key ring and key; for the mail providers it names the endpoint. The
+    # adapters log what they need (a template, a failure code) themselves.
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
 
 
 def get_logger(name: str) -> structlog.stdlib.BoundLogger:

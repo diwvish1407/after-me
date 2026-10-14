@@ -18,6 +18,7 @@ from app.api.container import AppServices
 from app.audit import writer as audit
 from app.audit.models import AuditLog
 from app.audit.writer import AuditEvent
+from app.auth.models import User
 from app.core.config import DEV_ONLY_EMAIL_PROVIDERS
 from app.core.logging import get_logger
 from app.engine.runtime import HOLD_SERVICE_NAME, SERVICE_NAME
@@ -150,6 +151,23 @@ async def engine_status(services: AppServices) -> EngineStatus:
                 )
             ).scalar_one()
         )
+        # G5 cancels the actions of an incident whose owner is suspended and nothing brings them
+        # back: the incident is open, nobody is going to be told, and no new one can open.
+        stranded = [
+            r[0]
+            for r in (
+                await session.execute(
+                    select(EscalationIncident.id)
+                    .join(User, User.id == EscalationIncident.user_id)
+                    .where(
+                        User.status == "suspended",
+                        EscalationIncident.status.in_(OPEN_STATUSES),
+                    )
+                    .order_by(EscalationIncident.opened_at)
+                    .limit(5)
+                )
+            ).all()
+        ]
         last_hour = int(
             (
                 await session.execute(
@@ -242,6 +260,7 @@ async def engine_status(services: AppServices) -> EngineStatus:
     if message_age is not None and message_age > 300:  # noqa: PLR2004
         pages.append("queued message past send_after for 5 minutes")
     warnings: list[str] = []
+    warnings.extend(f"suspended account with an open incident {i}" for i in stranded)
     if attempts >= 5 and errors / attempts > 0.05:  # noqa: PLR2004
         warnings.append("provider error rate above 5% in the last 15 minutes")
     if fallback:

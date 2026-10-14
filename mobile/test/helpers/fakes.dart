@@ -9,6 +9,9 @@ class ThrowingSecureStore implements SecureStore {
   Future<void> delete(String key) async => throw StateError('keystore');
 
   @override
+  Future<Set<String>> keys() async => throw StateError('keystore');
+
+  @override
   Future<void> deleteAll() async => throw StateError('keystore');
 
   @override

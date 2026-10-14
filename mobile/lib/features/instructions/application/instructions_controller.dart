@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/repository_providers.dart';
@@ -101,6 +102,16 @@ class InstructionsController extends AsyncNotifier<List<InstructionSummary>> {
     if (ref.watch(authControllerProvider) != AuthStatus.signedIn) {
       return const [];
     }
+    // Home counts the active instructions and judges recipients who have not accepted.
+    // It follows this counter, not the list: listening to the list would start its read
+    // (which needs the password) every time Home opens.
+    listenSelf((previous, next) {
+      final before = previous?.value;
+      final after = next.value;
+      if (before != null && after != null && !listEquals(before, after)) {
+        ref.read(instructionChangesProvider.notifier).bump();
+      }
+    });
     ref
       ..listen(contactsControllerProvider, (previous, next) {
         final before = previous?.value;
@@ -467,6 +478,23 @@ final instructionsControllerProvider =
     AsyncNotifierProvider<InstructionsController, List<InstructionSummary>>(
       InstructionsController.new,
     );
+
+/// Counts the changes made to the instruction list once it has been read (a create, an
+/// edit, a delete, a re-read that found something else). It holds no content.
+///
+/// Home listens to this, never to [instructionsControllerProvider]: a listener starts the
+/// list's read, which since Phase 9 needs a password entered in the last five minutes, and
+/// Home must not make a request that cannot succeed just by being open.
+class InstructionChanges extends Notifier<int> {
+  @override
+  int build() => 0;
+
+  void bump() => state++;
+}
+
+final instructionChangesProvider = NotifierProvider<InstructionChanges, int>(
+  InstructionChanges.new,
+);
 
 /// The categories to offer, in the server's order (`GET /instruction-categories`).
 /// Ids this app version has no words for are left out. When the list cannot be read the

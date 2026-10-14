@@ -9,5 +9,6 @@ export 'error_view.dart';
 export 'fit_text.dart';
 export 'form_page.dart';
 export 'loading_view.dart';
+export 'progress_spinner.dart';
 export 'section_card.dart';
 export 'status_banner.dart';

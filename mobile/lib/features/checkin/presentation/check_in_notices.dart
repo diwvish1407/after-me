@@ -49,28 +49,25 @@ Widget expiredCheckInNotice(
   String? timezone,
 }) {
   final l10n = AppLocalizations.of(context);
-  return Semantics(
-    liveRegion: true,
-    container: true,
-    child: StatusBanner(
-      kind: StatusBannerKind.attention,
-      title: l10n.homeExpiredTitle,
-      message: l10n.homeExpiredBody(
-        formatSpokenDayTime(
-          context,
-          l10n,
-          checkIn.tappedAt!,
-          now: now,
-          timezone: timezone,
-        ),
-      ),
-      action: AppButton.text(
-        label: l10n.homeExpiredDismiss,
-        onPressed: ref
-            .read(checkInControllerProvider.notifier)
-            .dismissExpiredNotice,
+  return StatusBanner(
+    kind: StatusBannerKind.attention,
+    title: l10n.homeExpiredTitle,
+    message: l10n.homeExpiredBody(
+      formatSpokenDayTime(
+        context,
+        l10n,
+        checkIn.tappedAt!,
+        now: now,
+        timezone: timezone,
       ),
     ),
+    action: AppButton.text(
+      label: l10n.homeExpiredDismiss,
+      onPressed: ref
+          .read(checkInControllerProvider.notifier)
+          .dismissExpiredNotice,
+    ),
+    liveRegion: true,
   );
 }
 
@@ -119,13 +116,10 @@ Widget? incidentCheckInNotice(
   if (banner == null) {
     return null;
   }
-  return Semantics(
+  return StatusBanner(
+    kind: StatusBannerKind.attention,
+    title: banner.$1,
+    message: banner.$2 ?? '',
     liveRegion: true,
-    container: true,
-    child: StatusBanner(
-      kind: StatusBannerKind.attention,
-      title: banner.$1,
-      message: banner.$2 ?? '',
-    ),
   );
 }

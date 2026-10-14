@@ -14,6 +14,7 @@ from sqlalchemy import (
     CheckConstraint,
     ForeignKey,
     ForeignKeyConstraint,
+    Index,
     Integer,
     PrimaryKeyConstraint,
     SmallInteger,
@@ -72,6 +73,9 @@ class EscalationStep(Base):
             deferrable=True,
             initially="DEFERRED",
         ),
+        # Every read of an owner's plan (Home, the plan screen, activation) filters on it
+        # (migration 0011).
+        Index("ix_escalation_steps_user", "user_id"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(

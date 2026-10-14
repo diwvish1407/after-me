@@ -1,0 +1,31 @@
+{% extends "base.html.j2" %}
+{% block title %}Support · AfterMe{% endblock %}
+{% block main_attrs %} class="wide legal"{% endblock %}
+{% block content %}
+<h1>Support</h1>
+<p>AfterMe checks in on you on a schedule you set and, if you don't answer, tells the people you chose. This page is for questions, for people who received a message they didn't expect, and for what to do if something goes wrong.</p>
+
+<h2>Contact us</h2>
+<ul>
+<li>Questions and help with your account: <a href="mailto:{{ support_email }}">{{ support_email }}</a></li>
+<li>Reporting an unwanted or suspicious message: <a href="mailto:{{ abuse_email }}">{{ abuse_email }}</a></li>
+</ul>
+
+<h2>I received a message from AfterMe that I didn't expect</h2>
+<p>Someone who knows your email address asked AfterMe to contact you if they miss a check-in. Nothing is shared with you unless you accept, and you can stop the messages at any time.</p>
+<ul>
+<li>Every message from us has a link at the bottom to stop emails like it. You can stop emails from one person, or choose "Never contact me about AfterMe again".</li>
+<li>If you think the message was sent to you by mistake, or you think someone is misusing AfterMe, write to <a href="mailto:{{ abuse_email }}">{{ abuse_email }}</a>. Forward the message to us and tell us what you saw. We will look at it and answer you.</li>
+<li>If you believe someone is in danger, contact your local emergency services. AfterMe is not an emergency service.</li>
+</ul>
+
+<h2>I lost my phone or can't use the app</h2>
+<ul>
+<li>You can still check in from any browser: <a href="/a/login">sign in to check in</a> with your email and password.</li>
+<li>If you can't remember your password, use "Forgot password" in the app or <a href="mailto:{{ support_email }}">write to us</a> from the email address of your account.</li>
+<li>If you want to close your account without the app, <a href="/a/delete">use the deletion page</a>. We send a link to your email address and ask for your password.</li>
+</ul>
+
+<h2>More</h2>
+<p><a href="/legal/privacy">Privacy policy</a> · <a href="/legal/terms">Terms of service</a></p>
+{% endblock %}

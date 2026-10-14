@@ -49,6 +49,10 @@ class FakeIncidentServer implements IncidentsRepository {
   /// (or tell anyone) again.
   final List<AppFailure> failAfterRecording = [];
 
+  /// Answers `all_clear_sent_to` in the opposite order (the server's order of that list
+  /// is not a contract the app may rely on).
+  bool reverseAllClear = false;
+
   /// Waits before answering (to show the sending state).
   Future<void>? safeGate;
   Future<void>? getGate;
@@ -226,7 +230,7 @@ class FakeIncidentServer implements IncidentsRepository {
     stopped++;
     final result = SafeResult(
       incidentId: incidentId,
-      allClearSentTo: told,
+      allClearSentTo: reverseAllClear ? told.reversed.toList() : told,
       nextDueAt: nextDue,
       serverTime: clock().add(server.skew),
     );

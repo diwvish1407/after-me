@@ -58,10 +58,10 @@ class FailureNotice extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Semantics(
+    return StatusBanner(
+      kind: StatusBannerKind.attention,
+      message: message,
       liveRegion: true,
-      container: true,
-      child: StatusBanner(kind: StatusBannerKind.attention, message: message),
     );
   }
 }

@@ -18,6 +18,7 @@ import '../../plan/presentation/plan_preview.dart';
 import '../application/incident_context.dart';
 import '../application/safe_controller.dart';
 import '../data/models/incident_models.dart';
+import 'incident_labels.dart';
 
 /// The password, then the confirmation of I'M SAFE (USER_FLOWS.md §7), then what the
 /// server answered.
@@ -163,7 +164,13 @@ class _SafeSheetState extends ConsumerState<SafeSheet> {
     final l10n = AppLocalizations.of(context);
     final Widget content;
     if (state.phase == SafePhase.success && state.result != null) {
-      content = _Done(result: state.result!, onClose: _close);
+      content = _Done(
+        result: state.result!,
+        notifiedOrder: [
+          ...?_incident?.notifiedContacts.map((contact) => contact.id),
+        ],
+        onClose: _close,
+      );
     } else if (_closedMeanwhile || state.alreadyClosed) {
       content = _Message(
         title: l10n.safeAlreadyClosedTitle,
@@ -398,9 +405,17 @@ class _Confirm extends ConsumerWidget {
 /// "You're marked safe." who is told, and when the next check-in is: only what the
 /// server's 200 says.
 class _Done extends ConsumerWidget {
-  const _Done({required this.result, required this.onClose});
+  const _Done({
+    required this.result,
+    required this.notifiedOrder,
+    required this.onClose,
+  });
 
   final SafeResult result;
+
+  /// Contact ids in the order they were first notified (from the incident the sheet
+  /// was showing), for a sentence whose order does not change between reads.
+  final List<String> notifiedOrder;
   final VoidCallback onClose;
 
   @override
@@ -408,10 +423,10 @@ class _Done extends ConsumerWidget {
     final l10n = AppLocalizations.of(context);
     final timezone = ref.watch(incidentTimezoneProvider);
     final now = ref.watch(serverNowProvider)();
-    final names = [
-      for (final target in result.allClearSentTo)
-        if (target.displayName.isNotEmpty) target.displayName,
-    ];
+    final names = allClearNames(
+      result.allClearSentTo,
+      notifiedOrder: notifiedOrder,
+    );
     final next = result.nextDueAt;
     return _Message(
       title: l10n.safeDoneTitle,

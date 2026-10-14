@@ -83,6 +83,30 @@ Future<void> _openHome(WidgetTester tester, TestFakes fakes) =>
 void main() {
   setUpAll(loadRoboto);
 
+  group('the all-clear sentence names people in a stable order', () {
+    for (final reversed in [false, true]) {
+      testWidgets(
+        'first notified first, whatever order the server lists them in '
+        '(server order reversed: $reversed)',
+        (tester) async {
+          final fakes = _world();
+          fakes.incidents.reverseAllClear = reversed;
+          await _openHome(tester, fakes);
+          await _toConfirmation(tester, fakes);
+          await tapText(tester, "Confirm I'm safe");
+          await tester.pumpAndSettle();
+          expect(
+            find.textContaining(
+              'An all-clear is being sent to Mom and Brother.',
+            ),
+            findsOneWidget,
+          );
+          expect(find.textContaining('Brother and Mom'), findsNothing);
+        },
+      );
+    }
+  });
+
   group('the way through', () {
     testWidgets('password, confirmation, then what the server answered', (
       tester,

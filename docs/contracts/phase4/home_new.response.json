@@ -39,5 +39,8 @@
       }
     ]
   },
-  "recent_activity": []
+  "recent_activity": [],
+  "service": {
+    "interruption": false
+  }
 }

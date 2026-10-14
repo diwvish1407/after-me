@@ -4,6 +4,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../config/app_config.dart';
+
 /// Sets and clears `FLAG_SECURE` on the app's window (FR-INS-06, SECURITY.md §11).
 ///
 /// While the flag is set Android blocks screenshots and screen recording of the window
@@ -47,10 +49,18 @@ final secureScreenGatewayProvider = Provider<SecureScreenGateway>(
 /// The flag is set at once on the first holder; it is cleared a microtask after the last
 /// one lets go, so a page that is replaced by another secure page in the same frame
 /// never leaves the window unprotected in between.
+///
+/// With [screenshotMode] (a staging or dev build made to capture store screenshots, see
+/// `AppConfig.screenshotMode`) the flag is never set: screens still count their holders,
+/// but the window stays capturable. A build with it on also shows a "Screenshot mode"
+/// strip on every screen, and `AppConfig` refuses it for prod.
 class SecureScreens {
-  SecureScreens(this._gateway);
+  SecureScreens(this._gateway, {this.screenshotMode = false});
 
   final SecureScreenGateway _gateway;
+
+  /// The window is deliberately left capturable (never true in a prod build).
+  final bool screenshotMode;
   int _holders = 0;
   bool _applied = false;
 
@@ -59,7 +69,7 @@ class SecureScreens {
 
   void acquire() {
     _holders++;
-    if (!_applied) {
+    if (!_applied && !screenshotMode) {
       _applied = true;
       unawaited(_gateway.setSecure(enabled: true));
     }
@@ -80,8 +90,23 @@ class SecureScreens {
   }
 }
 
+/// Whether this is a screenshot build (`SCREENSHOT_MODE`, validated by [AppConfig]).
+///
+/// Fails closed: anywhere the configuration is not provided (a widget test that does not
+/// set it up) the answer is false, which keeps `FLAG_SECURE` on.
+final screenshotModeProvider = Provider<bool>((ref) {
+  try {
+    return ref.watch(appConfigProvider).screenshotMode;
+  } on Object {
+    return false;
+  }
+});
+
 final secureScreensProvider = Provider<SecureScreens>(
-  (ref) => SecureScreens(ref.watch(secureScreenGatewayProvider)),
+  (ref) => SecureScreens(
+    ref.watch(secureScreenGatewayProvider),
+    screenshotMode: ref.watch(screenshotModeProvider),
+  ),
 );
 
 /// Wraps a screen that shows or edits instruction content (titles included): while it is

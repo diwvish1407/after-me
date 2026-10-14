@@ -221,7 +221,22 @@ class HoldMonitor:
         ]
         if not times:
             return
-        edges = [now - window, *times, now]
+        # "Fresh for the whole window" means the stretch of healthy probing *starts* no later
+        # than the window does: the last probe before the window must be within one staleness
+        # period of it (Phase 10 game day OPS-01: measured from the window's edge alone, the
+        # first fresh probe could arrive up to INGESTION_STALE into the window, and the Hold
+        # ended 7 minutes after recovery instead of the documented 10).
+        start = now - window
+        before: datetime | None = (
+            await session.execute(
+                select(func.max(IngestionProbe.received_at)).where(
+                    IngestionProbe.received_at < start
+                )
+            )
+        ).scalar_one()
+        if before is None or start - before > stale:
+            return
+        edges = [before, *times, now]
         if any(b - a > stale for a, b in pairwise(edges)):
             return
         await self._end(session, hold, now, "system")

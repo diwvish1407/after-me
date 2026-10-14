@@ -2,6 +2,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../../app/theme/dimens.dart';
 import '../../l10n/gen/app_localizations.dart';
+import 'progress_spinner.dart';
 
 enum AppButtonVariant { primary, secondary, text }
 
@@ -98,14 +99,12 @@ class AppButton extends StatelessWidget {
         if (isLoading)
           Padding(
             padding: const EdgeInsetsDirectional.only(end: AppSpacing.xs),
-            child: SizedBox.square(
-              dimension: 18,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                semanticsLabel: AppLocalizations.of(context).loading,
-                color: foreground,
-                backgroundColor: foreground.withValues(alpha: 0.25),
-              ),
+            child: ProgressSpinner(
+              size: 18,
+              strokeWidth: 2,
+              semanticsLabel: AppLocalizations.of(context).loading,
+              color: foreground,
+              backgroundColor: foreground.withValues(alpha: 0.25),
             ),
           )
         else if (showIcon)

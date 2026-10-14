@@ -3,6 +3,7 @@ import 'dart:ui';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/leave_guards.dart';
 import '../../../app/repository_providers.dart';
 import '../../../app/router.dart';
 import '../../../core/api/client_info.dart';
@@ -32,6 +33,15 @@ typedef PushNavigate = void Function(String location);
 final pushNavigateProvider = Provider<PushNavigate>(
   (ref) =>
       (location) => ref.read(routerProvider).go(location),
+);
+
+/// Puts [location] **on top of** what is on screen instead of replacing it, so that a
+/// screen with unsaved work (the plan editor) stays underneath with its draft. Used for a
+/// tap that must reach Home at once while such a screen is open. The default is the
+/// router's `push`; tests record the calls.
+final pushShowOnTopProvider = Provider<PushNavigate>(
+  (ref) =>
+      (location) => unawaited(ref.read(routerProvider).push<void>(location)),
 );
 
 /// Starts a one-shot timer. The default is [Timer.new]; tests fire timers by hand.
@@ -91,8 +101,21 @@ class PushCoordinator {
   Timer? _retry;
   int _attempt = 0;
 
+  /// The app is not in the foreground: no retry is scheduled (see [onPaused]).
+  bool _inBackground = false;
+
   /// Where a tap is going, until the app is ready to go there.
   PushDestination? _pendingTap;
+
+  /// Whether the pending tap is about a check-in or an incident (always reaches Home).
+  bool _pendingUrgent = false;
+
+  /// A screen with unsaved work is being asked whether the tap may take the person away.
+  bool _confirming = false;
+
+  /// Counts the taps that started a journey; a question that is answered after a newer,
+  /// urgent tap took the person to Home must not move them again.
+  int _tapGeneration = 0;
 
   final List<StreamSubscription<Object?>> _subscriptions = [];
 
@@ -195,7 +218,21 @@ class PushCoordinator {
     if (!_started || _disposed) {
       return;
     }
+    _inBackground = false;
     await sync();
+  }
+
+  /// The app left the foreground. The app does no background work (TEST_PLAN PERF-05): a
+  /// registration retry that was waiting is cancelled, and the count starts again, because
+  /// [onResumed] brings the registration up to date at once and schedules its own retries
+  /// if that fails.
+  void onPaused() {
+    if (!_started || _disposed) {
+      return;
+    }
+    _inBackground = true;
+    _cancelRetry();
+    _attempt = 0;
   }
 
   void onAuthChanged(AuthStatus? previous, AuthStatus next) {
@@ -472,7 +509,7 @@ class PushCoordinator {
   }
 
   void _scheduleRetry([Duration? atLeast]) {
-    if (!_live || _attempt >= pushRetryDelays.length) {
+    if (!_live || _inBackground || _attempt >= pushRetryDelays.length) {
       return;
     }
     var delay = pushRetryDelays[_attempt++];
@@ -568,19 +605,24 @@ class PushCoordinator {
   }
 
   /// The person tapped a notification the system showed.
-  void _onOpened(IncomingPush push) =>
-      _openDestination(tapDestination(push.data));
-
-  /// The person tapped a notification this app showed. Its payload is the push's type.
-  void _onLocalTap(String payload) => _openDestination(
-    tapDestination(<String, String>{
-      'type': payload,
-      'v': supportedPushVersion,
-    }),
+  void _onOpened(IncomingPush push) => _openDestination(
+    tapDestination(push.data),
+    urgent: tapIsUrgent(push.data),
   );
 
-  void _openDestination(PushDestination destination) {
+  /// The person tapped a notification this app showed. Its payload is the push's type.
+  void _onLocalTap(String payload) {
+    final data = <String, String>{'type': payload, 'v': supportedPushVersion};
+    _openDestination(tapDestination(data), urgent: tapIsUrgent(data));
+  }
+
+  void _openDestination(PushDestination destination, {required bool urgent}) {
+    if (_confirming && !urgent) {
+      // The person is answering "Leave without saving?" for an earlier tap.
+      return;
+    }
     _pendingTap = destination;
+    _pendingUrgent = urgent;
     _flushPendingTap();
   }
 
@@ -594,6 +636,7 @@ class PushCoordinator {
     if (destination == null || _disposed) {
       return;
     }
+    final urgent = _pendingUrgent;
     final navigate = _ref.read(pushNavigateProvider);
     switch (_auth) {
       case AuthStatus.unknown:
@@ -608,10 +651,77 @@ class PushCoordinator {
         }
         _pendingTap = null;
         if (!onboarding.needsOnboarding) {
-          navigate(destination.location);
-          _readAgain();
+          final guards = _ref.read(leaveGuardsProvider);
+          _tapGeneration++;
+          if (!guards.isGuarding) {
+            navigate(destination.location);
+            _readAgain();
+          } else {
+            unawaited(
+              _goPastUnsavedWork(
+                guards,
+                destination,
+                urgent: urgent,
+                generation: _tapGeneration,
+              ),
+            );
+          }
         }
     }
+  }
+
+  /// A screen with unsaved work (the plan editor) is open, and `go` would replace the
+  /// page stack and drop its draft without a word.
+  ///
+  /// * A tap about a check-in or an incident is **never** held up and never dropped: the
+  ///   person must be able to reach I'M OK or I'M SAFE. A save that is on its way is
+  ///   waited for (bounded: the screen closes itself when it succeeds), and Home is then
+  ///   put on top of the editor, which stays under it with its draft; Back returns to it.
+  /// * Any other tap asks the question Back asks and goes only if the person leaves (the
+  ///   draft is then discarded, so the question is not asked again later).
+  ///
+  /// Either way the push was a hint to read Home again, and that happens.
+  Future<void> _goPastUnsavedWork(
+    LeaveGuards guards,
+    PushDestination destination, {
+    required bool urgent,
+    required int generation,
+  }) async {
+    final navigate = _ref.read(pushNavigateProvider);
+    final showOnTop = _ref.read(pushShowOnTopProvider);
+    if (!urgent) {
+      _confirming = true;
+    }
+    var leave = false;
+    try {
+      await guards.whenIdle();
+      if (!_live || generation != _tapGeneration) {
+        return;
+      }
+      if (urgent) {
+        // The save may have closed the screen meanwhile: then nothing is left to keep.
+        if (guards.isGuarding) {
+          showOnTop(destination.location);
+        } else {
+          navigate(destination.location);
+        }
+      } else {
+        leave = guards.isGuarding ? await guards.confirmLeave() : true;
+      }
+    } on Object {
+      // A question that cannot be asked must not leave a draft to be thrown away.
+    } finally {
+      if (!urgent) {
+        _confirming = false;
+      }
+    }
+    if (!_live) {
+      return;
+    }
+    if (!urgent && leave && generation == _tapGeneration) {
+      navigate(destination.location);
+    }
+    _readAgain();
   }
 
   /// A push is only a hint: Home (and with it the incident on screen) is read again from

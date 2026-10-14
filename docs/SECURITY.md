@@ -92,7 +92,7 @@
 | T34 | Activity feed as a side channel | Per-action metadata allow-list; owner-scoped; entry ids come from a global sequence (accepted, §18) |
 | T35 | The fallback email provider delivering twice, or a provider's configuration error read as a verdict on a contact | A provider's "permanent" is not final until the other refuses; failure kinds; at-least-once is the intended direction of error |
 | T36 | Compromise of the retention job | Its own role; DELETE only of accounts in `pending_deletion` (trigger); UPDATE of contacts only for such accounts (trigger, Phase 9); audit INSERT only `account.purged` (trigger, Phase 9) |
-| T37 | Operator CLI misuse | Runs with the worker credentials from cloud IAM; commands audited (`operator.*`); `void` acts only on the incident it names (Phase 9). Provider tests are unaudited and `--operator` is self-asserted (accepted, §18) |
+| T37 | Operator CLI misuse | Runs with the worker credentials from cloud IAM; commands audited (`operator.*`); `void` acts only on the incident it names (Phase 9). `user suspend|unsuspend|set-tier` are audited with the operator's free-text reason (at most 200 printable characters, never logged, `user_visible=false`). Provider tests are unaudited and `--operator` is self-asserted (accepted, §18) |
 | T38 | The 426 upgrade gate used to lock people out | `MIN_CLIENT_VERSION` is shape-validated; the web check-in remains; a deploy-time check belongs in the runbook |
 | T39 | The idempotency store used to replay another operation's result | Key bound to user, operation and incident (Phase 9) |
 | T40 | Targeted denial of sign-in or recovery for a known address | Per-(account, network) budgets; the account lock does not bind a known device; recovery budgets per (address, network) with a higher ceiling across networks. Residual: §18 |
@@ -122,10 +122,12 @@ KMS KEK (never leaves KMS)
 - Decryption happens only for: the owner's API requests, the portal for an OTP-verified contact viewing an eligible release, and the owner's data export.
 
 **Phase 6, implemented.** `app/security/envelope.py` (AES-256-GCM, the stored format and AAD above), `kms.py` (the `KmsProvider` interface and `LocalKms`) and `vault.py` (seal/open with the per-user key, created on a user's first instruction and cached unwrapped for at most 5 minutes in process memory).
-* The wrapped DEK carries the KEK's identifier (`local-<12 hex>`), is bound to the user by AAD, and a previous KEK can stay configured (`KMS_LOCAL_KEY_PREVIOUS`) while keys are rewrapped. `KMS_PROVIDER=local` keeps the KEK in the environment: it is **refused in staging and production**, and a cloud KMS adapter is a deployment item (ROADMAP Phase 10-12): until it exists the backend cannot start in production, which is the safe failure.
+* **Production and staging (Phase 12): Cloud KMS.** `KMS_PROVIDER=gcp_kms` (`app/security/gcp_kms.py`): the KEK is the CryptoKey `instruction-kek` in Cloud KMS and never leaves it; only the API service account holds EncrypterDecrypter on it. The wrapped DEK carries `gcp:<CryptoKey name>` (not a version: Cloud KMS records the version inside the ciphertext) and is bound to the user by AAD inside the KMS. Every call has a 3 s ceiling, CRC32C checks both ways, and every failure is one `kms.call_failed` log line with a short code (never a key name or bytes), which pages ([DEPLOYMENT §7](DEPLOYMENT.md#7-monitoring-and-alerting)); a KMS failure answers "temporarily unavailable" (`503` + `Retry-After`), including the creation of a person's first key.
+* **Rotation in production** ([DEPLOYMENT §9](DEPLOYMENT.md#9-runbooks), Key management; the Cloud Run job `afterme-kms`, run as the API service account): the KEK rotates **automatically every 90 days** (a new primary version; old versions keep decrypting); `cli.admin kms rewrap` then rewrites every wrapped DEK under the primary version, and an old version is disabled only after a rewrap reported `"complete": true`. A per-user DEK rotation (`kms rotate-user`, a suspected exposure of one account) re-encrypts that person's instructions in one transaction and bumps `dek_version` (a database trigger allows +1 only).
+* **Development and tests only:** `KMS_PROVIDER=local` keeps the KEK in the environment (`KMS_LOCAL_KEY`, ids `local-<12 hex>`, an optional `KMS_LOCAL_KEY_PREVIOUS` while rewrapping). It is **refused in staging and production**.
 * Only the API process holds keys: `afterme_worker` has no privilege on `user_keys` and cannot select `instructions.content_ciphertext`, so the engine decides releases without ever being able to read one.
 * A ciphertext copied to another row, another user, or another key version fails to decrypt (tests `test_a_ciphertext_moved_to_another_*`); the failure is a generic `500` that names nothing.
-* Not implemented yet: per-user DEK rotation and the KEK re-wrap job (the schema carries `dek_version` and `rotated_at`), and export.
+* Implemented since (Phase 12): per-user DEK rotation and the KEK re-wrap job (`app/ops/kms.py`, above), and the data export.
 
 ### 6.3 Secrets and hashes
 
@@ -188,7 +190,7 @@ Append-only (`INSERT`/`SELECT` grants only). `user_visible` marks events shown i
 | System / operator | `system.hold_entered`, `system.hold_exited`, `system.consistency_violation`, `operator.<command>` |
 | Billing | `billing.subscription_changed` ✓ |
 
-Metadata contains IDs, reason codes and counts only. **Never** content, names, addresses, tokens, codes or passwords.
+Metadata contains IDs, reason codes and counts only. **Never** content, names, addresses, tokens, codes or passwords. The one exception is the operator's own free-text reason on the `operator.*` actions (at most 200 printable characters, one line, validated at write time, `user_visible=false`, never logged): it is written by the person running the command, not taken from user data.
 
 ## 10. Logging and leakage prevention
 
@@ -203,7 +205,7 @@ Metadata contains IDs, reason codes and counts only. **Never** content, names, a
 
 | MASVS area | Controls |
 |---|---|
-| STORAGE | Tokens and the pending check-in record (opaque account id, random key, tap time) in Keystore-backed secure storage; nothing sensitive in `shared_preferences`, files or logs; instruction content never persisted; `allowBackup="false"`; FLAG_SECURE on instruction screens (**Phase 6**) and, since Phase 9, on the export and delete-account screens and every password-entry screen and sheet (a MethodChannel `app.afterme/secure_screen`, reference counted, follows what is shown) |
+| STORAGE | Tokens and the pending check-in record (opaque account id, random key, tap time) in Keystore-backed secure storage; nothing sensitive in `shared_preferences`, files or logs; instruction content never persisted; `allowBackup="false"`; FLAG_SECURE on instruction screens (**Phase 6**) and, since Phase 9, on the export and delete-account screens and every password-entry screen and sheet, and, since Phase 10, on the contact add/detail/edit screens and wherever an instruction title is shown (Home, plan editor, Activity, incident screens) (a MethodChannel `app.afterme/secure_screen`, reference counted, follows what is shown) |
 | CRYPTO | No custom crypto; platform Keystore via plugin |
 | AUTH | All authorization server-side; app lock is local convenience security (the prompt accepts weak or strong biometrics or the device credential: `local_auth` offers no class-3-only option, and narrowing it could lock a person out of their own check-in); step-up via server password re-auth, including **reading** instructions (Phase 9) |
 | NETWORK | HTTPS only, enforced in the app (see §6.1): `AppConfig`, the flavor/`APP_ENV` pairing and the `allow_http` zone; the platform's `network_security_config` for the platform stack; platform CA trust, no user-installed CAs; no certificate pinning (§6.1) |
@@ -228,7 +230,7 @@ Metadata contains IDs, reason codes and counts only. **Never** content, names, a
 | Spamming arbitrary people with invitations | Verified-email accounts only; 10 invitations/day; 3 resends/contact/week; global suppression; complaint-rate monitoring |
 | Using AfterMe to harass via "alerts" | Contacts must accept before any alert; opt-out at any time |
 | Throwaway signups | Code verification; per-IP limits; Play Integrity (1.1) if needed |
-| Abuse reports | `abuse@<domain>` in every contact email; operator can suspend an account (`users.status = 'suspended'` stops every contact-facing action: queued alerts are cancelled, reminders and portal pages stop, web sessions die. **The one thing it does not stop is taking an alarm back**: an all-clear or a withdrawn alert to a contact who was already told is still sent, because leaving someone alarmed is the worse outcome; Phase 9 decision, F-17). **Not implemented**: there is no `suspend` command in the operator CLI yet (§18) |
+| Abuse reports | `abuse@<domain>` in every contact email; operator can suspend an account (`users.status = 'suspended'` stops every contact-facing action: queued alerts are cancelled, reminders and portal pages stop, web sessions die. **The one thing it does not stop is taking an alarm back**: an all-clear or a withdrawn alert to a contact who was already told is still sent, because leaving someone alarmed is the worse outcome; Phase 9 decision, F-17). Operator commands (Phase 10, audited, `operator.*`): `python -m cli.admin user suspend <user-id> --reason "…"` (sets `suspended` and revokes every app and web session; it voids and sends nothing), `user unsuspend`, `user set-tier`. A suspended person's open incident cannot escalate further (the gates cancel its pending actions) and a deadline that passes meanwhile is not shifted: after `unsuspend` the next tick opens an incident with a full grace period (product decision still open) |
 
 ## 14. Privacy
 
