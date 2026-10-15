@@ -385,10 +385,7 @@ void main() {
       expect(unknown.details, isEmpty);
       expect(unknown.showsTitle, isFalse);
     }
-    expect(
-      line('billing.subscription_changed').text,
-      'Your subscription changed',
-    );
+    expect(line('billing.subscription_changed').text, 'Your plan changed');
   });
 
   test('titles are shown only by the lines that carry one', () {

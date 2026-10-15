@@ -16,6 +16,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../../helpers/contacts_harness.dart';
 import '../../helpers/in_memory_contacts_repository.dart';
+import '../../helpers/no_purchase.dart';
 import '../../helpers/pump_app.dart';
 import '../../helpers/test_app.dart';
 
@@ -313,7 +314,7 @@ void main() {
     });
 
     testWidgets(
-      'at the free limit Add explains Premium and offers Close only',
+      'at the free limit Add explains the limit and offers Close only',
       (tester) async {
         final fakes = _fakes([testContact()], tier: 'free');
         await openApp(tester, fakes: fakes);
@@ -321,16 +322,20 @@ void main() {
         await tester.pumpAndSettle();
         expect(find.byType(AddContactScreen), findsNothing);
         expect(
-          find.text('More trusted contacts are part of Premium'),
+          find.text("More trusted contacts aren't available yet"),
           findsOneWidget,
         );
         expect(
-          find.textContaining('The free plan allows 1 trusted contact.'),
+          find.textContaining('The free plan includes 1 trusted contact.'),
           findsOneWidget,
         );
         expect(find.text('Close'), findsOneWidget);
         expect(find.textContaining('Buy'), findsNothing);
         expect(find.textContaining('Subscribe'), findsNothing);
+        expectNoPurchaseOffer(
+          within: find.byType(BottomSheet),
+          allowedButtons: {'Close'},
+        );
         await tapText(tester, 'Close');
         await tester.pumpAndSettle();
         expect(find.text('Close'), findsNothing);
@@ -346,7 +351,7 @@ void main() {
       await tapText(tester, 'Add contact');
       await tester.pumpAndSettle();
       expect(
-        find.textContaining('The free plan allows 0 trusted contacts.'),
+        find.textContaining('The free plan includes 0 trusted contacts.'),
         findsOneWidget,
       );
     });
@@ -394,7 +399,7 @@ void main() {
       await tapText(tester, 'Add contact');
       await tester.pumpAndSettle();
       expect(
-        find.text('More trusted contacts are part of Premium'),
+        find.text("More trusted contacts aren't available yet"),
         findsOneWidget,
       );
     });

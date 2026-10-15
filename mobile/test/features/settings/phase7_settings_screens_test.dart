@@ -8,6 +8,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../../helpers/contacts_harness.dart';
 import '../../helpers/in_memory_contacts_repository.dart';
+import '../../helpers/no_purchase.dart';
 import '../../helpers/real_fonts.dart';
 import '../../helpers/test_app.dart';
 
@@ -66,24 +67,25 @@ void main() {
       );
       expect(find.text('Stages in your plan'), findsOneWidget);
       expect(find.text('Choosing your own times'), findsOneWidget);
-      expect(find.text('Not on Free'), findsOneWidget);
+      expect(find.text('Not available yet'), findsOneWidget);
       expect(
         find.text(
-          'Premium adds room for more contacts, instructions and stages, and '
-          'lets you choose your own times.',
+          'Everything listed here is part of the free plan and works in full.',
         ),
         findsOneWidget,
       );
       expect(
         find.text(
-          "Premium isn't available yet. We'll let you know when it is.",
+          'More contacts, instructions and stages, and choosing your own '
+          "times, aren't available yet.",
         ),
         findsOneWidget,
       );
-      // Nothing that could be mistaken for buying.
+      // Nothing that could be mistaken for buying (PRD D5: no billing in 1.0), and no
+      // mention of a Premium the person cannot get.
       expect(find.byType(FilledButton), findsNothing);
-      expect(find.textContaining('Upgrade'), findsNothing);
-      expect(find.textContaining('Buy'), findsNothing);
+      expect(find.byType(OutlinedButton), findsNothing);
+      expectNoPurchaseOffer();
     });
 
     testWidgets('a premium account: its limits and what it includes', (
@@ -106,8 +108,22 @@ void main() {
         findsOneWidget,
       );
       expect(find.text('Included'), findsOneWidget);
-      expect(find.text('Not on Free'), findsNothing);
+      expect(find.text('Not available yet'), findsNothing);
       expect(find.textContaining("isn't available yet"), findsNothing);
+      expect(
+        find.text(
+          'Your plan includes more contacts, instructions and stages, and '
+          'your own times.',
+        ),
+        findsOneWidget,
+      );
+      // An operator-granted Premium is named, and nothing about paying is said.
+      expect(find.text('Premium'), findsOneWidget);
+      expect(find.byType(FilledButton), findsNothing);
+      final texts = visibleTexts().where(
+        (t) => t != 'Premium' && !t.startsWith('Premium · '),
+      );
+      expect(texts.where(purchaseLanguage.hasMatch), isEmpty);
     });
 
     testWidgets('a tier this version does not know is "Your plan", with the '

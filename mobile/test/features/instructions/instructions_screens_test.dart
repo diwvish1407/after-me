@@ -19,6 +19,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../helpers/contacts_harness.dart';
 import '../../helpers/in_memory_contacts_repository.dart';
+import '../../helpers/no_purchase.dart';
 import '../../helpers/pump_app.dart';
 import '../../helpers/test_app.dart';
 
@@ -311,22 +312,26 @@ void main() {
       await tapText(tester, 'Add instruction');
       await tester.pumpAndSettle();
       expect(
-        find.text('More instructions are part of Premium'),
+        find.text("More instructions aren't available yet"),
         findsOneWidget,
       );
       expect(
         find.text(
-          'The free plan allows 3 instructions. Adding more is part of Premium. You can also delete one to make room for another.',
+          "The free plan includes 3 instructions. Adding more isn't available yet. You can delete one to make room for another.",
         ),
         findsOneWidget,
       );
       expect(find.text('Close'), findsOneWidget);
       expect(find.textContaining('Upgrade'), findsNothing);
       expect(find.textContaining('Subscribe'), findsNothing);
+      expectNoPurchaseOffer(
+        within: find.byType(BottomSheet),
+        allowedButtons: {'Close'},
+      );
       expect(find.byType(AddInstructionScreen), findsNothing);
       await tapText(tester, 'Close');
       await tester.pumpAndSettle();
-      expect(find.text('More instructions are part of Premium'), findsNothing);
+      expect(find.text("More instructions aren't available yet"), findsNothing);
     });
 
     testWidgets('a limit answer from the server opens the same sheet and keeps '
@@ -346,7 +351,7 @@ void main() {
       await tapText(tester, 'Save instruction');
       await tester.pumpAndSettle();
       expect(
-        find.text('More instructions are part of Premium'),
+        find.text("More instructions aren't available yet"),
         findsOneWidget,
       );
       await tapText(tester, 'Close');

@@ -22,8 +22,8 @@ fun keystoreProperty(name: String): String =
         ?: throw GradleException("android/key.properties is missing '$name'")
 
 android {
-    // PROVISIONAL until product decision D1 (domain / application ID). The application ID
-    // cannot change after the first Play upload. See mobile/README.md.
+    // Decided (PRD D1): app.afterme. The application ID cannot change after the first Play
+    // upload. See mobile/README.md.
     namespace = "app.afterme"
     compileSdk = 36
     ndkVersion = flutter.ndkVersion

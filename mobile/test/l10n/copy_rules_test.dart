@@ -32,6 +32,45 @@ const _allowedPhrases = <String, String>{
       'contact your local emergency services." It is the only place the word appears.',
 };
 
+/// Purchase vocabulary (PRD D5, decided 2026-10-15: no Play Billing in 1.0; Premium is
+/// only granted by an operator). Nothing may offer a purchase, name a price or point to a
+/// payment: with no billing it would be a dead end, and a link to pay outside Google Play
+/// is against Play's payments policy. Word boundaries, case-insensitive; currency signs
+/// anywhere.
+final _purchase = RegExp(
+  r'\b('
+  r'buy|buying|bought|purchase\w*|subscribe\w*|subscriptions?|'
+  r'price\w*|pricing|upgrade\w*|checkout|pay now|payment\w*|'
+  r'per month|per year|free trial'
+  r')\b'
+  r'|[₹$€£]',
+  caseSensitive: false,
+);
+
+/// Keys whose value may contain purchase vocabulary, with the reason. Every entry must
+/// still match (a stale allowance fails).
+const _purchaseAllowed = <String, String>{
+  'starterHomeBillsBody':
+      "An instruction starter about the person's own household bills "
+      '("Subscriptions to cancel or keep"): their streaming or utility '
+      "subscriptions, not AfterMe's.",
+  'starterDigitalSocialTitle':
+      "An instruction starter title about the person's own online accounts "
+      '("Social media and subscriptions").',
+  'starterDigitalMoneyTitle':
+      "An instruction starter title about the person's own online banking "
+      '("Online banking and payments").',
+  'starterDigitalMoneyBody':
+      "An instruction starter about the person's own payment apps.",
+  'starterDigitalSocialBody':
+      "An instruction starter about the person's own subscriptions to cancel.",
+};
+
+/// The only key whose value may say "Premium": the tier's name, shown to an account an
+/// operator made Premium (Settings > Your plan). A free account is never told about a
+/// Premium it cannot get.
+const _premiumAllowed = <String>{'yourPlanTierPremium'};
+
 /// Keys whose value may contain an exclamation mark, with the reason. None today: the
 /// product never raises its voice.
 const _exclamationAllowed = <String, String>{};
@@ -128,6 +167,61 @@ void main() {
         reason: '"$phrase" is allowed but no string has it any more',
       );
     }
+  });
+
+  test('nothing offers a purchase, names a price or asks for a payment '
+      '(PRD D5: no billing in 1.0)', () {
+    final found = <String>[];
+    strings.forEach((key, value) {
+      final match = _purchase.firstMatch(_plain(value));
+      if (match != null && !_purchaseAllowed.containsKey(key)) {
+        found.add('$key: "${match.group(0)}" in "$value"');
+      }
+    });
+    expect(found, isEmpty, reason: found.join('\n'));
+  });
+
+  test(
+    'every purchase-vocabulary allowance still applies (no stale entry)',
+    () {
+      for (final key in _purchaseAllowed.keys) {
+        expect(strings, contains(key), reason: '$key is allowed but gone');
+        expect(
+          _purchase.hasMatch(_plain(strings[key]!)),
+          isTrue,
+          reason: '$key is allowed but no longer needs it',
+        );
+      }
+    },
+  );
+
+  test('"Premium" is only the tier name, never an offer', () {
+    final found = [
+      for (final entry in strings.entries)
+        if (RegExp(
+              r'\bpremium\b',
+              caseSensitive: false,
+            ).hasMatch(entry.value) &&
+            !_premiumAllowed.contains(entry.key))
+          '${entry.key}: "${entry.value}"',
+    ];
+    expect(found, isEmpty, reason: found.join('\n'));
+    expect(strings['yourPlanTierPremium'], 'Premium');
+  });
+
+  test('the purchase scan catches what it is for', () {
+    for (final sample in [
+      'Upgrade to Premium',
+      'Buy more contacts',
+      'Subscribe now',
+      'Only ₹99',
+      r'From $4.99',
+      'See the price',
+      'Purchase more stages',
+    ]) {
+      expect(_purchase.hasMatch(sample), isTrue, reason: sample);
+    }
+    expect(_purchase.hasMatch("More stages aren't available yet."), isFalse);
   });
 
   test('no exclamation marks', () {

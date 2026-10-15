@@ -77,6 +77,10 @@ locals {
       description = "AFTERME_EMAIL_FALLBACK_WEBHOOK_SECRET: Postmark webhook Basic-auth password (32+ characters)"
       readers     = local.settings_readers
     }
+    "reviewer-password" = {
+      description = "AFTERME_REVIEWER_PASSWORD: the Google Play reviewer account's password, read ONLY by the afterme-reviewer-account job (--password-env); generate it in the password manager (docs/RELEASE.md)"
+      readers     = ["api"]
+    }
   }
 
   readers = merge([

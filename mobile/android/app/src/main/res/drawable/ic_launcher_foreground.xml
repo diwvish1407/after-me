@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The AfterMe mark, adaptive-icon foreground layer (PLAY_STORE.md §5): a soft check in
+     a rounded tile, teal (`primary`) with a warm off-white (`bg`) check. 108 x 108 dp; the
+     tile and the check stay inside the 66 dp safe circle, so no launcher mask cuts them.
+     The numbers come from tool/store_assets/mark.dart (AfterMeMark), and
+     tool/store_assets/render_test.dart fails when this pathData drifts from them. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:name="tile"
+        android:fillColor="#FF1F6F6B"
+        android:pathData="M45,30H63A15,15 0,0 1,78,45V63A15,15 0,0 1,63,78H45A15,15 0,0 1,30,63V45A15,15 0,0 1,45,30Z" />
+    <path
+        android:name="check"
+        android:fillColor="#00000000"
+        android:strokeColor="#FFF7F5F2"
+        android:strokeWidth="5.5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M42,54L50,62L66,46" />
+</vector>

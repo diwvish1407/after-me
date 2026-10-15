@@ -26,6 +26,11 @@
 //     app or from a library an update pulled in, is a finding until it is reviewed and
 //     added here and to SECURITY §11.
 //
+// And for the Play release (Phase 13, PLAY_STORE §3): no advertising-ID permission
+// anywhere in the merged manifest (it is also outside the allowlist; this says why, in
+// so many words), and the application's icon, round icon and label are the adaptive
+// launcher icon and the flavor's app name.
+//
 // Usage (from mobile/), after `flutter build apk --flavor prod --release ...`:
 //   dart run tool/check_manifest_permissions.dart [manifest.xml] [applicationId]
 import 'dart:io';
@@ -306,6 +311,45 @@ List<String> hardeningIssues(String manifestXml) {
   return issues;
 }
 
+/// Google's advertising-ID permission. AfterMe uses no advertising ID (PLAY_STORE §3, the
+/// Play Console declaration says so), so it must not be in the merged manifest in any
+/// form: a dependency that adds it is removed in the app's manifest with
+/// `tools:node="remove"`, which leaves no trace in the merged file.
+const advertisingIdPermission = 'com.google.android.gms.permission.AD_ID';
+
+/// What the Play release itself needs from the merged manifest (Phase 13): no advertising
+/// ID anywhere, and the launcher icon wired as the adaptive icon (`@mipmap/ic_launcher`
+/// with its round twin, PLAY_STORE §3) under the flavor's `@string/app_name` label.
+/// Empty when ready.
+List<String> storeReadinessIssues(String manifestXml) {
+  final issues = <String>[];
+  if (manifestXml.contains(advertisingIdPermission)) {
+    issues.add(
+      '$advertisingIdPermission is in the merged manifest: AfterMe declares no '
+      'advertising ID. Remove it in android/app/src/main/AndroidManifest.xml with '
+      'tools:node="remove".',
+    );
+  }
+  final application = _application(manifestXml);
+  if (application == null) {
+    return [...issues, 'no <manifest>/<application> element was found'];
+  }
+  const expected = {
+    'icon': '@mipmap/ic_launcher',
+    'roundIcon': '@mipmap/ic_launcher_round',
+    'label': '@string/app_name',
+  };
+  for (final MapEntry(key: name, value: value) in expected.entries) {
+    final actual = application.android(name);
+    if (actual != value) {
+      issues.add(
+        'android:$name of the application must be "$value" (is ${actual ?? 'not set'})',
+      );
+    }
+  }
+  return issues;
+}
+
 File? _findMergedManifest() {
   final root = Directory(
     'build/app/intermediates/merged_manifests/prodRelease',
@@ -353,9 +397,18 @@ void main(List<String> args) {
     }
     exit(1);
   }
+  final store = storeReadinessIssues(xml);
+  if (store.isNotEmpty) {
+    stderr.writeln('Play release check failed for ${file.path}:');
+    for (final issue in store) {
+      stderr.writeln('  $issue');
+    }
+    exit(1);
+  }
   stdout.writeln(
     'OK: ${file.path} requests only ${declaredPermissions(xml).join(', ')}; '
-    'backup off, no cleartext flag, not debuggable, deep links off, exported '
-    'components: ${exportedComponents.keys.join(', ')}',
+    'backup off, no cleartext flag, not debuggable, deep links off, no AD_ID, '
+    'adaptive launcher icon set, exported components: '
+    '${exportedComponents.keys.join(', ')}',
   );
 }

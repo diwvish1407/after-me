@@ -22,6 +22,10 @@ output "kms_job_name" {
   value = google_cloud_run_v2_job.kms.name
 }
 
+output "reviewer_account_job_name" {
+  value = var.reviewer_account_job ? google_cloud_run_v2_job.reviewer[0].name : null
+}
+
 output "connections_peak" {
   description = "Database connections each role's processes can open at peak (api, worker)."
   value       = local.connections_peak

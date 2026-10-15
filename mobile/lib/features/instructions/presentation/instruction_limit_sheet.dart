@@ -8,8 +8,10 @@ import '../../../l10n/gen/app_localizations.dart';
 const int freeInstructionLimit = 3;
 
 /// Explains the plan limit for instructions (the same pattern as the contacts limit):
-/// the free plan allows [limit] (3) instructions and more are part of Premium. Billing
-/// does not exist yet, so there is no purchase action: only the explanation and Close.
+/// the free plan includes [limit] (3) instructions and more are not available yet. There
+/// is no billing in 1.0 (PRD D5), so the sheet offers no purchase, no price and no link to
+/// pay: only the explanation and Close. The server's `plan_limit_reached` (403) still
+/// opens it, with the server's own limit when it gave one.
 Future<void> showInstructionLimitSheet(
   BuildContext context, {
   int? limit,

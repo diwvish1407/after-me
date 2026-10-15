@@ -178,6 +178,7 @@ module "run" {
   worker_instances             = var.worker_instances
   role_connection_limits       = local.role_connection_limits
   oncall_principals            = var.oncall_principals
+  reviewer_account_job         = var.reviewer_account_job
   deletion_protection          = var.run_deletion_protection
   labels                       = local.labels
 

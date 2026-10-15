@@ -103,6 +103,11 @@ OPERATOR_UNSUSPEND_USER: Final = "operator.unsuspend_user"
 # material, a key name or a wrapped value: versions and counts only.
 OPERATOR_KMS_REWRAP: Final = "operator.kms_rewrap"
 OPERATOR_KMS_ROTATE_USER: Final = "operator.kms_rotate_user"
+# Phase 13: the Google Play reviewer (demo) account (``reviewer-account create | reset``). Takes
+# the operator's reason; never shown to the account holder; never carries the password or an
+# address (counts and the command only). Its presence is also what lets ``reset`` touch an
+# account at all.
+OPERATOR_REVIEWER_ACCOUNT: Final = "operator.reviewer_account"
 
 # --- Phase 7 actions ------------------------------------------------------------------------
 ACCOUNT_EXPORTED: Final = "account.exported"
@@ -196,6 +201,7 @@ PHASE5_ACTIONS: Final = frozenset(
         OPERATOR_UNSUSPEND_USER,
         OPERATOR_KMS_REWRAP,
         OPERATOR_KMS_ROTATE_USER,
+        OPERATOR_REVIEWER_ACCOUNT,
     }
 )
 PHASE7_ACTIONS: Final = frozenset(
@@ -259,7 +265,13 @@ USER_VISIBLE_ACTIONS: Final = frozenset(
 # its own rule: one line of at most 200 printable characters. It is never shown to the account
 # holder (these actions are not user-visible) and never written to a log.
 OPERATOR_TEXT_ACTIONS: Final = frozenset(
-    {OPERATOR_SET_TIER, OPERATOR_SUSPEND_USER, OPERATOR_UNSUSPEND_USER, OPERATOR_KMS_ROTATE_USER}
+    {
+        OPERATOR_SET_TIER,
+        OPERATOR_SUSPEND_USER,
+        OPERATOR_UNSUSPEND_USER,
+        OPERATOR_KMS_ROTATE_USER,
+        OPERATOR_REVIEWER_ACCOUNT,
+    }
 )
 OPERATOR_TEXT_KEY: Final = "operator_note"
 MAX_OPERATOR_TEXT: Final = 200

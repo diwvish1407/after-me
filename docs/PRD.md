@@ -372,12 +372,12 @@ On Android, Premium must be sold through **Google Play Billing**. The server ver
 | D2 | **Play developer account type**: personal (closed-test rule applies) or organization (exempt, needs a D-U-N-S number) | Organization if you have a legal entity; otherwise start recruiting 12+ testers now |
 | D3 | **Launch market(s)** → hosting region, privacy law, whether SMS/WhatsApp is essential | Decide before Phase 12 |
 | D4 | Contact channel for 1.0: email only, or email + SMS | Email only for 1.0; SMS/WhatsApp in 1.1 |
-| D5 | Monetization at 1.0: free with tier limits and Play Billing, or free closed beta with billing in 1.1 | Build entitlements in 1.0; wire Play Billing just before public production launch |
+| D5 | **Decided 2026-10-15: no Play Billing in 1.0; Premium only granted by the operator; billing in 1.1.** Monetization at 1.0: free with tier limits and Play Billing, or free closed beta with billing in 1.1 | Build entitlements in 1.0; wire Play Billing just before public production launch |
 | D6 | Lapsed-Premium behaviour | Grandfather the existing plan (§10) |
 | D7 | Fail-safe defaults: grace 1 h minimum; releases ≥ 24 h | Accept |
 | D8 | Web check-in page for users who lost their phone in 1.0 | Include (small, high value) |
 | D9 | Profile photo deferred to 1.1 | Accept |
 | D10 | Data retention for users who never return after an escalation (open incident, no activity) | Keep releases viewable for 12 months, then notify contacts and purge; needs legal input |
-| D11 | Brand name vs positioning (§3 note) | Decide before the store listing |
+| D11 | **Decided 2026-10-15: Play title "AfterMe" (brand only).** Brand name vs positioning (§3 note) | Decide before the store listing |
 | D12 | Hosting provider | Google Cloud (Firebase is already Google; see [DEPLOYMENT](DEPLOYMENT.md)) |
 | D13 | Transactional email provider | Choose one with strong transactional deliverability and idempotency support; configure a second provider as fallback |

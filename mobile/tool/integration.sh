@@ -3,8 +3,8 @@
 # emulator against the real dev backend, with the test clock.
 #
 # What it does, and always cleans up after:
-#   1. recreates the throwaway database `afterme_it` (never `afterme_dev`) and migrates it;
-#   2. starts the API (127.0.0.1:8000) and the worker against it, both with test support on
+#   1. recreates the throwaway database `afterme_it` (or `afterme_shots`; never `afterme_dev`) and migrates it;
+#   2. starts the API (127.0.0.1:8000, or AFTERME_IT_PORT) and the worker against it, both with test support on
 #      and one shared random token, rate limits off and a 2-second worker tick; their logs
 #      and the mail directory go to a temporary directory;
 #   3. starts tool/it_host.py (127.0.0.1:8001): the two things the phone cannot do, the
@@ -21,12 +21,24 @@
 #   mobile/tool/integration.sh --device emulator-5554  # a specific attached device
 #   mobile/tool/integration.sh --perf                  # also the PROFILE-mode frame-time run (below)
 #   mobile/tool/integration.sh --perf-only             # only that run
+#   mobile/tool/integration.sh --screenshots           # only the store screenshots (use
+#                                                      # tool/screenshots.sh, which sets
+#                                                      # the database and port below)
+#
+# Environment:
+#   AFTERME_IT_PORT   the API's port (default 8000). The app is built with
+#                     API_BASE_URL/PUBLIC_BASE_URL http://10.0.2.2:<port> to match, so
+#                     the suite runs while something else holds 8000.
+#   AFTERME_IT_DB     the throwaway database: afterme_it (default) or afterme_shots
+#                     (the screenshots); nothing else is accepted, because it is dropped.
+#   AFTERME_IT_HOST_PORT, AFTERME_IT_AVD   as below.
 #
 # Needs: uv and the backend's .venv (make setup), PostgreSQL running locally with a
 # superuser reachable by `psql -d postgres` (your OS user), Flutter, the Android SDK with the
-# AVD named by AFTERME_IT_AVD (default AfterMe_API_36). Port 8000 must be free: the app's
-# dev flavor (config/dev.json) talks to http://10.0.2.2:8000. Port 8001 (the host helper,
-# AFTERME_IT_HOST_PORT) must be free too.
+# AVD named by AFTERME_IT_AVD (default AfterMe_API_36). The API's port (8000, or
+# AFTERME_IT_PORT) must be free; the app is pointed at it with --dart-define. Port 8001
+# (the host helper, AFTERME_IT_HOST_PORT) must be free too. A server already on a port is
+# never stopped: the script refuses to start instead.
 #
 # Safe to run twice: the database is dropped and recreated, nothing is left running.
 set -euo pipefail
@@ -34,8 +46,15 @@ set -euo pipefail
 MOBILE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BACKEND_DIR="$(cd "$MOBILE_DIR/../backend" && pwd)"
 
-IT_DB="afterme_it" # fixed on purpose: this script drops it.
-PORT=8000
+# Fixed choices on purpose: this script drops the database.
+IT_DB="${AFTERME_IT_DB:-afterme_it}"
+case "$IT_DB" in
+  afterme_it | afterme_shots) ;;
+  *) echo "error: AFTERME_IT_DB must be afterme_it or afterme_shots (it is dropped), not '$IT_DB'" >&2; exit 2 ;;
+esac
+PORT="${AFTERME_IT_PORT:-8000}"
+[[ "$PORT" =~ ^[1-9][0-9]{3,4}$ ]] || { echo "error: AFTERME_IT_PORT must be a port number (got '$PORT')" >&2; exit 2; }
+API_URL_ON_PHONE="http://10.0.2.2:$PORT" # the emulator's alias for the host's loopback
 HOST_PORT="${AFTERME_IT_HOST_PORT:-8001}" # tool/it_host.py; the emulator sees it as 10.0.2.2
 AVD="${AFTERME_IT_AVD:-AfterMe_API_36}"
 SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-$HOME/Library/Android/sdk}}"
@@ -49,6 +68,7 @@ BOOT_TIMEOUT=300
 KEEP_EMULATOR=0
 PERF=0
 PERF_ONLY=0
+SCREENSHOTS=0
 DEVICE=""
 ONLY=()
 while [[ $# -gt 0 ]]; do
@@ -56,9 +76,10 @@ while [[ $# -gt 0 ]]; do
     --keep-emulator) KEEP_EMULATOR=1 ;;
     --perf) PERF=1 ;;
     --perf-only) PERF=1; PERF_ONLY=1 ;;
+    --screenshots) SCREENSHOTS=1 ;;
     --device) DEVICE="${2:?--device needs a serial}"; shift ;;
     --only) ONLY+=("${2:?--only needs a file name}"); shift ;;
-    -h|--help) sed -n '2,36p' "${BASH_SOURCE[0]}"; exit 0 ;;
+    -h|--help) sed -n '2,50p' "${BASH_SOURCE[0]}"; exit 0 ;;
     *) echo "unknown option: $1" >&2; exit 2 ;;
   esac
   shift
@@ -80,6 +101,7 @@ WORKER_PID=""
 HOST_PID=""
 EMULATOR_PID=""
 STARTED_EMULATOR=0
+RESIZED_DISPLAY=0
 TOKEN="$(openssl rand -hex 32)" # 64 characters; never printed
 
 kill_tree() {
@@ -98,6 +120,9 @@ cleanup() {
   kill_tree "$HOST_PID"
   kill_tree "$WORKER_PID"
   kill_tree "$API_PID"
+  if [[ "$RESIZED_DISPLAY" == 1 ]]; then
+    "$ADB" -s "$SERIAL" shell wm size reset >/dev/null 2>&1
+  fi
   if [[ "$STARTED_EMULATOR" == 1 && "$KEEP_EMULATOR" == 0 ]]; then
     "$ADB" -s "$SERIAL" emu kill >/dev/null 2>&1
     sleep 2
@@ -116,7 +141,10 @@ scrub() { sed "s/$TOKEN/<test-token>/g" "$1"; }
 
 # --- 0. the port must be free: never touch somebody else's server ------------------------
 if curl -fsS -o /dev/null --max-time 2 "http://127.0.0.1:$PORT/health/live" 2>/dev/null; then
-  die "something already answers on 127.0.0.1:$PORT. Stop it first: the app's dev flavor (config/dev.json) needs this port for the throwaway backend."
+  die "something already answers on 127.0.0.1:$PORT. It is not stopped: choose another port with AFTERME_IT_PORT (e.g. AFTERME_IT_PORT=8010); the app is pointed at it."
+fi
+if lsof -nP -iTCP:"$PORT" -sTCP:LISTEN >/dev/null 2>&1; then
+  die "port $PORT is in use (lsof). It is not stopped: choose another port with AFTERME_IT_PORT."
 fi
 
 if curl -fsS -o /dev/null --max-time 2 "http://127.0.0.1:$HOST_PORT/ping" 2>/dev/null; then
@@ -168,6 +196,9 @@ backend_env=(
   "AFTERME_RATE_LIMIT_ENABLED=false"
   "AFTERME_TICK_SECONDS=2"
   "AFTERME_DEV_MAIL_DIR=$WORK/mail"
+  # Links in mails and problem types name the port the API really runs on.
+  "AFTERME_PUBLIC_BASE_URL=http://localhost:$PORT"
+  "AFTERME_API_BASE_URL=http://localhost:$PORT"
 )
 
 say "Starting the API on 127.0.0.1:$PORT and the worker"
@@ -252,7 +283,7 @@ until "$ADB" -s "$SERIAL" shell pm path android >/dev/null 2>&1; do sleep 1; don
 for key in window_animation_scale transition_animation_scale animator_duration_scale; do
   "$ADB" -s "$SERIAL" shell settings put global "$key" 0 >/dev/null 2>&1 || true
 done
-# Is the emulator's port 8000 reaching the host? (10.0.2.2 is the host's loopback.)
+# Is the emulator reaching the host? (10.0.2.2 is the host's loopback.)
 "$ADB" -s "$SERIAL" shell "echo ok" >/dev/null
 
 # --- 4. the tests -------------------------------------------------------------------------
@@ -269,7 +300,7 @@ fi
 
 declare -a RESULTS=()
 FAILED=0
-if [[ "$PERF_ONLY" == 1 ]]; then
+if [[ "$PERF_ONLY" == 1 || "$SCREENSHOTS" == 1 ]]; then
   FILES=()
 fi
 for file in ${FILES[@]+"${FILES[@]}"}; do
@@ -280,6 +311,8 @@ for file in ${FILES[@]+"${FILES[@]}"}; do
   set +e
   flutter test "$file" -d "$SERIAL" --flavor dev \
     --dart-define-from-file=config/dev.json --dart-define="TEST_TOKEN=$TOKEN" \
+    --dart-define="API_BASE_URL=$API_URL_ON_PHONE" \
+    --dart-define="PUBLIC_BASE_URL=$API_URL_ON_PHONE" \
     --dart-define="HOST_CONTROL_URL=http://10.0.2.2:$HOST_PORT" \
     >"$WORK/$name.log" 2>&1
   code=$?
@@ -320,6 +353,8 @@ if [[ "$PERF" == 1 ]]; then
   flutter drive --no-dds --driver=test_driver/perf_driver.dart \
     --target=integration_test/perf_home_test.dart -d "$SERIAL" "--${AFTERME_PERF_MODE:-profile}" --flavor dev \
     --dart-define-from-file=config/dev.json --dart-define="TEST_TOKEN=$TOKEN" \
+    --dart-define="API_BASE_URL=$API_URL_ON_PHONE" \
+    --dart-define="PUBLIC_BASE_URL=$API_URL_ON_PHONE" \
     --dart-define="HOST_CONTROL_URL=http://10.0.2.2:$HOST_PORT" \
     >"$WORK/$name.log" 2>&1
   code=$?
@@ -332,6 +367,43 @@ if [[ "$PERF" == 1 ]]; then
     FAILED=1
     RESULTS+=("FAIL  $name  (${took}s, exit $code)")
     scrub "$WORK/$name.log" | tail -n 30
+  fi
+fi
+
+# --- 6. store screenshots (PLAY_STORE §5) -----------------------------------------------
+# A dev build with SCREENSHOT_MODE=true (FLAG_SECURE off, a "Screenshot mode" strip on
+# top), driven by integration_test/store_screenshots_test.dart with fictional people;
+# test_driver/screenshots_driver.dart cuts each capture to the app and writes a 24-bit
+# PNG to store/screenshots/. The display is made 1080 x 2340 for the run (and reset
+# after): without the strip (the status bar and 20 dp, about 180 px) a capture is about
+# 1080 x 2160, Play's 2:1 limit; the driver trims anything left over at the bottom.
+if [[ "$SCREENSHOTS" == 1 ]]; then
+  name="store_screenshots_test"
+  "$ADB" -s "$SERIAL" shell wm size 1080x2340 >/dev/null
+  RESIZED_DISPLAY=1
+  rm -f store/screenshots/*.png
+  say "Capturing the store screenshots on $SERIAL"
+  start=$SECONDS
+  set +e
+  flutter drive --no-dds --driver=test_driver/screenshots_driver.dart \
+    --target=integration_test/store_screenshots_test.dart -d "$SERIAL" --flavor dev \
+    --dart-define-from-file=config/dev.json --dart-define="TEST_TOKEN=$TOKEN" \
+    --dart-define="API_BASE_URL=$API_URL_ON_PHONE" \
+    --dart-define="PUBLIC_BASE_URL=$API_URL_ON_PHONE" \
+    --dart-define="HOST_CONTROL_URL=http://10.0.2.2:$HOST_PORT" \
+    --dart-define=SCREENSHOT_MODE=true \
+    >"$WORK/$name.log" 2>&1
+  code=$?
+  set -e
+  took=$((SECONDS - start))
+  scrub "$WORK/$name.log" | grep -E "^screenshot |All tests passed|Some tests failed|INTEGRATION FAILURE" | tail -n 20
+  if [[ $code -eq 0 ]] && dart run tool/store_assets/check_store_assets.dart --require-screenshots; then
+    RESULTS+=("PASS  $name  (${took}s; store/screenshots/)")
+  else
+    FAILED=1
+    RESULTS+=("FAIL  $name  (${took}s, exit $code)")
+    scrub "$WORK/$name.log" | tail -n 40
+    tail -n 20 "$WORK/api.log" | sed "s/$TOKEN/<test-token>/g"
   fi
 fi
 

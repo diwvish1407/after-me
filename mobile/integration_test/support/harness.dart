@@ -28,6 +28,15 @@ class TestAccount {
     required this.secondContactEmail,
   });
 
+  /// A fixed account, for a run on a database of its own (the store screenshots, whose
+  /// names and addresses are shown on screen and must be fictional and tidy).
+  const TestAccount.fixed({
+    required this.email,
+    required this.password,
+    required this.contactEmail,
+    this.secondContactEmail = 'unused@example.com',
+  });
+
   factory TestAccount.fresh() {
     final stamp = DateTime.now().microsecondsSinceEpoch;
     return TestAccount._(

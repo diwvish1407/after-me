@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The AfterMe mark for themed icons (Android 13+): the launcher tints this layer with the
+     wallpaper's colours and uses only its shape, so the tile is an outline here (a filled
+     tile would hide the check). Same numbers as ic_launcher_foreground.xml
+     (tool/store_assets/mark.dart, checked by tool/store_assets/render_test.dart). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:name="tile"
+        android:fillColor="#00000000"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="4.5"
+        android:pathData="M45,32.25H63A12.75,12.75 0,0 1,75.75,45V63A12.75,12.75 0,0 1,63,75.75H45A12.75,12.75 0,0 1,32.25,63V45A12.75,12.75 0,0 1,45,32.25Z" />
+    <path
+        android:name="check"
+        android:fillColor="#00000000"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="5.5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M42,54L50,62L66,46" />
+</vector>

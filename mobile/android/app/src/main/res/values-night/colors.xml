@@ -2,4 +2,7 @@
 <resources>
     <!-- `bg` token, dark (USER_FLOWS.md §1.2). -->
     <color name="launch_background">#121718</color>
+    <!-- The splash mark: `primary` tile, `bg` check (dark). -->
+    <color name="splash_tile">#5FB3AD</color>
+    <color name="splash_check">#121718</color>
 </resources>

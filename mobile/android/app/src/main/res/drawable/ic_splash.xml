@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The splash icon (Android 12+ SplashScreen, and centred on the launch background before
+     that): the same mark as the launcher icon, in the colours of the theme in use
+     (values/colors.xml and values-night/colors.xml), so the dark splash is dark too. The
+     system shows it inside a circle of 2/3 of its size, which the tile fits. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:name="tile"
+        android:fillColor="@color/splash_tile"
+        android:pathData="M45,30H63A15,15 0,0 1,78,45V63A15,15 0,0 1,63,78H45A15,15 0,0 1,30,63V45A15,15 0,0 1,45,30Z" />
+    <path
+        android:name="check"
+        android:fillColor="#00000000"
+        android:strokeColor="@color/splash_check"
+        android:strokeWidth="5.5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M42,54L50,62L66,46" />
+</vector>

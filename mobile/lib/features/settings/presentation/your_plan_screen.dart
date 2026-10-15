@@ -11,8 +11,13 @@ import '../../contacts/data/contacts_repository.dart';
 
 /// Settings > Your plan: the tier, what it allows and what is used (`GET
 /// /v1/me/entitlements`), in one calm sentence and as a short list. The server enforces
-/// every limit; this only shows them. There is no purchase here yet (billing is a later
-/// phase): the screen says so plainly instead of offering something that does not work.
+/// every limit; this only shows them.
+///
+/// There is no billing in 1.0 (PRD D5: Premium is only granted by the operator; Play
+/// Billing comes in 1.1). So nothing here offers a purchase, names a price or links to a
+/// payment outside Google Play (Play's payments policy): a free account is told what the
+/// free plan includes and, plainly, that more is not available yet; an account the
+/// operator made Premium sees "Premium" and what it includes, and nothing about paying.
 class YourPlanScreen extends ConsumerWidget {
   const YourPlanScreen({super.key});
 
@@ -145,12 +150,13 @@ class _PlanView extends StatelessWidget {
         if (e.isFree) ...[
           BodyText(l10n.yourPlanFreeNote),
           Gap.sm,
-          // No purchase yet: say so, never a button that does nothing.
+          // Nothing to buy in 1.0: say what is not available, never a button that does
+          // nothing and never a way to pay.
           Semantics(
             container: true,
             child: StatusBanner(
               kind: StatusBannerKind.info,
-              message: l10n.yourPlanPremiumSoon,
+              message: l10n.yourPlanMoreNotYet,
             ),
           ),
         ] else

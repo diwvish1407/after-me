@@ -8,8 +8,9 @@ import '../../../l10n/gen/app_localizations.dart';
 const int freeContactLimit = 1;
 
 /// Explains the plan limit for trusted contacts (USER_FLOWS §8): the free plan allows
-/// [limit] (1) trusted contact and more are part of Premium. Billing does not exist
-/// yet, so there is no purchase action: only the explanation and Close.
+/// [limit] (1) trusted contact and more are not available yet. There is no billing in
+/// 1.0 (PRD D5), so the sheet offers no purchase, no price and no link to pay: only the
+/// explanation and Close. The server's `plan_limit_reached` (403) still opens it.
 Future<void> showContactLimitSheet(
   BuildContext context, {
   int? limit,

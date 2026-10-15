@@ -50,7 +50,7 @@ variable "api_min_instances" {
 }
 
 variable "api_max_instances" {
-  description = "api_max_instances * 2 * (pool + overflow) + 2 (afterme-kms) must stay at or below the afterme_api connection limit (60); checked at plan time (terraform_data.connection_budget)."
+  description = "api_max_instances * 2 * (pool + overflow) + 2 (afterme-kms) + 2 (afterme-reviewer-account, when enabled) must stay at or below the afterme_api connection limit (60); checked at plan time (terraform_data.connection_budget)."
   type        = number
 }
 
@@ -108,4 +108,10 @@ variable "deletion_protection" {
 variable "labels" {
   type    = map(string)
   default = {}
+}
+
+variable "reviewer_account_job" {
+  description = "Create the afterme-reviewer-account job (the Play reviewer's demo account; docs/RELEASE.md). Turn on only after a version was added to the reviewer-password secret."
+  type        = bool
+  default     = false
 }

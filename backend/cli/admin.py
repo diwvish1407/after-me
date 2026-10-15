@@ -13,6 +13,9 @@
     python -m cli.admin email-test --to ADDRESS     # one message through the configured chain
     python -m cli.admin push-test --token TOKEN     # one push through the configured provider
     python -m cli.admin beta-report [--since YYYY-MM-DD] [--until YYYY-MM-DD] [--json]
+    python -m cli.admin reviewer-account create --email ADDR --contact-email INBOX --reason "..."
+    python -m cli.admin reviewer-account reset <user-id> [--contact-email INBOX]
+        # both: [--allow-public-contact] [--password-env NAME]
 
 Connects as the worker role; every command that changes something is audited with an operator
 actor. ``status``, ``hold status`` and ``beta-report`` only read, and are not.
@@ -21,6 +24,12 @@ The ``kms`` commands are the exception: they connect as the **API role** (``DATA
 because only that role may read keys and content, and use the configured KMS identity (run them
 where the API's service account is, e.g. a Cloud Run job of the API image). ``kms check`` needs
 no database. See ``app/ops/kms.py`` for what is safe to interrupt and re-run.
+
+``reviewer-account`` runs the same way (API role + KMS: it seals the two sample instructions).
+It makes or restores the Google Play reviewer's demo account (``app/ops/reviewer.py``). The
+password is generated and printed once **only to a terminal**; where stdout is a log (Cloud Run,
+CI, a pipe) it is refused unless ``--password-env NAME`` names an environment variable that holds
+it (a secret). The password is never logged and never in the audit record.
 
 ``beta-report`` is the closed-beta review: metrics for the period, then every incident in which
 a contact was messaged, with deterministic verdict hints. It is read-only (a READ ONLY
@@ -36,6 +45,7 @@ import argparse
 import asyncio
 import getpass
 import json
+import os
 import re
 import sys
 import uuid
@@ -49,10 +59,11 @@ from app.notifications.email import EmailMessage
 from app.notifications.errors import ProviderError
 from app.notifications.providers.factory import build_email_provider, build_push_provider
 from app.notifications.push import PushMessage
-from app.ops import admin, beta, users
+from app.ops import admin, beta, reviewer, users
 from app.ops import kms as kms_ops
 
 _DAY_RE = re.compile(r"\d{4}-\d{2}-\d{2}")
+_ENV_NAME_RE = re.compile(r"[A-Z_][A-Z0-9_]{0,63}")
 
 
 def _day(value: str) -> date:
@@ -134,6 +145,46 @@ def _parser() -> argparse.ArgumentParser:
         "--until", type=_day, metavar="YYYY-MM-DD", help="last UTC day, inclusive (default: now)"
     )
     report.add_argument("--json", action="store_true", help="a machine-readable document")
+    reviewer_parser = sub.add_parser(
+        "reviewer-account",
+        help="the Google Play reviewer (demo) account: create or reset (API role + KMS)",
+    )
+    reviewer_sub = reviewer_parser.add_subparsers(dest="reviewer_command", required=True)
+    make = reviewer_sub.add_parser(
+        "create", help="a verified Premium account with our inbox as its one contact"
+    )
+    make.add_argument("--email", required=True, help="the reviewer's login address (ours)")
+    make.add_argument(
+        "--contact-email", required=True, help="OUR inbox: the account's one verified contact"
+    )
+    make.add_argument("--reason", required=True, help="why (kept in the audit record)")
+    again = reviewer_sub.add_parser(
+        "reset", help="a new password, no session, and the seeded state back"
+    )
+    again.add_argument("user_id", type=uuid.UUID)
+    again.add_argument(
+        "--contact-email",
+        default=None,
+        help="OUR inbox (default: the account's one verified contact)",
+    )
+    again.add_argument(
+        "--reason",
+        default="reset of the Play reviewer account",
+        help="why (kept in the audit record)",
+    )
+    for one in (make, again):
+        one.add_argument(
+            "--allow-public-contact",
+            action="store_true",
+            help="accept a contact address on a public mail provider (it must still be ours)",
+        )
+        one.add_argument(
+            "--password-env",
+            default=None,
+            metavar="NAME",
+            help="read the password from this environment variable (a secret) instead of "
+            "generating one and printing it once (required when stdout is not a terminal)",
+        )
     return parser
 
 
@@ -148,6 +199,12 @@ def _parse(argv: list[str]) -> argparse.Namespace:
         and (args.limit is not None and args.limit < 1)
     ):
         parser.error("--limit must be at least 1")
+    if (
+        args.command == "reviewer-account"
+        and args.password_env is not None
+        and not _ENV_NAME_RE.fullmatch(args.password_env)
+    ):
+        parser.error("--password-env takes the NAME of an environment variable")
     return args
 
 
@@ -277,6 +334,95 @@ async def _kms_command(args: argparse.Namespace, operator: str) -> int:
         await services.db.dispose()
 
 
+def _stdout_is_terminal() -> bool:
+    """Whether a printed password reaches a person and not a log (Cloud Run, CI and a pipe all
+    capture stdout into a log)."""
+    return sys.stdout.isatty()
+
+
+def _reviewer_password(args: argparse.Namespace) -> tuple[str | None, str]:
+    """``(password, how it was obtained)``, or ``(None, why it was refused)``. A generated
+    password is printed once by the caller, only to a terminal."""
+    if args.password_env is not None:
+        value = os.environ.get(args.password_env, "")
+        if not value:
+            return None, f"the environment variable {args.password_env} is unset or empty"
+        return value, f"from {args.password_env} (not printed)"
+    if not _stdout_is_terminal():
+        return None, (
+            "stdout is not a terminal, so a generated password would be written to a log; "
+            "put the password in a secret and pass --password-env NAME instead"
+        )
+    return reviewer.generate_password(), "generated"
+
+
+async def _reviewer_command(args: argparse.Namespace, operator: str) -> int:
+    """``reviewer-account create | reset``. Exit ``0`` when done, ``2`` when refused (nothing
+    changed). Runs as the API role with the KMS, like ``kms``."""
+    password, how = _reviewer_password(args)
+    if password is None:
+        print(f"refused: {how}")  # noqa: T201
+        return 2
+    settings = load_settings()
+    configure_logging(settings)
+    services = build_services(settings, application_name="afterme-admin-reviewer")
+    try:
+        if settings.is_production_like:
+            role = await services.db.current_role()
+            if role != "afterme_api":
+                print(  # noqa: T201
+                    f"refused: reviewer-account must connect as afterme_api, not {role}"
+                )
+                return 2
+        try:
+            if args.reviewer_command == "create":
+                account = await reviewer.create(
+                    services,
+                    operator=operator,
+                    email=args.email,
+                    contact_email=args.contact_email,
+                    reason=args.reason,
+                    password=password,
+                    allow_public_contact=args.allow_public_contact,
+                )
+            else:
+                account = await reviewer.reset(
+                    services,
+                    operator=operator,
+                    user_id=args.user_id,
+                    reason=args.reason,
+                    password=password,
+                    contact_email=args.contact_email,
+                    allow_public_contact=args.allow_public_contact,
+                )
+        except users.UserCommandError as exc:
+            print(f"refused: {exc}")  # noqa: T201
+            return 2
+    finally:
+        await services.db.dispose()
+    done = "created" if account.command == "create" else "reset"
+    print(f"{done}: user_id={account.user_id} login={account.email}")  # noqa: T201
+    print(  # noqa: T201
+        f"contact: {account.contact_id} (verified; our inbox); plan: 2 stages; "
+        f"instructions: {len(reviewer.SAMPLES)} samples; schedule: active, daily 20:00 "
+        f"{reviewer.TIMEZONE}; tier: {reviewer.TIER}"
+    )
+    if account.command == "reset":
+        print(  # noqa: T201
+            f"sessions ended: {account.sessions_revoked}; contacts removed: "
+            f"{account.contacts_removed}; instructions replaced: {account.instructions_replaced}"
+        )
+    if how == "generated":
+        # The one place the password exists in clear outside the hash: this terminal, once.
+        print(  # noqa: T201
+            "password (shown once; put it in the password manager and Play Console now, it is "
+            f"not stored anywhere else): {password}"
+        )
+    else:
+        print(f"password: {how}")  # noqa: T201
+    return 0
+
+
 async def run(argv: list[str]) -> int:  # noqa: PLR0911 - one return per command
     args = _parse(argv)
     if args.command in ("email-test", "push-test"):
@@ -284,6 +430,8 @@ async def run(argv: list[str]) -> int:  # noqa: PLR0911 - one return per command
         return await _provider_test(args)
     if args.command == "kms":
         return await _kms_command(args, args.operator or getpass.getuser())
+    if args.command == "reviewer-account":
+        return await _reviewer_command(args, args.operator or getpass.getuser())
     settings = load_settings()
     configure_logging(settings)
     services = build_worker_services(settings)

@@ -337,9 +337,10 @@ ActivityLine describeActivity(
         icon: Icons.download_outlined,
         text: l10n.activityExported,
       );
+    // Worded as a plan change, not a purchase: there is no billing in 1.0 (PRD D5).
     case 'billing.subscription_changed':
       return ActivityLine(
-        icon: Icons.workspace_premium_outlined,
+        icon: Icons.inventory_2_outlined,
         text: l10n.activitySubscription,
       );
     default:

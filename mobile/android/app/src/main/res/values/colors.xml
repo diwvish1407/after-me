@@ -2,4 +2,10 @@
 <resources>
     <!-- `bg` token, light (USER_FLOWS.md §1.2). -->
     <color name="launch_background">#F7F5F2</color>
+    <!-- The splash mark: `primary` tile, `bg` check (light). -->
+    <color name="splash_tile">#1F6F6B</color>
+    <color name="splash_check">#F7F5F2</color>
+    <!-- The adaptive launcher icon's background layer (`bg`, light). Launcher icons do not
+         follow the dark theme, so there is no night value. -->
+    <color name="ic_launcher_background">#F7F5F2</color>
 </resources>

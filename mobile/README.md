@@ -25,16 +25,16 @@ authoritative; the app
 never decides whether an escalation happens ([ARCHITECTURE §1](../docs/ARCHITECTURE.md)) and never
 computes a deadline.
 
-## Application ID — PROVISIONAL
+## Application ID
 
 | | |
 |---|---|
 | Application ID / Kotlin namespace | **`app.afterme`** (dev: `app.afterme.dev`, staging: `app.afterme.staging`) |
-| Status | **Provisional until product decision D1** (domain / application ID, [PRD §15](../docs/PRD.md)) |
+| Status | **Decided (PRD D1): `app.afterme`, domain `afterme.app`** ([PRD §15](../docs/PRD.md)) |
 
-The application ID **cannot change after the first Play upload**. When D1 is decided, change
-`namespace` and `applicationId` in `android/app/build.gradle.kts` and move
-`android/app/src/main/kotlin/app/afterme/MainActivity.kt` to the new package before any upload.
+The application ID **cannot change after the first Play upload**. `config/staging.json` and
+`config/prod.json` still name the reserved `.invalid` hosts until the servers on the domain are
+live; change them to the real `https://` URLs before a build that should reach them.
 
 ## Toolchain
 
@@ -173,8 +173,10 @@ flutter build apk --flavor dev --debug --dart-define-from-file=config/dev.json
 
 # The production release (Play upload, DEPLOYMENT §5.1): App Bundle, obfuscated, symbols kept
 # privately. It needs android/key.properties and APP_ENV=prod in config/prod.json, and it runs the
-# merged-manifest check on what it built.
+# merged-manifest check and the 16 KB page-size check on what it built.
 tool/build_release.sh
+# Each Play upload needs a build number (versionCode) larger than the last one uploaded:
+tool/build_release.sh --build-number 2 --build-name 1.0.0
 
 # The same as an APK, or without the upload key (signed with the public DEBUG key, never
 # uploaded: a loud warning says so; this is what CI does)
@@ -188,7 +190,14 @@ tool/build_release.sh --apk --allow-debug-signing
 
 `tool/build_release.sh` fails, with the reason, when `android/key.properties` is missing (unless
 `--allow-debug-signing` is given), when `config/prod.json` does not say `"APP_ENV": "prod"` with an
-`https` API URL, or when the merged release manifest is not as documented. Keep the Dart symbols
+`https` API URL, when the merged release manifest is not as documented (including any
+`com.google.android.gms.permission.AD_ID` and the adaptive launcher icon's `icon`/`roundIcon`), or
+when a native library is not 16 KB-aligned (`tool/check_16kb.dart`: every `.so` of a 64-bit ABI
+must have ELF LOAD segments aligned to >= 16384; for an APK also
+`zipalign -c -P 16 -v 4` from the newest Android build-tools; run it by hand with
+`dart run tool/check_16kb.dart <aab|apk>`). The version is `1.0.0+<build>` in `pubspec.yaml`;
+`--build-number N` (1 to 2100000000) and `--build-name X.Y.Z` override it without editing the
+file. Keep the Dart symbols
 (`build/symbols` or `--symbols-dir=`) and the R8 mapping
 (`build/app/outputs/mapping/prodRelease/mapping.txt`) **private and per version**: they
 de-obfuscate crash traces and are never committed. Code and resource shrinking (R8) are stated in
@@ -869,8 +878,11 @@ test support on, one random token and rate limits off; uses the attached device 
 the tail of the worker, API and host-helper logs when a test fails; and always stops what it
 started. Logs and the mail directory are in a temporary directory whose path it prints. It needs
 PostgreSQL running with a superuser reachable as your OS user, the backend's `.venv` (`make setup`
-once), and ports 8000 and 8001 free (it refuses to start otherwise). A full run takes about ten
-minutes.
+once), and ports 8000 and 8001 free (it refuses to start otherwise, and never stops what holds
+them). **When 8000 is taken**, run it on another port: `AFTERME_IT_PORT=8010 tool/integration.sh`
+(the API listens there and the app is built with `API_BASE_URL`/`PUBLIC_BASE_URL`
+`http://10.0.2.2:8010`). `AFTERME_IT_DB` accepts only `afterme_it` (default) or `afterme_shots`.
+A full run takes about ten minutes.
 
 **The host helper** (`tool/it_host.py`, 127.0.0.1:8001, reached from the phone as `10.0.2.2:8001`,
 guarded by the run's random token) does the two things a test on the phone cannot: the operator's
@@ -914,6 +926,55 @@ with Continue); `main()` itself is not executed (`tool/emulator_smoke.sh` covers
 the app has no state of its own for the Hold (the API does not expose it), so MOB-68 asserts what
 the person is shown, which is the grace incident, and what the server did.
 The debug APK these runs build holds the throwaway test token as a `--dart-define`.
+
+## Store assets (Phase 13, PLAY_STORE §5)
+
+Everything the Play listing needs is drawn by code from one description of the mark
+(`tool/store_assets/mark.dart`: a soft check in a rounded tile, teal `primary` on warm-white
+`bg`), so no design tool is involved and nothing drifts:
+
+| What | Where | How |
+|---|---|---|
+| Play icon, 512 x 512, 32-bit PNG | `store/play_icon_512.png` | `flutter test tool/store_assets/render_test.dart` |
+| Feature graphic, 1024 x 500, 24-bit PNG (no alpha) | `store/feature_graphic_1024x500.png` | the same |
+| Legacy launcher PNGs (48-192 px) | `android/app/src/main/res/mipmap-*/ic_launcher(_round).png` | the same (minSdk 26 always uses the adaptive icon) |
+| Previews for a person (masks, themed icon, splash light/dark) | `store/previews/` | the same; not uploaded |
+| Phone screenshots, 1080 x 2160, 24-bit PNG | `store/screenshots/0*.png` | `tool/screenshots.sh` (below) |
+| Release notes (<= 500 characters) | `store/whatsnew/en-US.txt` | by hand |
+
+`dart run tool/store_assets/check_store_assets.dart [--require-screenshots]` checks sizes, bits per
+pixel, alpha and file sizes against Play's limits. The renderer runs outside `flutter test`'s default
+run (it lives in `tool/` and writes files) and fails when the vector drawables' path data drifts
+from the mark's numbers. Text in the feature graphic is Roboto from the local Flutter SDK (what
+Android draws the app in; the app bundles no font) and the app's own strings.
+
+The launcher icon is an **adaptive icon** (`res/mipmap-anydpi-v26/ic_launcher.xml` and
+`ic_launcher_round.xml`: background `@color/ic_launcher_background`, foreground and **monochrome**
+vector drawables in `res/drawable/`), labelled by the flavor (`AfterMe`, `AfterMe Dev`,
+`AfterMe Staging`). The **Android 12+ splash** (`values-v31/` and `values-night-v31/styles.xml`) is
+the theme's `bg` and the same mark (`drawable/ic_splash.xml`, coloured by `values(-night)/colors.xml`),
+with no animation; before Android 12 `drawable/launch_background.xml` shows the same.
+`test/tool/launcher_resources_test.dart` pins all of it.
+
+### Phone screenshots
+
+```bash
+tool/screenshots.sh                       # API on 127.0.0.1:8010, database afterme_shots
+AFTERME_IT_PORT=8020 tool/screenshots.sh  # another port
+```
+
+`tool/integration.sh --screenshots` with its own throwaway database (`afterme_shots`) and port
+(8010 by default: whatever runs on 8000 is never touched; the app gets
+`--dart-define=API_BASE_URL=http://10.0.2.2:<port>`). It builds the dev flavor with
+`SCREENSHOT_MODE=true`, signs up the fictional Asha, adds her contact Meera (who accepts) and an
+instruction about her dog (mentioning Ravi next door), and captures with
+`IntegrationTestWidgetsFlutterBinding.takeScreenshot` through `flutter drive`
+(`integration_test/store_screenshots_test.dart`, `test_driver/screenshots_driver.dart`). The
+display is set to 1080 x 2340 for the run (reset after); the driver cuts off the "Screenshot mode"
+strip with the status bar under it and writes 1080 x 2160 (or less) 24-bit PNGs:
+`01_home_checked_in`, `02_im_ok`, `03_plan`, `04_who_gets_what`, `05_grace_reminded_first`,
+`06_contact_accepted`, `07_privacy`. These come from an emulator; real-device captures are still
+worth a look before upload.
 
 ## Screenshots for the store (`SCREENSHOT_MODE`)
 

@@ -1,6 +1,7 @@
 # Cloud Run: the API (service), the escalation worker (worker pool), the migration job, the
 # retention job (job + Scheduler), the status watchdog (job + Scheduler), the operator jobs and
-# the key-management job (afterme-kms). One image, five commands (backend/Dockerfile).
+# the key-management job (afterme-kms) and the Play reviewer account job. One image, five commands
+# (backend/Dockerfile).
 #
 # Images are deployed by digest from CI (deploy.yml, `gcloud run ... --image <name>@sha256:...`),
 # so Terraform ignores `image` after the first apply: it creates the resources, CI moves them.
@@ -144,7 +145,7 @@ locals {
   # bookkeeping pool (no independent transaction in the engine or the dispatcher), so it counts
   # once. Each CLI job: 1 + 0, two pools.
   connections_peak = {
-    api    = var.api_max_instances * 2 * (var.api_db_pool_size + var.api_db_max_overflow) + 2 # + afterme-kms
+    api    = var.api_max_instances * 2 * (var.api_db_pool_size + var.api_db_max_overflow) + 2 + (var.reviewer_account_job ? 2 : 0) # + afterme-kms (+ afterme-reviewer-account)
     worker = var.worker_instances * var.worker_db_pool_size + 2 * length(local.cli_jobs)
   }
 }
@@ -157,7 +158,7 @@ resource "terraform_data" "connection_budget" {
   lifecycle {
     precondition {
       condition     = local.connections_peak.api <= var.role_connection_limits["api"]
-      error_message = "API pools at api_max_instances (+ the afterme-kms job) exceed the afterme_api connection limit: lower api_max_instances or raise the limit in provision_roles.sql and role_connection_limits together."
+      error_message = "API pools at api_max_instances (+ the afterme-kms and afterme-reviewer-account jobs) exceed the afterme_api connection limit: lower api_max_instances or raise the limit in provision_roles.sql and role_connection_limits together."
     }
     precondition {
       condition     = local.connections_peak.worker <= var.role_connection_limits["worker"]
@@ -670,6 +671,104 @@ resource "google_cloud_run_v2_job_iam_member" "kms_operator" {
   project  = var.project_id
   location = var.region
   name     = google_cloud_run_v2_job.kms.name
+  role     = "roles/run.jobsExecutorWithOverrides"
+  member   = each.value
+}
+
+# ---------------------------------------------------------------------------------------------
+# The Google Play reviewer (demo) account (docs/RELEASE.md, docs/PLAY_STORE.md §6):
+# `python -m cli.admin reviewer-account create | reset`. Like afterme-kms it needs the API database
+# role and the KMS (it seals two sample instructions), so it runs as the API service account with
+# the API's database URL, and its command is fixed up to `reviewer-account`. Cloud Run captures
+# stdout into Cloud Logging, so the command never prints a password here: the password is read
+# from AFTERME_REVIEWER_PASSWORD (`--password-env AFTERME_REVIEWER_PASSWORD`), bound to the
+# reviewer-password secret, which the owner fills from the password manager before executing.
+# Off by default (reviewer_account_job): a job bound to a secret that has no version cannot run.
+# Never scheduled; executed by the on-call principals (in practice the owner).
+# ---------------------------------------------------------------------------------------------
+resource "google_cloud_run_v2_job" "reviewer" {
+  count = var.reviewer_account_job ? 1 : 0
+
+  project  = var.project_id
+  location = var.region
+  name     = "${var.name_prefix}-reviewer-account"
+
+  labels              = var.labels
+  deletion_protection = var.deletion_protection
+
+  template {
+    task_count  = 1
+    parallelism = 1
+
+    template {
+      service_account = local.process.api.account
+      max_retries     = 0 # a refusal is read by a person, never retried in a loop
+      timeout         = "300s"
+
+      vpc_access {
+        egress = "PRIVATE_RANGES_ONLY"
+        network_interfaces {
+          network    = local.vpc.network
+          subnetwork = local.vpc.subnetwork
+        }
+      }
+
+      containers {
+        name    = "reviewer-account"
+        image   = var.image
+        command = ["python", "-m", "cli.admin", "reviewer-account"]
+        args    = ["--help"]
+
+        resources {
+          limits = {
+            cpu    = "1"
+            memory = "512Mi"
+          }
+        }
+
+        dynamic "env" {
+          # the API's environment, with a 1 + 0 pool: 2 connections
+          for_each = merge(var.common_env, local.process.api.env, {
+            AFTERME_DB_POOL_SIZE    = "1"
+            AFTERME_DB_MAX_OVERFLOW = "0"
+          })
+          content {
+            name  = env.key
+            value = env.value
+          }
+        }
+
+        dynamic "env" {
+          for_each = merge(local.process.api.secrets, { AFTERME_REVIEWER_PASSWORD = "reviewer-password" })
+          content {
+            name = env.key
+            value_source {
+              secret_key_ref {
+                secret  = env.value
+                version = "latest"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  lifecycle {
+    ignore_changes = [
+      template[0].template[0].containers[0].image,
+      client,
+      client_version,
+    ]
+  }
+}
+
+resource "google_cloud_run_v2_job_iam_member" "reviewer_operator" {
+  for_each = var.reviewer_account_job ? toset(var.oncall_principals) : toset([])
+
+  project  = var.project_id
+  location = var.region
+  name     = google_cloud_run_v2_job.reviewer[0].name
   role     = "roles/run.jobsExecutorWithOverrides"
   member   = each.value
 }

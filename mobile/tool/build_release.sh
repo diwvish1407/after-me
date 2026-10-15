@@ -11,15 +11,28 @@
 #     result is signed with the public DEBUG key and can never be uploaded to Play. CI
 #     uses it, because CI has no upload key and only proves that the release compiles;
 #   * after the build, the merged release manifest is checked: permission allowlist,
-#     allowBackup, cleartext and debuggable flags, deep links off, and the exact set of
-#     exported components (tool/check_manifest_permissions.dart).
+#     allowBackup, cleartext and debuggable flags, deep links off, the exact set of
+#     exported components, no advertising ID and the adaptive launcher icon
+#     (tool/check_manifest_permissions.dart);
+#   * then every native library in the artifact is checked for the 16 KB memory page
+#     size Play requires for Android 15+ targets (ELF LOAD alignment, and zipalign for
+#     an APK: tool/check_16kb.dart). A misaligned library fails the build loudly.
+#
+# Versions (PLAY_STORE §3, DEPLOYMENT §5.1): pubspec.yaml carries `version: 1.0.0+<build>`.
+# Every Play upload needs a versionCode (the build number) greater than every earlier
+# upload's: pass it with --build-number (Play Console shows the last one used), and the
+# user-visible version with --build-name when it changes. Without them, the pubspec's are
+# used.
 #
 # Usage (from anywhere; it changes to mobile/ itself):
 #   tool/build_release.sh [--apk | --appbundle] [--allow-debug-signing]
-#                         [--symbols-dir=DIR]
+#                         [--build-number N] [--build-name X.Y.Z] [--symbols-dir=DIR]
 #
 #   --appbundle (default)  the Android App Bundle for the Play upload
 #   --apk                  a release APK (local checks, CI)
+#   --build-number N       the versionCode: a whole number from 1 to 2100000000 (Play's
+#                          limit), greater than any build uploaded before
+#   --build-name X.Y.Z     the versionName people see (e.g. 1.0.0)
 #   --symbols-dir=DIR      where --split-debug-info writes the Dart symbols
 #                          (default build/symbols). Keep them, and the R8 mapping at
 #                          build/app/outputs/mapping/prodRelease/, PRIVATE and per version:
@@ -32,27 +45,57 @@ cd "$(dirname "$0")/.."
 TARGET="appbundle"
 ALLOW_DEBUG_SIGNING=0
 SYMBOLS_DIR="build/symbols"
+BUILD_NUMBER=""
+BUILD_NAME=""
 
 fail() {
   echo "build_release: $*" >&2
   exit 1
 }
 
-for arg in "$@"; do
+while [ $# -gt 0 ]; do
+  arg="$1"
   case "$arg" in
     --apk) TARGET="apk" ;;
     --appbundle) TARGET="appbundle" ;;
     --allow-debug-signing) ALLOW_DEBUG_SIGNING=1 ;;
     --symbols-dir=*) SYMBOLS_DIR="${arg#--symbols-dir=}" ;;
+    --build-number=*) BUILD_NUMBER="${arg#--build-number=}" ;;
+    --build-number)
+      [ $# -ge 2 ] || fail "--build-number needs a value"
+      BUILD_NUMBER="$2"
+      shift
+      ;;
+    --build-name=*) BUILD_NAME="${arg#--build-name=}" ;;
+    --build-name)
+      [ $# -ge 2 ] || fail "--build-name needs a value"
+      BUILD_NAME="$2"
+      shift
+      ;;
     -h | --help)
       sed -n '2,/^set -euo/p' "$0" | sed '$d' | sed 's/^# \{0,1\}//'
       exit 0
       ;;
     *) fail "unknown argument: $arg (see --help)" ;;
   esac
+  shift
 done
 
 [ -n "$SYMBOLS_DIR" ] || fail "--symbols-dir must not be empty"
+
+# --- The version ---------------------------------------------------------------------------
+VERSION_ARGS=()
+if [ -n "$BUILD_NUMBER" ]; then
+  # Play's versionCode: a positive whole number, at most 2100000000, no leading zero.
+  [[ "$BUILD_NUMBER" =~ ^[1-9][0-9]{0,9}$ ]] && [ "$BUILD_NUMBER" -le 2100000000 ] ||
+    fail "--build-number must be a whole number from 1 to 2100000000 (got '$BUILD_NUMBER')"
+  VERSION_ARGS+=("--build-number=$BUILD_NUMBER")
+fi
+if [ -n "$BUILD_NAME" ]; then
+  [[ "$BUILD_NAME" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] ||
+    fail "--build-name must look like 1.0.0 (got '$BUILD_NAME')"
+  VERSION_ARGS+=("--build-name=$BUILD_NAME")
+fi
 
 # --- The configuration: prod, https ----------------------------------------------------
 CONFIG="config/prod.json"
@@ -93,23 +136,32 @@ fi
 
 # --- Build -------------------------------------------------------------------------------
 mkdir -p "$SYMBOLS_DIR"
-echo "build_release: flutter build $TARGET --flavor prod --release --obfuscate --split-debug-info=$SYMBOLS_DIR"
+echo "build_release: flutter build $TARGET --flavor prod --release --obfuscate --split-debug-info=$SYMBOLS_DIR ${VERSION_ARGS[*]-}"
 flutter build "$TARGET" \
   --flavor prod \
   --release \
   --dart-define-from-file="$CONFIG" \
   --obfuscate \
-  --split-debug-info="$SYMBOLS_DIR"
+  --split-debug-info="$SYMBOLS_DIR" \
+  ${VERSION_ARGS[@]+"${VERSION_ARGS[@]}"}
+
+if [ "$TARGET" = "apk" ]; then
+  ARTIFACT="build/app/outputs/flutter-apk/app-prod-release.apk"
+else
+  ARTIFACT="build/app/outputs/bundle/prodRelease/app-prod-release.aab"
+fi
 
 # --- The merged manifest of what was just built ---------------------------------------------
 dart run tool/check_manifest_permissions.dart
 
+# --- 16 KB memory page size (Play, Android 15+ targets) -------------------------------------
+dart run tool/check_16kb.dart "$ARTIFACT"
+
 echo
 echo "build_release: done."
-if [ "$TARGET" = "apk" ]; then
-  echo "  artifact: build/app/outputs/flutter-apk/app-prod-release.apk"
-else
-  echo "  artifact: build/app/outputs/bundle/prodRelease/app-prod-release.aab"
+echo "  artifact: $ARTIFACT"
+if [ -n "$BUILD_NUMBER$BUILD_NAME" ]; then
+  echo "  version: ${BUILD_NAME:-from pubspec.yaml} (build ${BUILD_NUMBER:-from pubspec.yaml})"
 fi
 echo "  Dart symbols: $SYMBOLS_DIR  (keep private, per version)"
 echo "  R8 mapping:   build/app/outputs/mapping/prodRelease/mapping.txt  (keep private, per version)"

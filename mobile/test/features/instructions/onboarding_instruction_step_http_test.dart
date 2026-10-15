@@ -364,11 +364,11 @@ void main() {
       await tapText(tester, 'Save instruction');
       await tester.pumpAndSettle();
       expect(
-        find.text('More instructions are part of Premium'),
+        find.text("More instructions aren't available yet"),
         findsOneWidget,
       );
       expect(
-        find.textContaining('The free plan allows 3 instructions.'),
+        find.textContaining('The free plan includes 3 instructions.'),
         findsOneWidget,
       );
       expect(find.text('Close'), findsOneWidget);

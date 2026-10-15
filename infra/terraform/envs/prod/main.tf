@@ -56,4 +56,5 @@ module "stack" {
   legal_documents_final        = var.legal_documents_final
   extra_env                    = var.extra_env
   hmac_pepper_previous_enabled = var.hmac_pepper_previous_enabled
+  reviewer_account_job         = var.reviewer_account_job
 }

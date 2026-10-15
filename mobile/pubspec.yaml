@@ -3,8 +3,10 @@ description: "AfterMe: personal contingency planning. If you can't answer, your 
 # Private app: never published to pub.dev.
 publish_to: 'none'
 
-# versionName (semver) + versionCode (monotonic build number). See DEPLOYMENT.md §5.1.
-version: 0.1.0+1
+# versionName (semver) + versionCode (monotonic build number): `1.0.0+<build>`. Each Play
+# upload needs a larger build number: tool/build_release.sh --build-number N sets it
+# without editing this file. See DEPLOYMENT.md §5.1.
+version: 1.0.0+1
 
 environment:
   sdk: ^3.13.5

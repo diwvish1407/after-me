@@ -231,3 +231,9 @@ variable "hmac_pepper_previous_enabled" {
   type    = bool
   default = false
 }
+
+variable "reviewer_account_job" {
+  description = "Create the afterme-reviewer-account job (Play reviewer demo account). Fill the reviewer-password secret first."
+  type        = bool
+  default     = false
+}

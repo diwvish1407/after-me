@@ -15,6 +15,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../../helpers/contacts_harness.dart';
 import '../../helpers/in_memory_contacts_repository.dart';
+import '../../helpers/no_purchase.dart';
 import '../../helpers/pump_app.dart';
 import '../../helpers/test_app.dart';
 
@@ -383,19 +384,22 @@ void main() {
       await tester.pumpAndSettle();
     }
 
-    testWidgets('free plan: one contact, more are Premium, Close only', (
-      tester,
-    ) async {
+    testWidgets('free plan: one contact, more not available yet, Close only '
+        '(no purchase, price or upgrade: PRD D5)', (tester) async {
       await open(tester);
       expect(
-        find.text('More trusted contacts are part of Premium'),
+        find.text("More trusted contacts aren't available yet"),
         findsOneWidget,
       );
       expect(
-        find.textContaining('The free plan allows 1 trusted contact.'),
+        find.textContaining('The free plan includes 1 trusted contact.'),
         findsOneWidget,
       );
       expect(find.byType(FilledButton), findsOneWidget);
+      expectNoPurchaseOffer(
+        within: find.byType(BottomSheet),
+        allowedButtons: {'Close'},
+      );
       await tester.tap(find.text('Close'));
       await tester.pumpAndSettle();
       expect(find.text('Close'), findsNothing);
@@ -406,7 +410,7 @@ void main() {
     ) async {
       await open(tester, limit: 3);
       expect(
-        find.textContaining('The free plan allows 3 trusted contacts.'),
+        find.textContaining('The free plan includes 3 trusted contacts.'),
         findsOneWidget,
       );
     });
@@ -414,6 +418,10 @@ void main() {
     testWidgets('the top tier gets the plain limit text', (tester) async {
       await open(tester, free: false);
       expect(find.textContaining('(25)'), findsOneWidget);
+      expectNoPurchaseOffer(
+        within: find.byType(BottomSheet),
+        allowedButtons: {'Close'},
+      );
     });
   });
 }

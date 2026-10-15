@@ -1,0 +1,5 @@
+The first release of AfterMe.
+
+Check in with one tap on a schedule you choose. If you miss a check-in, we remind you first. If you still don't answer, AfterMe follows the plan you set: it tells the trusted contacts you chose and shares only what you prepared for each of them.
+
+You can see what will happen before it happens, and stop it at any time.

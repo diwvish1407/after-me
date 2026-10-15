@@ -113,6 +113,7 @@ Scope (from the Phase 1 brief):
 
 - Production AAB (target 36, 16 KB check), listing and graphics, Data safety, content rating, app access (reviewer account), legal pages live, the [pre-submission checklist](PLAY_STORE.md#10-pre-submission-checklist-phase-13); Play Billing integration if D5 chooses it for 1.0; apply for production access after 12 × 14; staged rollout.
 - **Exit (M4):** Live on Google Play; the first 48 h post-launch review done.
+- **Status (2026-10-15):** **Built:** [PLAY_STORE](PLAY_STORE.md) final for submission (title "AfterMe", listing without purchase claims, Data safety, IARC, target audience, declarations); the reviewer account (`python -m cli.admin reviewer-account create|reset`, audited, API role + KMS, tests) and its Cloud Run job `afterme-reviewer-account` (off until enabled); the signed-release workflow `.github/workflows/release.yml` (upload key from GitHub secrets, AAB + mapping + symbols kept 90 days; Play upload stays manual); [RELEASE](RELEASE.md) (production access, staged rollout with halt criteria, the first 48 h, rollback limits and the 426 lever). **Needs you:** the upload key and the `release` Environment, real `config/prod.json`, counsel + `LEGAL_DOCUMENTS_FINAL`, the Play Console entries, the reviewer account on production, the 12 × 14 closed test, production access, the rollout.
 
 ---
 

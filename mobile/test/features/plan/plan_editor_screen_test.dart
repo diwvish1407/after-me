@@ -16,6 +16,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../../helpers/contacts_harness.dart';
 import '../../helpers/in_memory_contacts_repository.dart';
+import '../../helpers/no_purchase.dart';
 import '../../helpers/pump_app.dart';
 import '../../helpers/test_app.dart';
 
@@ -290,10 +291,12 @@ void main() {
       expect(add.onPressed, isNull);
       expect(
         find.text(
-          'The free plan has room for 2 stages. More are part of Premium.',
+          "The free plan has room for 2 stages. More stages aren't available yet.",
         ),
         findsOneWidget,
       );
+      // Explained, never sold (PRD D5): nothing on the editor offers a purchase.
+      expect(visibleTexts().where(purchaseLanguage.hasMatch), isEmpty);
 
       // The time sheet has no custom fields.
       await _tapStage(tester, 'Change the time of stage', 2);

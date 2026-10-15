@@ -95,7 +95,7 @@ class SettingsScreen extends ConsumerWidget {
                 onTap: () => context.push(AppRoutes.settingsNotifications),
               ),
               SettingsTile(
-                icon: Icons.workspace_premium_outlined,
+                icon: Icons.inventory_2_outlined,
                 title: l10n.settingsYourPlan,
                 subtitle: l10n.settingsYourPlanSubtitle,
                 onTap: () => context.push(AppRoutes.settingsYourPlan),

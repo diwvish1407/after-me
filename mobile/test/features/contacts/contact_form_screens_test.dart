@@ -172,7 +172,7 @@ void main() {
       await tapText(tester, 'Save and send invitation');
       await tester.pumpAndSettle();
       expect(
-        find.text('More trusted contacts are part of Premium'),
+        find.text("More trusted contacts aren't available yet"),
         findsOneWidget,
       );
       await tapText(tester, 'Close');

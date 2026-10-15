@@ -2203,11 +2203,11 @@
   "@contactMustAccept": {
     "description": "Note on the contact detail."
   },
-  "contactLimitTitle": "More trusted contacts are part of Premium",
+  "contactLimitTitle": "More trusted contacts aren't available yet",
   "@contactLimitTitle": {
     "description": "Title of the free-plan limit sheet."
   },
-  "contactLimitBodyFree": "The free plan allows {limit, plural, =1{1 trusted contact} other{{limit} trusted contacts}}. Adding more is part of Premium. You can also remove a contact to make room for someone else.",
+  "contactLimitBodyFree": "The free plan includes {limit, plural, =1{1 trusted contact} other{{limit} trusted contacts}}. Adding more isn't available yet. You can remove a contact to make room for someone else.",
   "@contactLimitBodyFree": {
     "description": "Body of the free-plan limit sheet.",
     "placeholders": {
@@ -3220,11 +3220,11 @@
   "@instructionNotFound": {
     "description": "Server said 404 when saving an instruction."
   },
-  "instructionLimitTitle": "More instructions are part of Premium",
+  "instructionLimitTitle": "More instructions aren't available yet",
   "@instructionLimitTitle": {
     "description": "Title of the limit sheet."
   },
-  "instructionLimitBodyFree": "The free plan allows {limit, plural, =1{1 instruction} other{{limit} instructions}}. Adding more is part of Premium. You can also delete one to make room for another.",
+  "instructionLimitBodyFree": "The free plan includes {limit, plural, =1{1 instruction} other{{limit} instructions}}. Adding more isn't available yet. You can delete one to make room for another.",
   "@instructionLimitBodyFree": {
     "description": "Body of the free-plan limit sheet.",
     "placeholders": {
@@ -4461,7 +4461,7 @@
   "@planEditLockedBody": {
     "description": "Plan editor: why it is read-only while an incident is open."
   },
-  "planEditFreeNote": "The free plan uses the suggested times and up to {stages, plural, =1{1 stage} other{{stages} stages}}. Choosing your own times and more stages is part of Premium.",
+  "planEditFreeNote": "The free plan uses the suggested times and up to {stages, plural, =1{1 stage} other{{stages} stages}}. Choosing your own times and adding more stages aren't available yet.",
   "@planEditFreeNote": {
     "description": "Plan editor: what the free plan allows.",
     "placeholders": {
@@ -4529,7 +4529,7 @@
   "@planEditAdd": {
     "description": "Plan editor: adds a stage."
   },
-  "planEditLimitFree": "The free plan has room for {max, plural, =1{1 stage} other{{max} stages}}. More are part of Premium.",
+  "planEditLimitFree": "The free plan has room for {max, plural, =1{1 stage} other{{max} stages}}. More stages aren't available yet.",
   "@planEditLimitFree": {
     "description": "Plan editor: why Add a stage is off on the free plan.",
     "placeholders": {
@@ -5419,9 +5419,9 @@
   "@activityExported": {
     "description": "Activity: the data export."
   },
-  "activitySubscription": "Your subscription changed",
+  "activitySubscription": "Your plan changed",
   "@activitySubscription": {
-    "description": "Activity: billing change."
+    "description": "Activity: the account's plan changed (billing.subscription_changed). No purchase language: there is no billing in 1.0 (PRD D5)."
   },
   "staleDataNote": "Showing the last information we have. We couldn't refresh it just now.",
   "@staleDataNote": {
@@ -5769,21 +5769,21 @@
   "@yourPlanIncluded": {
     "description": "Your plan: a feature the tier has."
   },
-  "yourPlanNotIncluded": "Not on Free",
+  "yourPlanNotIncluded": "Not available yet",
   "@yourPlanNotIncluded": {
-    "description": "Your plan: a feature the free tier does not have."
+    "description": "Your plan: a feature the free tier does not have. Never a purchase prompt (PRD D5)."
   },
-  "yourPlanFreeNote": "Premium adds room for more contacts, instructions and stages, and lets you choose your own times.",
+  "yourPlanFreeNote": "Everything listed here is part of the free plan and works in full.",
   "@yourPlanFreeNote": {
-    "description": "Your plan: what premium adds."
+    "description": "Your plan: the free plan is complete as it is. No upsell: there is nothing to buy in 1.0 (PRD D5)."
   },
-  "yourPlanPremiumSoon": "Premium isn't available yet. We'll let you know when it is.",
-  "@yourPlanPremiumSoon": {
-    "description": "Your plan: no purchase yet."
+  "yourPlanMoreNotYet": "More contacts, instructions and stages, and choosing your own times, aren't available yet.",
+  "@yourPlanMoreNotYet": {
+    "description": "Your plan (free): what is not available yet. No purchase, price or link to pay (PRD D5, Play payments policy)."
   },
   "yourPlanPremiumNote": "Your plan includes more contacts, instructions and stages, and your own times.",
   "@yourPlanPremiumNote": {
-    "description": "Your plan: premium."
+    "description": "Your plan: an account an operator gave Premium. Says what it includes, never anything about paying (PRD D5)."
   },
   "lostPhoneBody": "Your plan keeps working without your phone. From any web browser you can check in, or confirm that you're safe.",
   "@lostPhoneBody": {

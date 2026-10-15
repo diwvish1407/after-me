@@ -11,14 +11,18 @@ import 'harness.dart';
 
 /// Welcome, create account, the emailed code (read from the backend's mail directory),
 /// and arrival at the first onboarding step.
-Future<void> signUpThroughUi(Harness h, TestAccount account) async {
+Future<void> signUpThroughUi(
+  Harness h,
+  TestAccount account, {
+  String name = TestAccount.name,
+}) async {
   await h.waitForText(
     l10n.welcomeGetStarted,
     timeout: const Duration(seconds: 30),
   );
   await h.tapText(l10n.welcomeGetStarted);
   await h.waitForText(l10n.createAccountHeading);
-  await h.typeInto(l10n.fieldName, TestAccount.name);
+  await h.typeInto(l10n.fieldName, name);
   await h.typeInto(l10n.fieldEmail, account.email);
   await h.typeInto(l10n.fieldPassword, account.password);
   await h.tapText(l10n.consentAdult);
@@ -60,10 +64,12 @@ Future<void> onboardToActivePlan(
   Harness h,
   TestAccount account, {
   InstructionSpec? instruction,
+  String contactName = TestAccount.contactName,
+  String? relationship,
 }) async {
   // Step 4: a trusted contact.
-  await h.typeInto(l10n.fieldContactName, TestAccount.contactName);
-  await h.tapText(l10n.relationshipParent);
+  await h.typeInto(l10n.fieldContactName, contactName);
+  await h.tapText(relationship ?? l10n.relationshipParent);
   await h.typeInto(l10n.fieldContactEmail, account.contactEmail);
   await h.tapText(l10n.contactStepSave);
   await h.waitForText(
@@ -90,7 +96,7 @@ Future<void> onboardToActivePlan(
   if (instruction == null) {
     await h.tapText(l10n.actionSkipForNow);
   } else {
-    await writeFirstInstruction(h, instruction);
+    await writeFirstInstruction(h, instruction, contactName: contactName);
   }
   await h.waitForText(l10n.protectStepTitle);
 
@@ -113,7 +119,11 @@ Future<void> onboardToActivePlan(
 /// a text), shared with the contact just added after [InstructionSpec.afterDays] day(s)
 /// without a check-in, and save it. The app then moves on by itself to the next step
 /// ("Stay protected"), which is what this waits for.
-Future<void> writeFirstInstruction(Harness h, InstructionSpec spec) async {
+Future<void> writeFirstInstruction(
+  Harness h,
+  InstructionSpec spec, {
+  String contactName = TestAccount.contactName,
+}) async {
   await h.waitForText(l10n.instructionStepTitle);
   await h.tapText(l10n.instructionsWriteOwn);
   await h.waitForText(l10n.instructionCategoryHeading);
@@ -123,7 +133,7 @@ Future<void> writeFirstInstruction(Harness h, InstructionSpec spec) async {
   // The contact just added is ticked already; the time is a stage the plan has no stage
   // for yet, which the save adds to the plan.
   await h.expectPresent(
-    find.text(TestAccount.contactName),
+    find.text(contactName),
     'the contact offered as the recipient',
   );
   await h.tapText(

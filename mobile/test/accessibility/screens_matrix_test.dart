@@ -849,7 +849,7 @@ final _screens = <_Screen>[
       await tapText(tester, 'Add instruction');
       await tester.pumpAndSettle();
       expect(
-        find.text('More instructions are part of Premium'),
+        find.text("More instructions aren't available yet"),
         findsOneWidget,
       );
     },

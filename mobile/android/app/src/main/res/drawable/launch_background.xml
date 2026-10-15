@@ -1,7 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Calm, brief launch background using the `bg` token (USER_FLOWS.md §1.2). A proper
-     Android 12+ SplashScreen with the app icon is planned with the store assets
-     (PLAY_STORE.md §3). -->
+<!-- The launch background before Android 12 (Android 12+ uses the SplashScreen attributes
+     in values-v31/ and values-night-v31/): the `bg` token with the mark in the middle,
+     the same as the splash on newer versions. Calm and brief: it is gone at Flutter's
+     first frame. -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
     <item android:drawable="@color/launch_background" />
+    <item
+        android:width="160dp"
+        android:height="160dp"
+        android:drawable="@drawable/ic_splash"
+        android:gravity="center" />
 </layer-list>

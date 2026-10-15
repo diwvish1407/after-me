@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The adaptive launcher icon (Android 8+, i.e. every supported version: minSdk 26):
+     warm off-white background, the teal mark, and the monochrome layer for themed icons
+     (Android 13+). PLAY_STORE.md §3 and §5. -->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@color/ic_launcher_background" />
+    <foreground android:drawable="@drawable/ic_launcher_foreground" />
+    <monochrome android:drawable="@drawable/ic_launcher_monochrome" />
+</adaptive-icon>
