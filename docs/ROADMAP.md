@@ -10,13 +10,13 @@
 
 ## Milestones
 
-| Milestone | Reached when | Meaning |
-|---|---|---|
-| **M0 — Design approved** | Phase 0 signed off | Architecture and decisions agreed |
-| **M1 — Engine proven** | End of Phase 5 | The T0–T8 lifecycle, invariant and failure-scenario tests pass against the real engine |
-| **M2 — Feature complete** | End of Phase 8 | Every **M** requirement works end to end in staging |
-| **M3 — Closed beta** | During Phase 10 | Play closed testing running (the 14-day clock starts) |
-| **M4 — Launch** | End of Phase 13 | Production on Google Play (staged rollout) |
+| Milestone | Reached when | Meaning | Status (2026-10-16) |
+|---|---|---|---|
+| **M0 — Design approved** | Phase 0 signed off | Architecture and decisions agreed | **Reached** (2026-10-08) |
+| **M1 — Engine proven** | End of Phase 5 | The T0–T8 lifecycle, invariant and failure-scenario tests pass against the real engine | **Reached** in code (lifecycle ×100, invariants, failure scenarios, nightly job written); Phase 5 owner sign-off still open |
+| **M2 — Feature complete** | End of Phase 8 | Every **M** requirement works end to end in staging | **Not reached**: every M requirement works end to end locally and on the emulator, but no staging environment exists yet (needs the Google Cloud project) |
+| **M3 — Closed beta** | During Phase 10 | Play closed testing running (the 14-day clock starts) | **Not reached**: needs production live, Play Console, the signed build and testers |
+| **M4 — Launch** | End of Phase 13 | Production on Google Play (staged rollout) | **Not reached**: after M3, production access from Google, staged rollout |
 
 Size: **S** ≈ a few focused sessions · **M** ≈ a week of sessions · **L** ≈ multiple weeks. These are for sequencing, not commitments.
 
@@ -109,7 +109,7 @@ Scope (from the Phase 1 brief):
 - **Exit:** Production is running and empty; alerts verified end to end; runbooks rehearsed.
 - **Status (2026-10-14):** **Built:** the Cloud KMS adapter (REST, metadata-server identity, AAD per account, checksums, 3 s ceiling, circuit breaker; check-ins, I'M SAFE, alerts and the engine keep working when the KMS is down) and key rotation (`python -m cli.admin kms check|rewrap|rotate-user`, migration `0012`); `/legal/privacy`, `/legal/terms`, `/support` with a "draft, not reviewed by counsel" banner until `LEGAL_DOCUMENTS_FINAL`; the abuse address in every contact email; Terraform for asia-south1 (Cloud Run API behind a global load balancer, worker pool ×2, Cloud SQL HA + PITR, KMS, Secret Manager, uptime check, alerts to two people, on-call Cloud Run jobs, an optional admin VM) validated with `terraform validate`; `deploy.yml` (Workload Identity, migrate before traffic, rollback of everything); [INFRASTRUCTURE](INFRASTRUCTURE.md), [ONCALL](ONCALL.md), OPS-04/05 in [GAMEDAYS](GAMEDAYS.md), bring-up in `infra/README.md` with a cost estimate. **Not done, needs you:** the projects and billing, `terraform apply`, secrets, DNS records, the first deploy, paging yourself, OPS-04/05, and the 13 Google Cloud behaviours listed in INFRASTRUCTURE §14 to confirm at first apply.
 
-## Phase 13 — Google Play release · S–M
+## Phase 13 — Google Play release · S–M *(built to everything that needs no Play Console or production servers; awaiting owner review)*
 
 - Production AAB (target 36, 16 KB check), listing and graphics, Data safety, content rating, app access (reviewer account), legal pages live, the [pre-submission checklist](PLAY_STORE.md#10-pre-submission-checklist-phase-13); Play Billing integration if D5 chooses it for 1.0; apply for production access after 12 × 14; staged rollout.
 - **Exit (M4):** Live on Google Play; the first 48 h post-launch review done.
