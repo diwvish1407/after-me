@@ -129,7 +129,7 @@ jobs:
       # on 127.0.0.1:8000 with test support, and runs the mob6*_test.dart suites with
       # --flavor dev (which talks to http://10.0.2.2:8000, the runner's loopback).
       - name: Run mobile/tool/integration.sh on the emulator
-        uses: reactivecircus/android-emulator-runner@v2.30.1
+        uses: reactivecircus/android-emulator-runner@v2.38.0
         env:
           AFTERME_IT_AVD: afterme_ci
           # Where integration.sh writes its logs, so that the upload step can find them. The
