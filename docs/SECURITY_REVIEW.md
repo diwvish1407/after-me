@@ -148,9 +148,9 @@ The lost-phone path (`/a/login` + `/a/safe`) is password-only by design, so a de
 
 A PIN would protect only the local read surface (instruction text, contacts, I'M OK in grace): writes, I'M SAFE, export and delete are already server-gated. With 4.2 the instruction text now needs the password on every phone, which is stronger than a local PIN. Remaining low-cost work: a persistent Home nudge and re-offering the app lock in onboarding when the phone has no screen lock.
 
-### 7.4 Reading instructions needs a recent password: **implemented; please confirm or revert**
+### 7.4 Reading instructions needs a recent password: **implemented; confirmed by the owner, 2026-11-04**
 
-This was open since Phase 6. Both reviews rated the status quo S2, and the exit criterion required it closed, so I implemented the recommended option. To revert, change `ReauthUserDep` back to `CurrentUserDep` on the two `GET` routes in `app/instructions/router.py` and remove the matching mobile prompt; the audit row can stay.
+This was open since Phase 6. Both reviews rated the status quo S2, and the exit criterion required it closed, so I implemented the recommended option. The owner confirmed on 2026-11-04 that it stays. Reverting would have meant changing `ReauthUserDep` back to `CurrentUserDep` on the two `GET` routes in `app/instructions/router.py` and removing the matching mobile prompt.
 
 ### 7.5 Still open from earlier phases
 
