@@ -296,7 +296,13 @@ void main() {
           2880,
           4320,
         ]);
+        // Custom timings: short stages (5 minutes to 2 hours) are offered too.
         expect(rules.stageChoices(includeKept: false), [
+          5,
+          15,
+          30,
+          60,
+          120,
           180,
           360,
           720,

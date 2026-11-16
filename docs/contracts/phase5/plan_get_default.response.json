@@ -4,11 +4,11 @@
   "grace_minutes": 180,
   "stages": [],
   "rules": {
-    "grace_min": 60,
+    "grace_min": 1,
     "grace_max": 4320,
-    "stage_gap_min": 30,
+    "stage_gap_min": 1,
     "offset_max": 43200,
-    "release_offset_min": 1440,
+    "release_offset_min": 1,
     "max_stages": 10,
     "custom_offsets": true,
     "presets": [

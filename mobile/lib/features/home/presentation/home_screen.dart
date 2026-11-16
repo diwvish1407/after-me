@@ -679,9 +679,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         done: schedule != null,
         label: schedule == null
             ? l10n.checklistSchedule
-            : l10n.scheduleSummary(
-                intervalLabel(l10n, schedule.intervalDays).toLowerCase(),
-                formatMinutesOfDay(context, schedule.dueMinutes),
+            : scheduleSummaryText(
+                l10n,
+                intervalDays: schedule.intervalDays,
+                intervalMinutes: schedule.intervalMinutes,
+                dueTime: formatMinutesOfDay(context, schedule.dueMinutes),
               ),
         actionLabel: schedule == null
             ? l10n.checklistSetUp

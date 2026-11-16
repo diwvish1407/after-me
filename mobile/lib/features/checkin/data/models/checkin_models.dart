@@ -47,11 +47,13 @@ String _checkedLocalTime(String value) {
 }
 
 /// The check-in schedule as the person chooses it: "Check in every [intervalDays]
-/// day(s) by [dueMinutes]", with a reminder [reminderLeadMinutes] before.
+/// day(s) by [dueMinutes]", or "every [intervalMinutes] minutes" (a custom interval),
+/// with a reminder [reminderLeadMinutes] before.
 @immutable
 class CheckInSchedule {
   const CheckInSchedule({
     this.intervalDays = 1,
+    this.intervalMinutes,
     this.dueMinutes = 20 * 60,
     this.reminderLeadMinutes = 60,
     this.timezone = 'UTC',
@@ -60,6 +62,10 @@ class CheckInSchedule {
   /// Days between check-ins (1-30 on the server; 1, 2, 3 and 7 are offered in
   /// onboarding).
   final int intervalDays;
+
+  /// A custom interval in minutes (1-43200). When set, a check-in is due this long after
+  /// the last one and [intervalDays] and [dueMinutes] are not used for the deadline.
+  final int? intervalMinutes;
 
   /// Local due time as minutes after midnight (20:00 -> 1200), in the profile timezone.
   final int dueMinutes;
@@ -70,13 +76,20 @@ class CheckInSchedule {
   /// IANA timezone of the profile. Read-only here: the server uses the profile's.
   final String timezone;
 
+  /// [intervalMinutes] stays as it is unless given; [clearIntervalMinutes] goes back to
+  /// days.
   CheckInSchedule copyWith({
     int? intervalDays,
+    int? intervalMinutes,
+    bool clearIntervalMinutes = false,
     int? dueMinutes,
     int? reminderLeadMinutes,
     String? timezone,
   }) => CheckInSchedule(
     intervalDays: intervalDays ?? this.intervalDays,
+    intervalMinutes: clearIntervalMinutes
+        ? null
+        : intervalMinutes ?? this.intervalMinutes,
     dueMinutes: dueMinutes ?? this.dueMinutes,
     reminderLeadMinutes: reminderLeadMinutes ?? this.reminderLeadMinutes,
     timezone: timezone ?? this.timezone,
@@ -86,6 +99,9 @@ class CheckInSchedule {
   /// three values; no instant is ever sent.
   Map<String, Object?> toJson() => <String, Object?>{
     'interval_days': intervalDays,
+    // Only a custom interval is sent; without it the server uses days (and clears a
+    // custom interval saved before).
+    'interval_minutes': ?intervalMinutes,
     'due_local_time': formatLocalTime(dueMinutes),
     'reminder_lead_minutes': reminderLeadMinutes,
   };
@@ -94,13 +110,19 @@ class CheckInSchedule {
   bool operator ==(Object other) =>
       other is CheckInSchedule &&
       other.intervalDays == intervalDays &&
+      other.intervalMinutes == intervalMinutes &&
       other.dueMinutes == dueMinutes &&
       other.reminderLeadMinutes == reminderLeadMinutes &&
       other.timezone == timezone;
 
   @override
-  int get hashCode =>
-      Object.hash(intervalDays, dueMinutes, reminderLeadMinutes, timezone);
+  int get hashCode => Object.hash(
+    intervalDays,
+    intervalMinutes,
+    dueMinutes,
+    reminderLeadMinutes,
+    timezone,
+  );
 }
 
 /// `GET /v1/checkin/schedule` and the body of every schedule-changing call
@@ -112,6 +134,7 @@ abstract class ScheduleSnapshot with _$ScheduleSnapshot {
   const factory ScheduleSnapshot({
     required int intervalDays,
     @JsonKey(fromJson: _checkedLocalTime) required String dueLocalTime,
+    int? intervalMinutes,
     required int reminderLeadMinutes,
     required String timezone,
     @JsonKey(unknownEnumValue: CheckInStatus.unknown)
@@ -133,6 +156,7 @@ abstract class ScheduleSnapshot with _$ScheduleSnapshot {
   /// What the person chose, without the server's bookkeeping.
   CheckInSchedule get settings => CheckInSchedule(
     intervalDays: intervalDays,
+    intervalMinutes: intervalMinutes,
     dueMinutes: dueMinutes,
     reminderLeadMinutes: reminderLeadMinutes,
     timezone: timezone,

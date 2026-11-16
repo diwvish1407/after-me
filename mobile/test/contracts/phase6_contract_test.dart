@@ -418,7 +418,7 @@ void main() {
         stage.offsetMinutes,
         greaterThanOrEqualTo(plan.rules.releaseOffsetMin),
       );
-      expect(plan.rules.releaseOffsetMin, 1440);
+      expect(plan.rules.releaseOffsetMin, 1); // custom timings
       expect(stage.releaseCount, 1);
     });
   });

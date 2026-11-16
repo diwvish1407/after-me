@@ -111,8 +111,9 @@ class HomeService(AuthServiceBase):
                 last_checkin_at=cfg.last_checkin_at,
                 schedule=HomeSchedule(
                     interval_days=cfg.interval_days,
+                    interval_minutes=cfg.interval_minutes,
                     due_local_time=format_hhmm(cfg.due_local_time),
-                    reminder_lead_minutes=cfg.reminder_lead_minutes,  # type: ignore[arg-type]
+                    reminder_lead_minutes=cfg.reminder_lead_minutes,
                 ),
             ),
             incident=incident_view,

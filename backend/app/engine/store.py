@@ -35,7 +35,7 @@ class DueDeadline:
 # The largest ``reminder_lead_minutes`` the CHECK on ``checkin_configurations`` allows. A
 # deadline further away than this cannot be inside any person's reminder window, so the
 # candidate scan stops there instead of reading every deadline of the next days.
-MAX_REMINDER_LEAD_MINUTES = 240
+MAX_REMINDER_LEAD_MINUTES = 1440
 
 
 def pre_reminder_stamp(due_at: datetime) -> str:

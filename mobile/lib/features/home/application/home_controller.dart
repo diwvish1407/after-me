@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/repository_providers.dart';
+import '../../../core/alarm/deadline_alarm.dart';
 import '../../../core/api/failures/app_failure.dart';
 import '../../../core/api/failures/failure_mapper.dart';
 import '../../../core/auth/auth_controller.dart';
@@ -16,6 +17,7 @@ import '../../incidents/application/safe_controller.dart';
 import '../../incidents/data/models/incident_models.dart';
 import '../../instructions/application/instructions_controller.dart';
 import '../data/home_repository.dart';
+import 'deadline_alarm_sync.dart';
 import 'home_inputs.dart';
 
 /// The last good Home aggregate and what is needed to read its times correctly.
@@ -74,6 +76,27 @@ class HomeController extends AsyncNotifier<HomeData?> {
     final session = _session.next();
     // Another account's read in flight is not this one's: it is not joined.
     _refreshing = null;
+    // The loud alarm follows the deadline the server gave: set again when it moves,
+    // cancelled when check-ins stop or the person signs out.
+    listenSelf((previous, next) {
+      if (next.isLoading && !next.hasValue) {
+        return;
+      }
+      final before = previous?.value?.snapshot.checkin;
+      final after = next.value?.snapshot.checkin;
+      if (previous != null &&
+          previous.hasValue &&
+          before?.status == after?.status &&
+          before?.nextDueAt == after?.nextDueAt) {
+        return;
+      }
+      unawaited(
+        applyAlarmPlan(
+          ref.read(deadlineAlarmProvider),
+          alarmPlanFor(next.value),
+        ),
+      );
+    });
     if (ref.watch(authControllerProvider) != AuthStatus.signedIn) {
       return null;
     }

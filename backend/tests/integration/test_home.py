@@ -39,6 +39,7 @@ async def test_a_new_account(h: Harness) -> None:
             "last_checkin_at": None,
             "schedule": {
                 "interval_days": 1,
+                "interval_minutes": None,
                 "due_local_time": "20:00",
                 "reminder_lead_minutes": 60,
             },

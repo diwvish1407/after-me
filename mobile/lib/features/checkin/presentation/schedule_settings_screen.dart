@@ -13,6 +13,7 @@ import '../../home/application/home_controller.dart';
 import '../../settings/presentation/settings_widgets.dart';
 import '../application/schedule_controller.dart';
 import '../data/models/checkin_models.dart';
+import 'custom_minutes_sheet.dart';
 import 'schedule_labels.dart';
 
 /// Settings > Check-in schedule (USER_FLOWS.md §11): how often, by when and how long
@@ -63,6 +64,10 @@ class _ScheduleForm extends ConsumerStatefulWidget {
 
 class _ScheduleFormState extends ConsumerState<_ScheduleForm> {
   int? _interval;
+  // Null: the custom interval as saved. True: the custom interval in [_customMinutes].
+  // False: a number of days ([_interval]).
+  bool? _useCustom;
+  int? _customMinutes;
   int? _dueMinutes;
   int? _lead;
   bool _busy = false;
@@ -73,11 +78,17 @@ class _ScheduleFormState extends ConsumerState<_ScheduleForm> {
   ScheduleSnapshot get _snapshot => widget.snapshot;
 
   int get _intervalValue => _interval ?? _snapshot.intervalDays;
+  int? get _customValue => switch (_useCustom) {
+    null => _snapshot.intervalMinutes,
+    true => _customMinutes,
+    false => null,
+  };
   int get _dueValue => _dueMinutes ?? _snapshot.dueMinutes;
   int get _leadValue => _lead ?? _snapshot.reminderLeadMinutes;
 
   bool get _dirty =>
       _intervalValue != _snapshot.intervalDays ||
+      _customValue != _snapshot.intervalMinutes ||
       _dueValue != _snapshot.dueMinutes ||
       _leadValue != _snapshot.reminderLeadMinutes;
 
@@ -90,8 +101,45 @@ class _ScheduleFormState extends ConsumerState<_ScheduleForm> {
       // A newer version arrived (saved, or loaded after a 412): the draft starts again
       // from what the server has.
       _interval = null;
+      _useCustom = null;
+      _customMinutes = null;
       _dueMinutes = null;
       _lead = null;
+    }
+  }
+
+  Future<void> _pickCustomInterval() async {
+    final l10n = AppLocalizations.of(context);
+    final picked = await showCustomMinutesSheet(
+      context,
+      title: l10n.scheduleCustomIntervalTitle,
+      help: l10n.scheduleCustomIntervalHelp,
+      choices: customIntervalChoices,
+      min: minIntervalMinutes,
+      max: maxIntervalMinutes,
+      initial: _customValue,
+    );
+    if (picked != null && mounted) {
+      setState(() {
+        _useCustom = true;
+        _customMinutes = picked;
+      });
+    }
+  }
+
+  Future<void> _pickCustomLead() async {
+    final l10n = AppLocalizations.of(context);
+    final picked = await showCustomMinutesSheet(
+      context,
+      title: l10n.scheduleCustomReminderTitle,
+      help: l10n.scheduleCustomReminderHelp,
+      choices: reminderLeadChoices.where((m) => m > 0).toList(),
+      min: 1,
+      max: maxReminderLeadMinutes,
+      initial: _leadValue > 0 ? _leadValue : null,
+    );
+    if (picked != null && mounted) {
+      setState(() => _lead = picked);
     }
   }
 
@@ -147,8 +195,11 @@ class _ScheduleFormState extends ConsumerState<_ScheduleForm> {
 
   Future<void> _save() {
     final l10n = AppLocalizations.of(context);
+    final custom = _customValue;
     final schedule = _snapshot.settings.copyWith(
       intervalDays: _intervalValue,
+      intervalMinutes: custom,
+      clearIntervalMinutes: custom == null,
       dueMinutes: _dueValue,
       reminderLeadMinutes: _leadValue,
     );
@@ -223,10 +274,14 @@ class _ScheduleFormState extends ConsumerState<_ScheduleForm> {
       CheckInStatus.incidentOpen => l10n.errorIncidentOpen,
       _ => '',
     };
-    final summary = l10n.scheduleSummary(
-      intervalLabel(l10n, _intervalValue).toLowerCase(),
-      formatMinutesOfDay(context, _dueValue),
+    final custom = _customValue;
+    final summary = scheduleSummaryText(
+      l10n,
+      intervalDays: _intervalValue,
+      intervalMinutes: custom,
+      dueTime: formatMinutesOfDay(context, _dueValue),
     );
+    final editable = !_busy && !_locked;
     return FormPage(
       title: l10n.settingsCheckInSchedule,
       children: [
@@ -261,28 +316,51 @@ class _ScheduleFormState extends ConsumerState<_ScheduleForm> {
             for (final days in intervals)
               ChoiceChip(
                 label: Text(intervalLabel(l10n, days)),
-                selected: _intervalValue == days,
-                onSelected: _busy || _locked
-                    ? null
-                    : (_) => setState(() => _interval = days),
+                selected: custom == null && _intervalValue == days,
+                onSelected: editable
+                    ? (_) => setState(() {
+                        _interval = days;
+                        _useCustom = false;
+                      })
+                    : null,
               ),
+            ChoiceChip(
+              label: Text(
+                custom == null
+                    ? l10n.scheduleChoiceCustom
+                    : scheduleIntervalLabel(
+                        l10n,
+                        intervalDays: _intervalValue,
+                        intervalMinutes: custom,
+                      ),
+              ),
+              selected: custom != null,
+              onSelected: editable ? (_) => _pickCustomInterval() : null,
+            ),
           ],
         ),
         Gap.lg,
-        Semantics(
-          header: true,
-          child: Text(
-            l10n.scheduleBy,
-            style: Theme.of(context).textTheme.titleSmall,
+        if (custom == null) ...[
+          Semantics(
+            header: true,
+            child: Text(
+              l10n.scheduleBy,
+              style: Theme.of(context).textTheme.titleSmall,
+            ),
           ),
-        ),
-        Gap.xs,
-        AppButton.secondary(
-          label: formatMinutesOfDay(context, _dueValue),
-          icon: Icons.schedule_rounded,
-          onPressed: _busy || _locked ? null : _pickTime,
-          expand: true,
-        ),
+          Gap.xs,
+          AppButton.secondary(
+            label: formatMinutesOfDay(context, _dueValue),
+            icon: Icons.schedule_rounded,
+            onPressed: editable ? _pickTime : null,
+            expand: true,
+          ),
+        ] else
+          BodyText(
+            l10n.scheduleCustomIntervalNote(
+              formatDurationMinutes(l10n, custom),
+            ),
+          ),
         Gap.lg,
         Semantics(
           header: true,
@@ -299,10 +377,15 @@ class _ScheduleFormState extends ConsumerState<_ScheduleForm> {
               ChoiceChip(
                 label: Text(reminderChoiceLabel(l10n, minutes)),
                 selected: _leadValue == minutes,
-                onSelected: _busy || _locked
-                    ? null
-                    : (_) => setState(() => _lead = minutes),
+                onSelected: editable
+                    ? (_) => setState(() => _lead = minutes)
+                    : null,
               ),
+            ChoiceChip(
+              label: Text(l10n.scheduleChoiceCustom),
+              selected: false,
+              onSelected: editable ? (_) => _pickCustomLead() : null,
+            ),
           ],
         ),
         Gap.md,

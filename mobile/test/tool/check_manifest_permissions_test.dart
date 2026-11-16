@@ -38,8 +38,13 @@ void main() {
     ]);
   });
 
-  test('the allowlist is exactly the app\'s three and the three FCM adds', () {
+  test('the allowlist is exactly the app\'s three, the alarm\'s three and the '
+      'three FCM adds', () {
     expect(allowedPermissions, {
+      // The check-in alarm.
+      'android.permission.SCHEDULE_EXACT_ALARM',
+      'android.permission.RECEIVE_BOOT_COMPLETED',
+      'android.permission.USE_FULL_SCREEN_INTENT',
       'android.permission.INTERNET',
       'android.permission.POST_NOTIFICATIONS',
       'android.permission.USE_BIOMETRIC',
@@ -69,7 +74,7 @@ void main() {
       // The local-notifications plugin declares VIBRATE, which the app removes: a
       // channel vibrates on the app's behalf.
       'android.permission.VIBRATE',
-      // Only needed to reschedule notifications after a reboot: nothing is scheduled.
+      // Reschedules the check-in alarm after a reboot.
       'android.permission.RECEIVE_BOOT_COMPLETED',
       'android.permission.SCHEDULE_EXACT_ALARM',
       'android.permission.USE_EXACT_ALARM',
@@ -77,14 +82,13 @@ void main() {
       'com.google.android.gms.permission.AD_ID',
       'android.permission.USE_FULL_SCREEN_INTENT',
     ]);
+    // RECEIVE_BOOT_COMPLETED, SCHEDULE_EXACT_ALARM and USE_FULL_SCREEN_INTENT are allowed
+    // for the check-in alarm; USE_EXACT_ALARM (alarm-clock apps only) is not.
     expect(unexpectedPermissions(xml, id), [
       'android.permission.VIBRATE',
-      'android.permission.RECEIVE_BOOT_COMPLETED',
-      'android.permission.SCHEDULE_EXACT_ALARM',
       'android.permission.USE_EXACT_ALARM',
       'android.permission.FOREGROUND_SERVICE',
       'com.google.android.gms.permission.AD_ID',
-      'android.permission.USE_FULL_SCREEN_INTENT',
     ]);
   });
 

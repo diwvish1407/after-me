@@ -33,13 +33,13 @@ ARGON2_MIN_MEMORY_KIB = 19_456
 ARGON2_MIN_PARALLELISM = 1
 MIN_PEPPER_BYTES = 32
 # Fail-safe floors for production-like environments (ESCALATION_ENGINE §13).
-_MIN_RELEASE_OFFSET_FLOOR = 1_440
+_MIN_RELEASE_OFFSET_FLOOR = 1
 _SETTLE_DELAY_FLOOR_SECONDS = 300
 _LATE_SHIFT_FLOOR_MINUTES = 30
 # The shortest grace period that may be configured (FR-ESC-01: 1-72 h). The database enforces the
 # same floor (CHECK ck_escalation_plans_grace_minutes), so a lower setting would let the plan
 # editor accept a value that the insert then refuses with a 500.
-_GRACE_MIN_FLOOR_MINUTES = 60
+_GRACE_MIN_FLOOR_MINUTES = 1
 _GRACE_MAX_CEILING_MINUTES = 4_320
 _STAGE_OFFSET_CEILING_MINUTES = 43_200
 _MIN_API_KEY = 8
@@ -206,11 +206,11 @@ class Settings(BaseSettings):
     # 90 days: the beta review and an investigation after a stolen session read it.
     audit_retention_days: Annotated[int, Field(ge=90, le=3650)] = 365
     tick_seconds: Annotated[int, Field(ge=1, le=300)] = 15
-    grace_min_minutes: Annotated[int, Field(ge=1, le=10_080)] = 60
+    grace_min_minutes: Annotated[int, Field(ge=1, le=10_080)] = 1
     grace_max_minutes: Annotated[int, Field(ge=1, le=10_080)] = 4_320
-    stage_min_gap_minutes: Annotated[int, Field(ge=1, le=10_080)] = 30
+    stage_min_gap_minutes: Annotated[int, Field(ge=1, le=10_080)] = 1
     stage_max_offset_minutes: Annotated[int, Field(ge=1, le=525_600)] = 43_200
-    min_release_offset_minutes: Annotated[int, Field(ge=1, le=525_600)] = 1_440
+    min_release_offset_minutes: Annotated[int, Field(ge=1, le=525_600)] = 1
     final_warning_lead_minutes: Annotated[int, Field(ge=1, le=1_440)] = 60
     settle_delay_seconds: Annotated[int, Field(ge=0, le=3_600)] = 300
     ingestion_probe_interval_seconds: Annotated[int, Field(ge=1, le=3_600)] = 60

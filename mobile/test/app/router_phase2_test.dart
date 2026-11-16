@@ -235,10 +235,16 @@ void main() {
       // The manifest is the contract: nothing outside the app can open a route.
       final manifest = File('android/app/src/main/AndroidManifest.xml')
           .readAsStringSync();
-      final filters = RegExp(
-        r'<intent-filter>.*?</intent-filter>',
-        dotAll: true,
-      ).allMatches(manifest).map((m) => m.group(0)!).toList();
+      final filters =
+          RegExp(
+              r'<intent-filter>.*?</intent-filter>',
+              dotAll: true,
+            ).allMatches(manifest).map((m) => m.group(0)!).toList()
+            // The check-in alarm's boot receiver (not exported) listens for system
+            // broadcasts only, never for a route.
+            ..removeWhere(
+              (f) => f.contains('android.intent.action.BOOT_COMPLETED'),
+            );
       expect(filters, hasLength(1), reason: 'only the launcher');
       expect(filters.single, contains('android.intent.action.MAIN'));
       expect(filters.single, isNot(contains('VIEW')));

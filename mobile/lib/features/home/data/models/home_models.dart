@@ -52,6 +52,7 @@ abstract class HomeSchedule with _$HomeSchedule {
     required int intervalDays,
     @JsonKey(fromJson: _checkedLocalTime) required String dueLocalTime,
     required int reminderLeadMinutes,
+    int? intervalMinutes,
   }) = _HomeSchedule;
 
   factory HomeSchedule.fromJson(Map<String, dynamic> json) =>

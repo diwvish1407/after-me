@@ -18,7 +18,7 @@ from app.auth.base import AuthServiceBase
 from app.auth.guards import ensure_owner_active
 from app.checkins.models import CheckinConfiguration
 from app.checkins.repository import CheckinConfigRepository, CheckinEventRepository
-from app.checkins.schedule import compute_next_due
+from app.checkins.schedule import next_due_for
 from app.contacts.repository import ContactRepository
 from app.core.errors import IdempotencyKeyReused, InvalidState, NotFound, ValidationFailed
 from app.core.pagination import InvalidCursorError, decode_cursor, encode_cursor
@@ -239,8 +239,6 @@ def _restart(config: CheckinConfiguration, at: datetime, timezone: str) -> datet
     config.status = "active"
     config.last_checkin_at = at
     config.baseline_at = at
-    config.next_due_at = compute_next_due(
-        at, config.interval_days, config.due_local_time, ZoneInfo(timezone)
-    )
+    config.next_due_at = next_due_for(config, at, ZoneInfo(timezone))
     config.updated_at = at
     return config.next_due_at

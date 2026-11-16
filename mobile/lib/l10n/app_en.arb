@@ -898,28 +898,40 @@
   "@aboutBuildVersion": {
     "description": "Diagnostic line: the app's version (major.minor.patch).",
     "placeholders": {
-      "version": {"type": "String", "example": "0.1.0"}
+      "version": {
+        "type": "String",
+        "example": "0.1.0"
+      }
     }
   },
   "aboutBuildNumber": "Build number: {number}",
   "@aboutBuildNumber": {
     "description": "Diagnostic line: the build number.",
     "placeholders": {
-      "number": {"type": "String", "example": "12"}
+      "number": {
+        "type": "String",
+        "example": "12"
+      }
     }
   },
   "aboutBuildEnvironment": "Environment: {environment}",
   "@aboutBuildEnvironment": {
     "description": "Diagnostic line: the flavor this build was made for (dev, staging or prod). Not translated.",
     "placeholders": {
-      "environment": {"type": "String", "example": "staging"}
+      "environment": {
+        "type": "String",
+        "example": "staging"
+      }
     }
   },
   "aboutBuildApiHost": "Server: {host}",
   "@aboutBuildApiHost": {
     "description": "Diagnostic line: the host the app talks to (never a token or an account).",
     "placeholders": {
-      "host": {"type": "String", "example": "api.staging.example.com"}
+      "host": {
+        "type": "String",
+        "example": "api.staging.example.com"
+      }
     }
   },
   "aboutCopyDiagnostics": "Copy diagnostic text",
@@ -5876,5 +5888,117 @@
   "planInUseShowTitles": "Show which ones",
   "@planInUseShowTitles": {
     "description": "Button on the plan editor's notice about a stage that shares instructions: asks for the password and then names them."
+  },
+  "intervalEveryDuration": "Every {duration}",
+  "@intervalEveryDuration": {
+    "description": "Custom interval label.",
+    "placeholders": {
+      "duration": {
+        "type": "String",
+        "example": "45 minutes"
+      }
+    }
+  },
+  "scheduleSummaryCustom": "Check in every {duration}.",
+  "@scheduleSummaryCustom": {
+    "description": "One-sentence summary of a custom-interval schedule.",
+    "placeholders": {
+      "duration": {
+        "type": "String",
+        "example": "45 minutes"
+      }
+    }
+  },
+  "scheduleChoiceCustom": "Custom",
+  "@scheduleChoiceCustom": {
+    "description": "Chip that opens the custom time sheet (interval or reminder)."
+  },
+  "scheduleCustomIntervalTitle": "How often should you check in?",
+  "@scheduleCustomIntervalTitle": {
+    "description": "Custom interval sheet title."
+  },
+  "scheduleCustomIntervalHelp": "The time starts again each time you tap I'M OK.",
+  "@scheduleCustomIntervalHelp": {
+    "description": "Custom interval sheet explanation."
+  },
+  "scheduleCustomIntervalNote": "With your own interval there is no fixed time of day: a check-in is due {duration} after the last one.",
+  "@scheduleCustomIntervalNote": {
+    "description": "Schedule screen note while a custom interval is chosen.",
+    "placeholders": {
+      "duration": {
+        "type": "String",
+        "example": "45 minutes"
+      }
+    }
+  },
+  "scheduleCustomReminderTitle": "When should we remind you?",
+  "@scheduleCustomReminderTitle": {
+    "description": "Custom reminder sheet title."
+  },
+  "scheduleCustomReminderHelp": "How long before a check-in is due.",
+  "@scheduleCustomReminderHelp": {
+    "description": "Custom reminder sheet explanation."
+  },
+  "customTimeTotal": "That is {duration}.",
+  "@customTimeTotal": {
+    "description": "Custom time sheet: the time typed, in words.",
+    "placeholders": {
+      "duration": {
+        "type": "String",
+        "example": "1 hour 30 minutes"
+      }
+    }
+  },
+  "customTimeTooLong": "Choose up to {duration}.",
+  "@customTimeTooLong": {
+    "description": "Custom time sheet: the time typed is longer than allowed.",
+    "placeholders": {
+      "duration": {
+        "type": "String",
+        "example": "30 days"
+      }
+    }
+  },
+  "customTimeTooShort": "Choose at least {duration}.",
+  "@customTimeTooShort": {
+    "description": "Custom time sheet: the time typed is shorter than allowed.",
+    "placeholders": {
+      "duration": {
+        "type": "String",
+        "example": "1 minute"
+      }
+    }
+  },
+  "alarmChannelName": "Check-in alarm",
+  "@alarmChannelName": {
+    "description": "Android notification channel name of the loud alarm at the check-in time."
+  },
+  "alarmChannelDescription": "Sounds an alarm when a check-in is due, even in silent mode.",
+  "@alarmChannelDescription": {
+    "description": "Android notification channel description of the alarm."
+  },
+  "alarmTitle": "Time to check in",
+  "@alarmTitle": {
+    "description": "Alarm notification title."
+  },
+  "alarmBody": "Open AfterMe and tap I'M OK.",
+  "@alarmBody": {
+    "description": "Alarm notification body."
+  },
+  "alarmSettingTitle": "Alarm at check-in time",
+  "@alarmSettingTitle": {
+    "description": "Settings switch: a loud alarm when a check-in is due."
+  },
+  "alarmSettingBody": "Your phone sounds an alarm when a check-in is due, so you can tap I'M OK before anyone is told.",
+  "@alarmSettingBody": {
+    "description": "Settings switch explanation."
+  },
+  "alarmPermissionNeeded": "Allow \"Alarms & reminders\" for AfterMe so the alarm can sound on time.",
+  "@alarmPermissionNeeded": {
+    "description": "Shown when Android has not allowed exact alarms."
+  },
+  "alarmPermissionOpen": "Open settings",
+  "@alarmPermissionOpen": {
+    "description": "Button: opens the Android alarms permission."
   }
 }

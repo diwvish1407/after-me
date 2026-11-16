@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from typing import Any, Literal
 
-from app.checkins.schemas import CheckinStatus, ReminderLead
+from app.checkins.schemas import CheckinStatus
 from app.core.schemas import ResponseModel, UtcDateTime
 
 ReadinessCode = Literal[
@@ -28,8 +28,9 @@ class HomeUser(ResponseModel):
 
 class HomeSchedule(ResponseModel):
     interval_days: int
+    interval_minutes: int | None
     due_local_time: str
-    reminder_lead_minutes: ReminderLead
+    reminder_lead_minutes: int
 
 
 class HomeCheckin(ResponseModel):

@@ -11,6 +11,7 @@
     "last_checkin_at": null,
     "schedule": {
       "interval_days": 1,
+      "interval_minutes": null,
       "due_local_time": "20:00",
       "reminder_lead_minutes": 60
     }

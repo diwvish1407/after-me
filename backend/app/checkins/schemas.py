@@ -13,7 +13,10 @@ from app.checkins.schedule import parse_hhmm
 from app.core.schemas import RequestModel, ResponseModel, UtcDateTime
 
 CheckinStatus = Literal["inactive", "active", "incident_open"]
-ReminderLead = Literal[0, 30, 60, 120, 240]
+# Any number of minutes before the deadline, 0 (off) to a day.
+ReminderLead = Annotated[int, Field(strict=True, ge=0, le=1440)]
+# A custom check-in interval: from one minute to 30 days.
+IntervalMinutes = Annotated[int, Field(strict=True, ge=1, le=43_200)]
 EventKind = Literal["ok", "safe"]
 EventSource = Literal["app", "web"]
 
@@ -55,6 +58,7 @@ def _informational_instant(value: object) -> datetime | None:
 
 class ScheduleOut(ResponseModel):
     interval_days: int
+    interval_minutes: int | None
     due_local_time: str
     reminder_lead_minutes: int
     timezone: str
@@ -66,6 +70,9 @@ class ScheduleOut(ResponseModel):
 
 class SchedulePutRequest(RequestModel):
     interval_days: Annotated[int, Field(strict=True, ge=1, le=30)]
+    # When set, check-ins are due this many minutes apart (``interval_days`` and
+    # ``due_local_time`` are then kept but not used for the deadline).
+    interval_minutes: IntervalMinutes | None = None
     due_local_time: Annotated[str, BeforeValidator(_hhmm)]
     reminder_lead_minutes: ReminderLead
 

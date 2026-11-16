@@ -91,19 +91,27 @@ async def _scenario(h: Harness, owner_db: Conn) -> Recorder:
     )
     assert (await h.reauth(tokens)).status_code == 204
     await call("instructions_list_empty", "GET", "/v1/instructions", status=200)
-    await call(
-        "problem_release_stage_too_early",
-        "POST",
-        "/v1/instructions",
-        status=422,
-        json_body={
-            "category": "home",
-            "title": "House emergency",
-            "body": "The spare key is with Mrs. Sharma at flat 3B.",
-            "recipients": [{"contact_id": dad["id"], "release_stage_id": stages[0]["id"]}],
-        },
-        problem=True,
-    )
+    # The defaults allow a release one minute after a missed check-in (custom timings); a
+    # deployment that sets MIN_RELEASE_OFFSET_MINUTES higher answers like this.
+    floor = h.settings.min_release_offset_minutes
+    # Settings are frozen; the scenario raises the floor for this one call only.
+    object.__setattr__(h.settings, "min_release_offset_minutes", 1440)
+    try:
+        await call(
+            "problem_release_stage_too_early",
+            "POST",
+            "/v1/instructions",
+            status=422,
+            json_body={
+                "category": "home",
+                "title": "House emergency",
+                "body": "The spare key is with Mrs. Sharma at flat 3B.",
+                "recipients": [{"contact_id": dad["id"], "release_stage_id": stages[0]["id"]}],
+            },
+            problem=True,
+        )
+    finally:
+        object.__setattr__(h.settings, "min_release_offset_minutes", floor)
     created = await call(
         "instruction_create",
         "POST",

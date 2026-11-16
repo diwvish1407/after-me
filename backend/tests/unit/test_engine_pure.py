@@ -141,12 +141,13 @@ def test_timeline_properties(
         assert planned.scheduled_for == anchor + timedelta(minutes=stage.offset_minutes)
         assert planned.scheduled_for >= grace_end
     warnings = {a.step_id: a for a in actions if a.kind == "user_final_warning"}
-    for stage in snap.stages:  # a warning exactly 60 min before each releasing stage (INV-9)
-        if stage.releases:
-            assert (
-                warnings[stage.stage_id].scheduled_for
-                == stages[stage.stage_id].scheduled_for - WARNING_LEAD
-            )
+    for stage in snap.stages:  # a warning before each releasing stage (INV-9): 60 min, or
+        if stage.releases:  # halfway there for a release sooner than two hours
+            offset = timedelta(minutes=stage.offset_minutes)
+            assert warnings[stage.stage_id].scheduled_for == stages[
+                stage.stage_id
+            ].scheduled_for - min(WARNING_LEAD, offset / 2)
+            assert warnings[stage.stage_id].scheduled_for >= anchor
         else:
             assert stage.stage_id not in warnings
 

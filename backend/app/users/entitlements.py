@@ -25,7 +25,7 @@ class TierLimits:
 
 
 TIER_LIMITS: Final[dict[str, TierLimits]] = {
-    "free": TierLimits(contacts=1, instructions=3, stages=2, custom_offsets=False),
+    "free": TierLimits(contacts=1, instructions=3, stages=2, custom_offsets=True),
     "premium": TierLimits(contacts=25, instructions=200, stages=10, custom_offsets=True),
 }
 

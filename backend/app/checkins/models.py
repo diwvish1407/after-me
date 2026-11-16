@@ -39,8 +39,10 @@ class CheckinConfiguration(Base):
     __table_args__ = (
         CheckConstraint("interval_days BETWEEN 1 AND 30", name="interval_days"),
         CheckConstraint(
-            "reminder_lead_minutes IN (0, 30, 60, 120, 240)", name="reminder_lead_minutes"
+            "interval_minutes IS NULL OR interval_minutes BETWEEN 1 AND 43200",
+            name="interval_minutes",
         ),
+        CheckConstraint("reminder_lead_minutes BETWEEN 0 AND 1440", name="reminder_lead_minutes"),
         CheckConstraint(in_list("status", CHECKIN_STATUSES), name="status"),
         CheckConstraint(
             "status = 'inactive' OR (next_due_at IS NOT NULL AND baseline_at IS NOT NULL)",
@@ -53,6 +55,9 @@ class CheckinConfiguration(Base):
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
     )
     interval_days: Mapped[int] = mapped_column(SmallInteger, server_default=text("1"))
+    # When set, the next deadline is the baseline plus this many minutes (a custom interval);
+    # otherwise ``interval_days`` at ``due_local_time``.
+    interval_minutes: Mapped[int | None] = mapped_column(Integer)
     due_local_time: Mapped[time] = mapped_column(Time, server_default=text("'20:00'"))
     reminder_lead_minutes: Mapped[int] = mapped_column(SmallInteger, server_default=text("60"))
     status: Mapped[str] = mapped_column(Text, server_default=text("'inactive'"))

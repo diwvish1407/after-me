@@ -154,9 +154,11 @@ class _DoneStepScreenState extends ConsumerState<DoneStepScreen> {
           done: schedule != null,
           text: schedule == null
               ? l10n.summaryNoSchedule
-              : l10n.scheduleSummary(
-                  intervalLabel(l10n, schedule.intervalDays).toLowerCase(),
-                  formatMinutesOfDay(context, schedule.dueMinutes),
+              : scheduleSummaryText(
+                  l10n,
+                  intervalDays: schedule.intervalDays,
+                  intervalMinutes: schedule.intervalMinutes,
+                  dueTime: formatMinutesOfDay(context, schedule.dueMinutes),
                 ),
         ),
         _SummaryRow(

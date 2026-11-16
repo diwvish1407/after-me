@@ -4,7 +4,7 @@
     "contacts": 1,
     "instructions": 3,
     "stages": 2,
-    "custom_offsets": false
+    "custom_offsets": true
   },
   "usage": {
     "contacts": 0,

@@ -52,3 +52,7 @@ infra/**/crash.log
 
 # make perf output (machine-specific)
 backend/perf-report.json
+
+# Android Gradle output
+mobile/android/build/
+mobile/android/app/build/

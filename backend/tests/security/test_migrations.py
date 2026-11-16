@@ -118,6 +118,7 @@ def test_single_linear_history() -> None:
     assert len(heads) == 1
     revisions = list(script.walk_revisions())
     assert [r.revision for r in revisions] == [
+        "0013",
         "0012",
         "0011",
         "0010",

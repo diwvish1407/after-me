@@ -417,8 +417,9 @@ class PlanEditorRules {
   /// accounts with custom times may use.
   static const List<int> _longTimes = [7 * 1440, 14 * 1440, 30 * 1440];
 
-  /// 1 and 2 hours: allowed as a grace period only with custom times.
-  static const List<int> _shortGrace = [60, 120];
+  /// Short grace periods (5 minutes to 2 hours): offered only with custom times, and
+  /// only those the server's `grace_min` allows.
+  static const List<int> _shortGrace = [5, 15, 30, 60, 120];
 
   bool _allowedValue(int minutes) =>
       rules.customOffsets ||
@@ -497,7 +498,7 @@ class PlanEditorRules {
   /// uses.
   List<int> stageChoices({int? current, bool includeKept = true}) {
     final choices = <int>{
-      for (final minutes in [...rules.presets, ..._longTimes])
+      for (final minutes in [..._shortGrace, ...rules.presets, ..._longTimes])
         if (_allowedValue(minutes) && minutes <= rules.offsetMax) minutes,
       if (includeKept) ...keptOffsets,
       ?current,

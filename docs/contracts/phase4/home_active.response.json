@@ -11,6 +11,7 @@
     "last_checkin_at": "2026-10-08T09:02:40Z",
     "schedule": {
       "interval_days": 2,
+      "interval_minutes": null,
       "due_local_time": "21:30",
       "reminder_lead_minutes": 30
     }

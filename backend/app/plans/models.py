@@ -32,7 +32,7 @@ GRACE_DEFAULT_MINUTES = 180
 class EscalationPlan(Base):
     __tablename__ = "escalation_plans"
     __table_args__ = (
-        CheckConstraint("grace_minutes BETWEEN 60 AND 4320", name="grace_minutes"),
+        CheckConstraint("grace_minutes BETWEEN 1 AND 4320", name="grace_minutes"),
         UniqueConstraint("user_id", name="uq_escalation_plans_user"),
     )
 
@@ -57,7 +57,7 @@ class EscalationStep(Base):
     __tablename__ = "escalation_steps"
     __table_args__ = (
         CheckConstraint("position >= 1", name="position"),
-        CheckConstraint("offset_minutes BETWEEN 60 AND 43200", name="offset_minutes"),
+        CheckConstraint("offset_minutes BETWEEN 1 AND 43200", name="offset_minutes"),
         UniqueConstraint("id", "user_id", name="uq_escalation_steps_id_user"),
         UniqueConstraint(
             "plan_id",

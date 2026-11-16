@@ -67,13 +67,13 @@ async def test_a_new_account_has_an_empty_default_plan(h: Harness) -> None:
     assert body["stages"] == []
     assert response.headers["etag"] == '"plan-1"'
     assert body["rules"] == {
-        "grace_min": 60,
+        "grace_min": 1,
         "grace_max": 4320,
-        "stage_gap_min": 30,
+        "stage_gap_min": 1,
         "offset_max": 43200,
-        "release_offset_min": 1440,
+        "release_offset_min": 1,
         "max_stages": 2,
-        "custom_offsets": False,
+        "custom_offsets": True,
         "presets": [180, 360, 720, 1440, 2880, 4320],
     }
 
@@ -184,7 +184,7 @@ async def test_a_stage_missing_from_the_request_is_deleted(h: Harness, owner_db:
     [
         ({"grace_minutes": 180, "stages": []}, "stages", "too_short"),
         (
-            {"grace_minutes": 30, "stages": [{"offset_minutes": 30, "notify_contact_ids": []}]},
+            {"grace_minutes": 0, "stages": [{"offset_minutes": 0, "notify_contact_ids": []}]},
             "grace_minutes",
             "out_of_range",
         ),
@@ -194,9 +194,12 @@ async def test_a_stage_missing_from_the_request_is_deleted(h: Harness, owner_db:
             "must_equal_grace",
         ),
         (
-            {"grace_minutes": 200, "stages": [{"offset_minutes": 200, "notify_contact_ids": []}]},
+            {
+                "grace_minutes": 4321,
+                "stages": [{"offset_minutes": 4321, "notify_contact_ids": []}],
+            },
             "grace_minutes",
-            "not_a_preset",
+            "out_of_range",
         ),
     ],
 )
@@ -210,17 +213,13 @@ async def test_put_validates_the_plan(h: Harness, body: dict, field: str, code: 
     assert (await _get(h, tokens)).json()["version"] == 1
 
 
-async def test_free_stages_must_be_close_enough_in_order_and_from_the_presets(h: Harness) -> None:
+async def test_free_stages_may_use_custom_minutes(h: Harness) -> None:
+    """Custom timings: a free account chooses its own minutes, down to one."""
     tokens = await h.signup(OWNER)
     mom = (await h.add_contact(tokens, "mom@example.com")).json()
-    response = await _put(
-        h, tokens, _body(180, (180, [mom["id"]]), (1000, [mom["id"]])), '"plan-1"'
-    )
-    assert response.status_code == 422
-    assert any(
-        e["field"] == "stages[1].offset_minutes" and e["code"] == "not_a_preset"
-        for e in problem(response)["errors"]
-    )
+    response = await _put(h, tokens, _body(2, (2, [mom["id"]]), (7, [mom["id"]])), '"plan-1"')
+    assert response.status_code == 200, response.text
+    assert [s["offset_minutes"] for s in response.json()["stages"]] == [2, 7]
 
 
 async def test_the_stage_limit_is_the_tier_limit(h: Harness) -> None:

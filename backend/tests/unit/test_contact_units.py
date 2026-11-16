@@ -201,8 +201,9 @@ def test_tier_limits() -> None:
     assert (limits_for("free").contacts, limits_for("premium").contacts) == (1, 25)
     assert (limits_for("free").instructions, limits_for("premium").instructions) == (3, 200)
     assert (limits_for("free").stages, limits_for("premium").stages) == (2, 10)
+    # Custom timings: every tier may choose its own minutes.
     assert (limits_for("free").custom_offsets, limits_for("premium").custom_offsets) == (
-        False,
+        True,
         True,
     )
     assert limits_for("something-new") == limits_for("free")  # fail closed

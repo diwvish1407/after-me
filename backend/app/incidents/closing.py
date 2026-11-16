@@ -20,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.audit import writer as audit
 from app.audit.writer import AuditEvent, AuditWriter
 from app.checkins.repository import CheckinConfigRepository
-from app.checkins.schedule import compute_next_due
+from app.checkins.schedule import next_due_for
 from app.contacts.repository import ContactRepository
 from app.incidents.models import EscalationIncident
 from app.incidents.repository import IncidentRepository
@@ -268,9 +268,7 @@ async def _resume_schedule(
     at = max(now, config.baseline_at or now, config.last_checkin_at or now)
     config.status = "active"
     config.baseline_at = at
-    config.next_due_at = compute_next_due(
-        at, config.interval_days, config.due_local_time, ZoneInfo(timezone)
-    )
+    config.next_due_at = next_due_for(config, at, ZoneInfo(timezone))
     config.updated_at = now
     if incident.contacts_messaged_at is not None:
         return  # the all-clear confirmation covers it, and "nobody was contacted" would be false

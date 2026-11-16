@@ -6,9 +6,8 @@ from ever sleeping)."""
 from __future__ import annotations
 
 from datetime import timedelta
-from typing import get_args
 
-from app.checkins.schemas import ReminderLead
+from app.checkins.models import CheckinConfiguration
 from app.engine.store import MAX_REMINDER_LEAD_MINUTES, EngineStore
 from tests.world import World, ist
 
@@ -60,4 +59,9 @@ async def test_a_new_deadline_is_a_new_reminder(world: World) -> None:
 
 
 def test_the_scan_bound_is_the_largest_lead_the_schedule_allows() -> None:
-    assert max(get_args(ReminderLead)) == MAX_REMINDER_LEAD_MINUTES
+    checks = [
+        str(c.sqltext)
+        for c in CheckinConfiguration.__table__.constraints
+        if "reminder_lead_minutes" in str(getattr(c, "sqltext", ""))
+    ]
+    assert checks == [f"reminder_lead_minutes BETWEEN 0 AND {MAX_REMINDER_LEAD_MINUTES}"]

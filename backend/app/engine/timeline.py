@@ -62,7 +62,8 @@ def materialise(
             "user_reminder",
             "last_chance",
             None,
-            anchor_at + grace - LAST_CHANCE_LEAD,
+            # A short grace period gets its last chance in its final quarter instead.
+            anchor_at + grace - min(LAST_CHANCE_LEAD, grace / 4),
             dedupe_key(incident_id, "user_reminder", "last_chance"),
         ),
     ]
@@ -74,7 +75,9 @@ def materialise(
                     "user_final_warning",
                     None,
                     stage.stage_id,
-                    anchor_at + offset - final_warning_lead,
+                    # Never before the incident started: a release a few minutes after the
+                    # anchor gets its warning halfway there.
+                    anchor_at + offset - min(final_warning_lead, offset / 2),
                     dedupe_key(incident_id, "user_final_warning", str(stage.stage_id)),
                 )
             )

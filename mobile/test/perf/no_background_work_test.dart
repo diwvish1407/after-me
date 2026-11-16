@@ -75,6 +75,27 @@ final _forbidden = <String, RegExp>{
   ),
 };
 
+/// The one exception to [_forbidden]: the loud alarm at check-in time. Key: a pattern
+/// name of [_forbidden]; value: the files that may contain it, with the reason.
+const _forbiddenAllowed = <String, Map<String, String>>{
+  'local notification scheduling (reminders come from the server)': {
+    'lib/core/alarm/deadline_alarm.dart':
+        'One alarm at the deadline the server gave (never computed on the phone), so '
+        'the person hears it in time to tap I\'M OK. Cancelled and set again whenever '
+        'the server sends a new deadline; cancelled when check-ins stop or on sign-out.',
+  },
+  'boot receiver': {
+    'android/app/src/main/AndroidManifest.xml':
+        "flutter_local_notifications' boot receiver sets the check-in alarm again after "
+        'the phone restarts; it runs nothing else.',
+  },
+  'exact alarms / battery optimisation exemptions': {
+    'android/app/src/main/AndroidManifest.xml':
+        'SCHEDULE_EXACT_ALARM, for the one check-in alarm only (the person allows it '
+        'in "Alarms & reminders"). No battery-optimisation exemption is asked for.',
+  },
+};
+
 List<File> _sourceFiles() {
   final files = <File>[];
   void walk(String dir, bool Function(String path) keep) {
@@ -171,7 +192,8 @@ void main() {
     for (final file in files) {
       for (final (path, number, line) in _codeLines(file)) {
         _forbidden.forEach((name, pattern) {
-          if (pattern.hasMatch(line)) {
+          if (pattern.hasMatch(line) &&
+              !(_forbiddenAllowed[name]?.containsKey(path) ?? false)) {
             found.add('$path:$number  [$name]  ${line.trim()}');
           }
         });
@@ -230,18 +252,21 @@ void main() {
       expect(manifest, isNot(contains('WAKE_LOCK')));
     });
 
-    test(
-      'declares no service, no boot or alarm receiver and no job of its own',
-      () {
-        expect(manifest, isNot(contains('<service')));
-        expect(manifest, isNot(contains('<receiver')));
-        expect(manifest, isNot(contains('<provider')));
-        expect(manifest, isNot(contains('BOOT_COMPLETED')));
-        expect(manifest, isNot(contains('FOREGROUND_SERVICE')));
-        expect(manifest, isNot(contains('SCHEDULE_EXACT_ALARM')));
-        expect(manifest, isNot(contains('USE_EXACT_ALARM')));
-      },
-    );
+    test('declares no service and no job of its own; the only receivers are the '
+        "check-in alarm's", () {
+      expect(manifest, isNot(contains('<service')));
+      expect(manifest, isNot(contains('<provider')));
+      final receivers = RegExp(r'<receiver[^>]*android:name="([^"]+)"')
+          .allMatches(manifest)
+          .map((m) => m.group(1)!)
+          .toSet();
+      expect(receivers, {
+        'com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver',
+        'com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver',
+      });
+      expect(manifest, isNot(contains('FOREGROUND_SERVICE')));
+      expect(manifest, isNot(contains('USE_EXACT_ALARM')));
+    });
 
     test('the permission list is the short one', () {
       final names = RegExp(r'<uses-permission[^>]*android:name="([^"]+)"')
@@ -254,6 +279,9 @@ void main() {
         'android.permission.POST_NOTIFICATIONS',
         'android.permission.USE_FINGERPRINT',
         'android.permission.VIBRATE',
+        'android.permission.SCHEDULE_EXACT_ALARM',
+        'android.permission.RECEIVE_BOOT_COMPLETED',
+        'android.permission.USE_FULL_SCREEN_INTENT',
       });
     });
   });

@@ -265,7 +265,8 @@ async def test_unknown_fields_are_refused(world: World) -> None:
 # --- recipients -------------------------------------------------------------------------------
 
 
-async def test_a_release_stage_under_a_day_is_refused(world: World) -> None:
+async def test_a_release_stage_under_a_day_is_not_refused(world: World) -> None:
+    """Custom timings: a stage minutes after a missed check-in may share instructions."""
     person = await _ready(world)
     stages = await _stage_ids(world, person)
     response = await world.h.client.post(
@@ -278,8 +279,7 @@ async def test_a_release_stage_under_a_day_is_refused(world: World) -> None:
         },
         headers=person.headers,
     )
-    assert response.status_code == 422
-    assert problem(response)["errors"][0]["code"] == "release_stage_too_early"
+    assert response.status_code != 422, response.text
 
 
 async def test_someone_elses_contact_or_stage_is_a_404_and_nothing_is_created(

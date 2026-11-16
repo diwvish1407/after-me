@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import re
 from datetime import UTC, date, datetime, time, timedelta
-from typing import Final
+from typing import Final, Protocol
 from zoneinfo import ZoneInfo
 
 MIN_WINDOW: Final = timedelta(hours=12)
@@ -60,3 +60,22 @@ def compute_next_due(
         day += timedelta(days=1)
     msg = "no deadline found"  # pragma: no cover - unreachable for any real zone
     raise RuntimeError(msg)  # pragma: no cover
+
+
+class ScheduleTiming(Protocol):
+    """What a deadline is computed from: a ``CheckinConfiguration`` or anything shaped like it."""
+
+    interval_days: int
+    interval_minutes: int | None
+    due_local_time: time
+
+
+def next_due_for(cfg: ScheduleTiming, baseline: datetime, tz: ZoneInfo) -> datetime:
+    """The next deadline for ``cfg``. A custom interval (``interval_minutes``) is simply that
+    many minutes after the baseline; otherwise :func:`compute_next_due` applies."""
+    if cfg.interval_minutes is not None:
+        if baseline.tzinfo is None:
+            msg = "baseline must be timezone-aware"
+            raise ValueError(msg)
+        return baseline + timedelta(minutes=cfg.interval_minutes)
+    return compute_next_due(baseline, cfg.interval_days, cfg.due_local_time, tz)

@@ -9,6 +9,7 @@ import '../../../l10n/gen/app_localizations.dart';
 import '../../auth/application/me_controller.dart';
 import '../../auth/presentation/reauth_sheet.dart';
 import '../../checkin/data/schedule_repository.dart';
+import '../../checkin/presentation/custom_minutes_sheet.dart';
 import '../../checkin/presentation/schedule_labels.dart';
 import '../application/onboarding_controller.dart';
 import '../application/setup_controller.dart';
@@ -24,6 +25,9 @@ class ScheduleStepScreen extends ConsumerStatefulWidget {
 
 class _ScheduleStepScreenState extends ConsumerState<ScheduleStepScreen> {
   int? _interval;
+  // Null: as saved. True: the custom interval in [_customMinutes]. False: days.
+  bool? _useCustom;
+  int? _customMinutes;
   int? _dueMinutes;
   bool _busy = false;
   AppFailure? _failure;
@@ -38,6 +42,31 @@ class _ScheduleStepScreenState extends ConsumerState<ScheduleStepScreen> {
     }
   }
 
+  int? _customFor(CheckInSchedule base) => switch (_useCustom) {
+    null => base.intervalMinutes,
+    true => _customMinutes,
+    false => null,
+  };
+
+  Future<void> _pickCustom(int? current) async {
+    final l10n = AppLocalizations.of(context);
+    final picked = await showCustomMinutesSheet(
+      context,
+      title: l10n.scheduleCustomIntervalTitle,
+      help: l10n.scheduleCustomIntervalHelp,
+      choices: customIntervalChoices,
+      min: minIntervalMinutes,
+      max: maxIntervalMinutes,
+      initial: current,
+    );
+    if (picked != null && mounted) {
+      setState(() {
+        _useCustom = true;
+        _customMinutes = picked;
+      });
+    }
+  }
+
   Future<void> _save(CheckInSchedule base) async {
     setState(() {
       _busy = true;
@@ -45,8 +74,11 @@ class _ScheduleStepScreenState extends ConsumerState<ScheduleStepScreen> {
     });
     try {
       final setup = ref.read(setupControllerProvider.notifier);
+      final custom = _customFor(base);
       final schedule = base.copyWith(
         intervalDays: _interval ?? base.intervalDays,
+        intervalMinutes: custom,
+        clearIntervalMinutes: custom == null,
         dueMinutes: _dueMinutes ?? base.dueMinutes,
       );
       // The schedule is still off here, so no password is asked for. If the server ever
@@ -84,6 +116,7 @@ class _ScheduleStepScreenState extends ConsumerState<ScheduleStepScreen> {
         'UTC';
     final base = (saved ?? CheckInSchedule(timezone: timezone));
     final interval = _interval ?? base.intervalDays;
+    final custom = _customFor(base);
     final due = _dueMinutes ?? base.dueMinutes;
     final dueText = formatMinutesOfDay(context, due);
     return OnboardingScaffold(
@@ -120,34 +153,59 @@ class _ScheduleStepScreenState extends ConsumerState<ScheduleStepScreen> {
             }.toList()..sort())
               ChoiceChip(
                 label: Text(intervalLabel(l10n, days)),
-                selected: interval == days,
+                selected: custom == null && interval == days,
                 onSelected: _busy
                     ? null
-                    : (_) => setState(() => _interval = days),
+                    : (_) => setState(() {
+                        _interval = days;
+                        _useCustom = false;
+                      }),
               ),
+            ChoiceChip(
+              label: Text(
+                custom == null
+                    ? l10n.scheduleChoiceCustom
+                    : scheduleIntervalLabel(
+                        l10n,
+                        intervalDays: interval,
+                        intervalMinutes: custom,
+                      ),
+              ),
+              selected: custom != null,
+              onSelected: _busy ? null : (_) => _pickCustom(custom),
+            ),
           ],
         ),
         Gap.lg,
-        Semantics(
-          header: true,
-          child: Text(
-            l10n.scheduleBy,
-            style: Theme.of(context).textTheme.titleSmall,
+        if (custom == null) ...[
+          Semantics(
+            header: true,
+            child: Text(
+              l10n.scheduleBy,
+              style: Theme.of(context).textTheme.titleSmall,
+            ),
           ),
-        ),
-        Gap.xs,
-        AppButton.secondary(
-          label: dueText,
-          icon: Icons.schedule_rounded,
-          onPressed: _busy ? null : () => _pickTime(due),
-          expand: true,
-        ),
+          Gap.xs,
+          AppButton.secondary(
+            label: dueText,
+            icon: Icons.schedule_rounded,
+            onPressed: _busy ? null : () => _pickTime(due),
+            expand: true,
+          ),
+        ] else
+          BodyText(
+            l10n.scheduleCustomIntervalNote(
+              formatDurationMinutes(l10n, custom),
+            ),
+          ),
         Gap.md,
         StatusBanner(
           kind: StatusBannerKind.info,
-          message: l10n.scheduleSummary(
-            intervalLabel(l10n, interval).toLowerCase(),
-            dueText,
+          message: scheduleSummaryText(
+            l10n,
+            intervalDays: interval,
+            intervalMinutes: custom,
+            dueTime: dueText,
           ),
         ),
         Gap.sm,

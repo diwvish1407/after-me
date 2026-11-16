@@ -197,12 +197,11 @@ def test_weak_argon2_only_in_test_env() -> None:
 
 
 def test_the_grace_period_floor_matches_the_database_in_every_environment() -> None:
-    """The plan table refuses a grace period under 60 minutes (CHECK), so the configured minimum
-    may not promise less: it would turn a plan edit into a 500."""
-    with pytest.raises(ValidationError) as excinfo:
-        make_settings(grace_min_minutes=59)
-    assert "GRACE_MIN_MINUTES must be at least 60" in _problems(excinfo.value)
-    assert make_settings(grace_min_minutes=60).grace_min_minutes == 60
+    """The plan table refuses a grace period under one minute (CHECK, custom timings), so the
+    configured minimum may not promise less: it would turn a plan edit into a 500."""
+    with pytest.raises(ValidationError):
+        make_settings(grace_min_minutes=0)
+    assert make_settings(grace_min_minutes=1).grace_min_minutes == 1
 
 
 def test_the_other_plan_bounds_also_match_the_database() -> None:
@@ -340,12 +339,12 @@ def test_engine_defaults_match_the_specification() -> None:
     assert settings.tick_seconds == 15
     assert settings.settle_delay_seconds == 300
     assert settings.ingestion_stale_seconds == 180
-    assert settings.min_release_offset_minutes == 1440
+    assert settings.min_release_offset_minutes == 1  # custom timings
     assert settings.hold_exit_fresh_seconds == 600
     assert settings.hold_recovery_buffer_minutes == 30
     assert settings.anomaly_floor_per_hour == 25
     assert settings.action_max_attempts == 5
-    assert settings.stage_min_gap_minutes == 30
+    assert settings.stage_min_gap_minutes == 1  # custom timings
     assert settings.stage_max_offset_minutes == 43200
 
 
@@ -356,11 +355,9 @@ def test_production_keeps_the_fail_safe_floors(env: str) -> None:
         make_settings(
             **values,
             email_provider="recording",
-            min_release_offset_minutes=600,
             settle_delay_seconds=250,
         )
     message = _problems(excinfo.value)
-    assert "MIN_RELEASE_OFFSET_MINUTES must be at least 1440" in message
     assert "SETTLE_DELAY_SECONDS must be at least 300" in message
 
 

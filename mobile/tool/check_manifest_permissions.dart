@@ -4,10 +4,10 @@
 // (WAKE_LOCK, ACCESS_NETWORK_STATE, c2dm RECEIVE: see below, each with its reason), plus
 // the signature-level "<applicationId>.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" that
 // AndroidX Core adds for apps targeting SDK 33+. In particular there must be no AD_ID, no
-// READ_CONTACTS (contacts come from the system picker), no RECEIVE_BOOT_COMPLETED (nothing
-// is scheduled on the phone: reminders come from the server), no VIBRATE (a channel vibrates
-// on the app's behalf; the manifest removes the plugin's declaration), no exact-alarm and no
-// foreground-service permission.
+// READ_CONTACTS (contacts come from the system picker), no VIBRATE (a channel vibrates on
+// the app's behalf; the manifest removes the plugin's declaration) and no foreground-service
+// permission. The check-in alarm (lib/core/alarm/deadline_alarm.dart) adds exactly three:
+// SCHEDULE_EXACT_ALARM, RECEIVE_BOOT_COMPLETED and USE_FULL_SCREEN_INTENT (see below).
 //
 // One conditional entry: androidx.biometric 1.1.0 (through local_auth) declares the legacy
 // USE_FINGERPRINT, which Android 8.0-8.1 (API 26-27, our minSdk) still needs for the
@@ -56,8 +56,18 @@ const _accessNetworkState = 'android.permission.ACCESS_NETWORK_STATE';
 /// services to create IID tokens". Normal permission, no prompt.
 const _c2dmReceive = 'com.google.android.c2dm.permission.RECEIVE';
 
+// The loud alarm at check-in time: one exact alarm at the deadline the server gave (the
+// person allows "Alarms & reminders"), scheduled again after a restart of the phone, and
+// shown full screen so it is seen on a locked phone.
+const _scheduleExactAlarm = 'android.permission.SCHEDULE_EXACT_ALARM';
+const _receiveBootCompleted = 'android.permission.RECEIVE_BOOT_COMPLETED';
+const _useFullScreenIntent = 'android.permission.USE_FULL_SCREEN_INTENT';
+
 /// Permissions the app may request, besides the per-application dynamic receiver one.
 const allowedPermissions = <String>{
+  _scheduleExactAlarm,
+  _receiveBootCompleted,
+  _useFullScreenIntent,
   _internet,
   _postNotifications,
   _useBiometric,

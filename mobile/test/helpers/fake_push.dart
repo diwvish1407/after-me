@@ -1,3 +1,5 @@
+import 'package:afterme/core/alarm/deadline_alarm.dart';
+
 import 'dart:async';
 
 import 'package:afterme/core/device/device_info_source.dart';
@@ -211,4 +213,24 @@ class FakeDevicesRepository implements DevicesRepository {
     deletes++;
     registeredToken = null;
   }
+}
+
+/// The check-in alarm without the plugin: records what the app asked for.
+class FakeDeadlineAlarm implements DeadlineAlarm {
+  final List<DateTime> sets = [];
+  int cancels = 0;
+  bool onTime = true;
+  int asks = 0;
+
+  @override
+  Future<void> set(DateTime at, DeadlineAlarmText text) async => sets.add(at);
+
+  @override
+  Future<void> cancel() async => cancels++;
+
+  @override
+  Future<bool> canRingOnTime() async => onTime;
+
+  @override
+  Future<void> askToRingOnTime() async => asks++;
 }

@@ -66,6 +66,7 @@ async def test_a_new_account_has_the_default_inactive_schedule(h: Harness) -> No
     assert response.status_code == 200
     assert response.json() == {
         "interval_days": 1,
+        "interval_minutes": None,
         "due_local_time": "20:00",
         "reminder_lead_minutes": 60,
         "timezone": "Asia/Kolkata",
@@ -119,6 +120,7 @@ async def test_put_saves_the_schedule_of_an_inactive_account(h: Harness, owner_d
     assert response.status_code == 200
     assert response.json() == {
         "interval_days": 2,
+        "interval_minutes": None,
         "due_local_time": "21:30",
         "reminder_lead_minutes": 30,
         "timezone": "Asia/Kolkata",
@@ -167,7 +169,7 @@ async def test_an_identical_put_changes_nothing(h: Harness, owner_db: Db) -> Non
         {**BODY, "due_local_time": "20:00:00"},
         {**BODY, "due_local_time": "20:60"},
         {**BODY, "due_local_time": 2000},
-        {**BODY, "reminder_lead_minutes": 45},
+        {**BODY, "reminder_lead_minutes": 1441},
         {**BODY, "reminder_lead_minutes": "60"},
         {**BODY, "reminder_lead_minutes": -30},
         {**BODY, "timezone": "UTC"},

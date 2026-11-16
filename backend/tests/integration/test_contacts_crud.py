@@ -652,7 +652,7 @@ async def test_entitlements_follow_the_tier_and_usage(h: Harness, owner_db: Conn
     assert free.status_code == 200
     assert free.json() == {
         "tier": "free",
-        "limits": {"contacts": 1, "instructions": 3, "stages": 2, "custom_offsets": False},
+        "limits": {"contacts": 1, "instructions": 3, "stages": 2, "custom_offsets": True},
         "usage": {"contacts": 0, "instructions": 0, "stages": 0},
     }
     created = (await h.add_contact(tokens, "mom@example.com")).json()

@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../../../app/theme/tokens.dart';
+import '../../../core/alarm/deadline_alarm.dart';
 import '../../../core/design_system/design_system.dart';
 import '../../../core/permissions/notification_permission.dart';
 import '../../../core/push/notification_channel.dart';
@@ -34,6 +35,8 @@ class NotificationsSettingsScreen extends ConsumerWidget {
           ),
         ],
         Gap.md,
+        const _AlarmCard(),
+        Gap.md,
         SectionCard(
           title: l10n.notificationsWhatTitle,
           child: Column(
@@ -60,6 +63,65 @@ class NotificationsSettingsScreen extends ConsumerWidget {
         Gap.md,
         BodyText(l10n.notificationsPrivateBody),
       ],
+    );
+  }
+}
+
+/// The loud alarm at check-in time, and the "Alarms & reminders" permission it needs to
+/// sound at the exact minute.
+class _AlarmCard extends ConsumerStatefulWidget {
+  const _AlarmCard();
+
+  @override
+  ConsumerState<_AlarmCard> createState() => _AlarmCardState();
+}
+
+class _AlarmCardState extends ConsumerState<_AlarmCard> {
+  late Future<bool> _onTime = ref.read(deadlineAlarmProvider).canRingOnTime();
+
+  Future<void> _ask() async {
+    final alarm = ref.read(deadlineAlarmProvider);
+    await alarm.askToRingOnTime();
+    if (mounted) {
+      setState(() => _onTime = alarm.canRingOnTime());
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return SectionCard(
+      title: l10n.alarmSettingTitle,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          BodyText(l10n.alarmSettingBody),
+          FutureBuilder<bool>(
+            future: _onTime,
+            builder: (context, snapshot) {
+              if (snapshot.data != false) {
+                return const SizedBox.shrink();
+              }
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Gap.sm,
+                  StatusBanner(
+                    kind: StatusBannerKind.attention,
+                    message: l10n.alarmPermissionNeeded,
+                  ),
+                  Gap.sm,
+                  AppButton.secondary(
+                    label: l10n.alarmPermissionOpen,
+                    onPressed: _ask,
+                    expand: true,
+                  ),
+                ],
+              );
+            },
+          ),
+        ],
+      ),
     );
   }
 }

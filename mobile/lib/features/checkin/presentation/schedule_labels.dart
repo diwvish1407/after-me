@@ -5,9 +5,19 @@ import '../../../l10n/gen/app_localizations.dart';
 /// outside this list (set from another device) is shown as an extra choice.
 const List<int> scheduleIntervalChoices = [1, 2, 3, 7];
 
-/// Reminder lead choices, in minutes before the deadline (0 = no reminder), exactly the
-/// values the server accepts.
-const List<int> reminderLeadChoices = [0, 30, 60, 120, 240];
+/// Reminder lead choices, in minutes before the deadline (0 = no reminder). The server
+/// accepts any value from 0 to [maxReminderLeadMinutes]; "Custom" offers the rest.
+const List<int> reminderLeadChoices = [0, 5, 15, 30, 60, 120, 240];
+
+/// The longest reminder lead the server accepts (a day).
+const int maxReminderLeadMinutes = 1440;
+
+/// The shortest and longest custom interval the server accepts (1 minute to 30 days).
+const int minIntervalMinutes = 1;
+const int maxIntervalMinutes = 30 * 1440;
+
+/// Suggested custom intervals, in minutes.
+const List<int> customIntervalChoices = [5, 15, 30, 60, 120, 360, 720];
 
 /// "Every day", "Every week", "Every 3 days".
 String intervalLabel(AppLocalizations l10n, int days) => switch (days) {
@@ -15,6 +25,28 @@ String intervalLabel(AppLocalizations l10n, int days) => switch (days) {
   7 => l10n.intervalEveryWeek,
   _ => l10n.intervalEveryNDays(days),
 };
+
+/// The interval of a schedule: "Every day", or "Every 45 minutes" for a custom one.
+String scheduleIntervalLabel(
+  AppLocalizations l10n, {
+  required int intervalDays,
+  int? intervalMinutes,
+}) => intervalMinutes == null
+    ? intervalLabel(l10n, intervalDays)
+    : l10n.intervalEveryDuration(formatDurationMinutes(l10n, intervalMinutes));
+
+/// "Check in every day by 8:00 PM." or "Check in every 45 minutes."
+String scheduleSummaryText(
+  AppLocalizations l10n, {
+  required int intervalDays,
+  required int? intervalMinutes,
+  required String dueTime,
+}) => intervalMinutes == null
+    ? l10n.scheduleSummary(
+        intervalLabel(l10n, intervalDays).toLowerCase(),
+        dueTime,
+      )
+    : l10n.scheduleSummaryCustom(formatDurationMinutes(l10n, intervalMinutes));
 
 /// The reminder lead in minutes (0 = off) as a choice label: "No reminder",
 /// "30 minutes before", "1 hour before".

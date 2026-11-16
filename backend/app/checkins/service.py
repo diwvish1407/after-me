@@ -26,7 +26,7 @@ from app.auth.base import AuthServiceBase
 from app.auth.guards import ensure_owner_active
 from app.checkins.models import CheckinConfiguration
 from app.checkins.repository import CheckinConfigRepository, CheckinEventRepository
-from app.checkins.schedule import compute_next_due, format_hhmm, parse_hhmm
+from app.checkins.schedule import format_hhmm, next_due_for, parse_hhmm
 from app.checkins.schemas import (
     CheckinItem,
     CheckinPage,
@@ -65,6 +65,7 @@ def schedule_etag(version: int) -> str:
 def schedule_out(cfg: CheckinConfiguration, timezone: str) -> ScheduleOut:
     return ScheduleOut(
         interval_days=cfg.interval_days,
+        interval_minutes=cfg.interval_minutes,
         due_local_time=format_hhmm(cfg.due_local_time),
         reminder_lead_minutes=cfg.reminder_lead_minutes,
         timezone=timezone,
@@ -73,6 +74,11 @@ def schedule_out(cfg: CheckinConfiguration, timezone: str) -> ScheduleOut:
         last_checkin_at=cfg.last_checkin_at,
         version=cfg.version,
     )
+
+
+def _interval_span(interval_days: int, interval_minutes: int | None) -> int:
+    """How long a schedule gives between check-ins, in minutes, to compare two schedules."""
+    return interval_minutes if interval_minutes is not None else interval_days * 1440
 
 
 def restart_clock(cfg: CheckinConfiguration, timezone: str, now: datetime) -> None:
@@ -85,9 +91,7 @@ def restart_clock(cfg: CheckinConfiguration, timezone: str, now: datetime) -> No
     every recorded check-in (the engine treats the opposite as an inconsistency, §6.3)."""
     at = max(now, cfg.baseline_at or now, cfg.last_checkin_at or now)
     cfg.baseline_at = at
-    cfg.next_due_at = compute_next_due(
-        at, cfg.interval_days, cfg.due_local_time, ZoneInfo(timezone)
-    )
+    cfg.next_due_at = next_due_for(cfg, at, ZoneInfo(timezone))
 
 
 class CheckinService(AuthServiceBase):
@@ -139,7 +143,8 @@ class CheckinService(AuthServiceBase):
         # schedule is off (nothing to soften yet: onboarding) need nothing more.
         if (
             cfg.status == "active"
-            and body.interval_days > cfg.interval_days
+            and _interval_span(body.interval_days, body.interval_minutes)
+            > _interval_span(cfg.interval_days, cfg.interval_minutes)
             and not has_fresh_reauth(current, now)
         ):
             raise ReauthRequired
@@ -149,7 +154,11 @@ class CheckinService(AuthServiceBase):
         changed = [
             name
             for name, differs in (
-                ("interval", cfg.interval_days != body.interval_days),
+                (
+                    "interval",
+                    cfg.interval_days != body.interval_days
+                    or cfg.interval_minutes != body.interval_minutes,
+                ),
                 ("time", cfg.due_local_time.replace(tzinfo=None) != due),
                 ("reminder", cfg.reminder_lead_minutes != body.reminder_lead_minutes),
             )
@@ -157,6 +166,7 @@ class CheckinService(AuthServiceBase):
         ]
         if changed:
             cfg.interval_days = body.interval_days
+            cfg.interval_minutes = body.interval_minutes
             cfg.due_local_time = due
             cfg.reminder_lead_minutes = body.reminder_lead_minutes
             if cfg.status == "active":
@@ -308,9 +318,7 @@ class CheckinService(AuthServiceBase):
         if cfg.status != "inactive" or incident is not None:
             cfg.status = "active"
             cfg.baseline_at = at
-            cfg.next_due_at = compute_next_due(
-                at, cfg.interval_days, cfg.due_local_time, ZoneInfo(timezone)
-            )
+            cfg.next_due_at = next_due_for(cfg, at, ZoneInfo(timezone))
             next_due_at = cfg.next_due_at
         cfg.updated_at = now
 

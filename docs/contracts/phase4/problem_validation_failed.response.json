@@ -15,11 +15,6 @@
       "field": "due_local_time",
       "code": "invalid_time",
       "message": "Use a time such as 20:00 (24-hour)."
-    },
-    {
-      "field": "reminder_lead_minutes",
-      "code": "invalid_choice",
-      "message": "Input should be 0, 30, 60, 120 or 240"
     }
   ]
 }

@@ -1,3 +1,4 @@
+import 'package:afterme/core/alarm/deadline_alarm.dart';
 import 'package:afterme/app/repository_providers.dart';
 import 'package:afterme/app/theme/app_theme.dart';
 import 'package:afterme/core/api/client_info.dart';
@@ -295,6 +296,7 @@ class TestFakes {
     fileExportGatewayProvider.overrideWithValue(exportGateway),
     pushGatewayProvider.overrideWithValue(push),
     localNotificationGatewayProvider.overrideWithValue(localNotifications),
+    deadlineAlarmProvider.overrideWithValue(FakeDeadlineAlarm()),
     if (!realDevicesRepository)
       devicesRepositoryProvider.overrideWithValue(devices),
     pushTimerProvider.overrideWithValue(pushTimers.create),
