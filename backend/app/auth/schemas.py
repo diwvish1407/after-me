@@ -88,6 +88,8 @@ class RegisterResendRequest(_EmailMixin):
 class LoginRequest(_EmailMixin):
     password: PasswordInput
     device: LoginDeviceInfo
+    # The authenticator code (or a recovery code) when the account has two-step verification.
+    otp: Annotated[str, StringConstraints(min_length=6, max_length=16)] | None = None
 
 
 class RefreshRequest(RequestModel):
@@ -134,6 +136,7 @@ class TokenUser(ResponseModel):
     id: uuid.UUID
     email: str
     tier: str
+    role: str = "user"
 
 
 class TokenResponse(ResponseModel):
@@ -167,3 +170,39 @@ class SessionItem(ResponseModel):
 
 class SessionList(ResponseModel):
     items: list[SessionItem] = Field(default_factory=list)
+
+
+# --- two-step verification ---------------------------------------------------------------------
+
+
+class MfaStatusOut(ResponseModel):
+    enabled: bool
+    recovery_codes_left: int
+
+
+class MfaSetupOut(ResponseModel):
+    """Shown once: the secret for the authenticator app (also as an ``otpauth://`` link)."""
+
+    secret: str
+    otpauth_uri: str
+
+
+class MfaCodeRequest(RequestModel):
+    code: Annotated[str, StringConstraints(min_length=6, max_length=16)]
+
+
+class MfaEnabledOut(ResponseModel):
+    recovery_codes: list[str]
+
+
+# --- Sign in with Google -----------------------------------------------------------------------
+
+
+class GoogleLoginRequest(RequestModel):
+    id_token: Annotated[str, StringConstraints(min_length=20, max_length=4096)]
+    device: LoginDeviceInfo
+    otp: Annotated[str, StringConstraints(min_length=6, max_length=16)] | None = None
+    # Used for a new account only (the Google profile name otherwise).
+    display_name: DisplayName | None = None
+    timezone: TimezoneName = "UTC"
+    locale: LocaleTag = "en"

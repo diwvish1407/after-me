@@ -21,6 +21,7 @@ from app.api.deps import ContextDep, DbSession, ServicesDep
 from app.contacts.portal_service import ContactPortalService, LinkInvalid
 from app.core.errors import RateLimited
 from app.core.net import rate_limit_subject
+from app.incidents.ack_service import AckInvalidError, AckService
 from app.security.rate_limit import WEB_CONTACT_PER_IP
 from app.web import pages, security
 
@@ -207,6 +208,67 @@ async def optout_submit(
         return _invalid()
     done = pages.page(
         "contact_optout_done.html.j2", scope=result.scope, inviter_name=result.inviter_name
+    )
+    pages.clear_csrf(done)
+    return done
+
+
+# --- "I'm checking on them" (a contact acknowledges an alert) ---------------------------------
+
+
+@router.get("/ack")
+async def ack_page(request: Request) -> Response:
+    return _landing(
+        request,
+        heading="Letting them know",
+        intro="One moment. If nothing happens, press Continue.",
+        action="/c/ack/confirm",
+        prefix="ak_",
+    )
+
+
+@router.post("/ack/confirm")
+async def ack_confirm(
+    request: Request, session: DbSession, services: ServicesDep, ctx: ContextDep
+) -> Response:
+    """Show the choice for a valid acknowledgement token. Changes nothing."""
+    form, csrf, refused = await _guard(request, session, services, ctx)
+    if refused is not None:
+        return refused
+    token = form.get("token", "")
+    try:
+        view = await AckService(session=session, services=services, ctx=ctx).preview(token)
+    except AckInvalidError:
+        return _invalid()
+    return pages.page(
+        "contact_ack_choice.html.j2",
+        csrf=csrf,
+        token=token,
+        person_name=view.person_name,
+        contact_name=view.contact_name,
+        already=view.already,
+        open=view.open,
+    )
+
+
+@router.post("/ack")
+async def ack_submit(
+    request: Request, session: DbSession, services: ServicesDep, ctx: ContextDep
+) -> Response:
+    form, _csrf, refused = await _guard(request, session, services, ctx)
+    if refused is not None:
+        return refused
+    try:
+        view = await AckService(session=session, services=services, ctx=ctx).acknowledge(
+            form.get("token", "")
+        )
+    except AckInvalidError:
+        return _invalid()
+    done = pages.page(
+        "contact_ack_done.html.j2",
+        person_name=view.person_name,
+        contact_name=view.contact_name,
+        open=view.open,
     )
     pages.clear_csrf(done)
     return done

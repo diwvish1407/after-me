@@ -8,8 +8,8 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
-from zoneinfo import ZoneInfo
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.container import AppServices
@@ -18,14 +18,16 @@ from app.auth.base import AuthServiceBase
 from app.auth.guards import ensure_owner_active
 from app.checkins.models import CheckinConfiguration
 from app.checkins.repository import CheckinConfigRepository, CheckinEventRepository
-from app.checkins.schedule import next_due_for
+from app.checkins.slots import restart_everything
+from app.contacts.models import TrustedContact
 from app.contacts.repository import ContactRepository
 from app.core.errors import IdempotencyKeyReused, InvalidState, NotFound, ValidationFailed
 from app.core.pagination import InvalidCursorError, decode_cursor, encode_cursor
 from app.incidents.closing import close_incident
-from app.incidents.models import OPEN_STATUSES, EscalationIncident
+from app.incidents.models import OPEN_STATUSES, EscalationIncident, IncidentAcknowledgement
 from app.incidents.repository import IncidentRepository
 from app.incidents.schemas import (
+    AcknowledgementOut,
     AllClearTarget,
     IncidentCurrent,
     IncidentOut,
@@ -66,7 +68,30 @@ class IncidentService(AuthServiceBase):
             owner_id=owner_id, contact_ids=ids
         )
         releases = await self._releases(owner_id, incident)
-        return build_incident(incident, actions, names, now=now, releases=releases)
+        out = build_incident(incident, actions, names, now=now, releases=releases)
+        acks = (
+            await self.session.execute(
+                select(
+                    IncidentAcknowledgement.contact_id,
+                    TrustedContact.display_name,
+                    IncidentAcknowledgement.acknowledged_at,
+                )
+                .join(TrustedContact, TrustedContact.id == IncidentAcknowledgement.contact_id)
+                .where(
+                    IncidentAcknowledgement.user_id == owner_id,
+                    IncidentAcknowledgement.incident_id == incident.id,
+                )
+                .order_by(IncidentAcknowledgement.acknowledged_at)
+            )
+        ).all()
+        return out.model_copy(
+            update={
+                "acknowledgements": [
+                    AcknowledgementOut(contact_id=c, contact_display_name=n, acknowledged_at=at)
+                    for c, n, at in acks
+                ]
+            }
+        )
 
     async def _releases(
         self, owner_id: uuid.UUID, incident: EscalationIncident
@@ -189,7 +214,7 @@ class IncidentService(AuthServiceBase):
         profile = await self.profiles.get(owner_id=current.user_id)
         timezone = profile.timezone if profile is not None else "UTC"
         at = _monotonic(now, config)
-        next_due = _restart(config, at, timezone)
+        next_due = await _restart(self.session, config, at, timezone)
 
         outcome = await close_incident(
             self.session,
@@ -234,11 +259,15 @@ def _monotonic(now: datetime, config: CheckinConfiguration) -> datetime:
     return max(now, config.last_checkin_at or now, config.baseline_at or now)
 
 
-def _restart(config: CheckinConfiguration, at: datetime, timezone: str) -> datetime:
-    """The schedule resumes from this confirmation, exactly as after an I'M OK (§9.2)."""
+async def _restart(
+    session: AsyncSession, config: CheckinConfiguration, at: datetime, timezone: str
+) -> datetime:
+    """The schedule resumes from this confirmation: every check-in event restarts (§9.2)."""
     config.status = "active"
     config.last_checkin_at = at
-    config.baseline_at = at
-    config.next_due_at = next_due_for(config, at, ZoneInfo(timezone))
     config.updated_at = at
-    return config.next_due_at
+    due = await restart_everything(session, config, timezone, at)
+    if due is None:  # pragma: no cover - an active schedule always has the primary deadline
+        msg = "an active schedule has no deadline"
+        raise RuntimeError(msg)
+    return due

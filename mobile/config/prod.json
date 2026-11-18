@@ -1,11 +1,12 @@
 {
   "APP_ENV": "prod",
-  "API_BASE_URL": "https://api.afterme.invalid",
-  "PUBLIC_BASE_URL": "https://afterme.invalid",
+  "API_BASE_URL": "https://reapprove-salon-silicon.ngrok-free.dev",
+  "PUBLIC_BASE_URL": "https://reapprove-salon-silicon.ngrok-free.dev",
   "SENTRY_DSN": "",
   "PLAY_STORE_URL": "https://play.google.com/store/apps/details?id=app.afterme",
   "FIREBASE_API_KEY": "",
   "FIREBASE_APP_ID": "",
   "FIREBASE_MESSAGING_SENDER_ID": "",
-  "FIREBASE_PROJECT_ID": ""
+  "FIREBASE_PROJECT_ID": "",
+  "GOOGLE_SERVER_CLIENT_ID": "578394594864-o42rkiogo0t4atefiti3s25n16njos4k.apps.googleusercontent.com"
 }

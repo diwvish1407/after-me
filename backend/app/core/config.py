@@ -118,6 +118,10 @@ class Settings(BaseSettings):
     session_idle_days: Annotated[int, Field(ge=1, le=365)] = 60
     session_absolute_days: Annotated[int, Field(ge=1, le=730)] = 365
 
+    # Sign in with Google: the OAuth client IDs whose ID tokens are accepted (the Android
+    # client and the web client the app requests tokens for). Empty: Google sign-in is off.
+    google_client_ids: list[str] = Field(default_factory=list)
+
     hmac_pepper: SecretStr | None = None
     hmac_pepper_previous: SecretStr | None = None
 
@@ -190,6 +194,10 @@ class Settings(BaseSettings):
     # ------------------------------------------------------------------ test support
     # A movable clock and a mail reader for integration tests (TEST_PLAN §2). Off by default,
     # refused in production, and in any environment but ``test`` it needs a token.
+    # The interactive API docs (/v1/docs). Never in prod; a dev server opened to the internet
+    # (the laptop prototype behind a tunnel) switches them off too.
+    api_docs_enabled: bool = True
+
     test_support_enabled: bool = False
     test_support_token: SecretStr | None = None
 
@@ -239,7 +247,7 @@ class Settings(BaseSettings):
 
     @property
     def docs_enabled(self) -> bool:
-        return self.app_env is not AppEnv.PROD
+        return self.app_env is not AppEnv.PROD and self.api_docs_enabled
 
     @property
     def hsts_enabled(self) -> bool:

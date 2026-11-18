@@ -9,6 +9,7 @@ incident that is already running; it is refused with ``409 incident_open`` inste
 from __future__ import annotations
 
 import uuid
+from datetime import datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,6 +18,7 @@ from app.api.deps import CurrentUser, RequestContext, has_fresh_reauth
 from app.audit import writer as audit
 from app.auth.base import AuthServiceBase
 from app.auth.guards import ensure_owner_active
+from app.checkins.models import CheckinSlot
 from app.checkins.repository import CheckinConfigRepository
 from app.contacts.repository import ContactRepository
 from app.core.errors import (
@@ -78,13 +80,38 @@ class PlanService(AuthServiceBase):
             self.settings, max_stages=limits.stages, custom_offsets=limits.custom_offsets
         )
 
-    async def _out(self, current: CurrentUser, plan: EscalationPlan) -> PlanOut:
+    async def _out(
+        self,
+        current: CurrentUser,
+        plan: EscalationPlan,
+        *,
+        slot_id: uuid.UUID | None = None,
+        inherits_default: bool = False,
+    ) -> PlanOut:
         steps = await self.plans.steps(owner_id=current.user_id, plan_id=plan.id)
         by_step = await self.plans.contacts_by_step(owner_id=current.user_id, plan_id=plan.id)
         released = await self.releases.active_by_stage(self.session, owner_id=current.user_id)
+        if plan.slot_id is not None:
+            # Releases live on the default plan's stages; an event plan's stage N shows what
+            # the default plan releases at stage N (as the engine does, opener.py).
+            default = await self.plans.get(owner_id=current.user_id)
+            by_position = (
+                {
+                    s.position: s.id
+                    for s in await self.plans.steps(owner_id=current.user_id, plan_id=default.id)
+                }
+                if default is not None
+                else {}
+            )
+            released = {
+                step.id: released.get(by_position.get(step.position), [])  # type: ignore[arg-type]
+                for step in steps
+            }
         return PlanOut(
             id=plan.id,
-            version=plan.version,
+            slot_id=slot_id,
+            inherits_default=inherits_default,
+            version=0 if inherits_default else plan.version,
             grace_minutes=plan.grace_minutes,
             stages=[
                 StageOut(
@@ -101,22 +128,63 @@ class PlanService(AuthServiceBase):
 
     # ------------------------------------------------------------------ read
 
-    async def get_plan(self, current: CurrentUser) -> PlanOut:
+    async def _require_slot(self, owner_id: uuid.UUID, slot_id: uuid.UUID) -> None:
+        slot = await self.session.get(CheckinSlot, slot_id)
+        if slot is None or slot.user_id != owner_id or slot.deleted_at is not None:
+            raise NotFound
+
+    async def get_plan(self, current: CurrentUser, slot_id: uuid.UUID | None = None) -> PlanOut:
         now = await self._now()
+        if slot_id is not None:
+            await self._require_slot(current.user_id, slot_id)
+            own = await self.plans.get(owner_id=current.user_id, slot_id=slot_id)
+            if own is not None:
+                out = await self._out(current, own, slot_id=slot_id)
+                await self.session.commit()
+                return out
         plan = await self.plans.get(owner_id=current.user_id)
         if plan is None:  # lazily created: accounts that predate Phase 5, or a lost signup row
             await self.plans.ensure(owner_id=current.user_id, now=now)
             plan = await self.plans.get(owner_id=current.user_id)
         if plan is None:  # pragma: no cover - ensure() just inserted it
             raise NotFound
-        out = await self._out(current, plan)
+        out = await self._out(current, plan, slot_id=slot_id, inherits_default=slot_id is not None)
         await self.session.commit()
         return out
 
     # ------------------------------------------------------------------ replace
 
+    async def _plan_to_edit(
+        self,
+        current: CurrentUser,
+        body: PlanPutRequest,
+        slot_id: uuid.UUID | None,
+        now: datetime,
+    ) -> tuple[EscalationPlan, int | None]:
+        """The locked plan to replace, and the version the client must have seen when it
+        differs from the plan's (``0``: a new event plan, created here from the request)."""
+        expected: int | None = None
+        if slot_id is not None:
+            await self._require_slot(current.user_id, slot_id)
+            if await self.plans.get(owner_id=current.user_id, slot_id=slot_id) is None:
+                expected = 0  # the client saw the inherited default plan (version 0)
+                await self.plans.ensure_for_slot(
+                    owner_id=current.user_id,
+                    slot_id=slot_id,
+                    grace_minutes=body.grace_minutes,
+                    now=now,
+                )
+        plan = await self.plans.get(owner_id=current.user_id, for_update=True, slot_id=slot_id)
+        if plan is None:  # pragma: no cover
+            raise NotFound
+        return plan, expected
+
     async def put_plan(
-        self, current: CurrentUser, if_match: str | None, body: PlanPutRequest
+        self,
+        current: CurrentUser,
+        if_match: str | None,
+        body: PlanPutRequest,
+        slot_id: uuid.UUID | None = None,
     ) -> PlanOut:
         if if_match is None:
             raise PreconditionRequired
@@ -127,10 +195,8 @@ class PlanService(AuthServiceBase):
             raise NotFound
         await ensure_owner_active(self.session, current.user_id)
         await self.plans.ensure(owner_id=current.user_id, now=now)
-        plan = await self.plans.get(owner_id=current.user_id, for_update=True)
-        if plan is None:  # pragma: no cover
-            raise NotFound
-        if if_match != plan_etag(plan.version):
+        plan, expected = await self._plan_to_edit(current, body, slot_id, now)
+        if if_match != plan_etag(plan.version if expected is None else expected):
             raise PreconditionFailed
         if config.status == "incident_open":
             raise IncidentOpen
@@ -148,7 +214,11 @@ class PlanService(AuthServiceBase):
             if any(contact_id not in live for contact_id in stage.notify_contact_ids):
                 raise NotFound
 
-        assigned = await self.releases.instructions_by_stage(self.session, owner_id=current.user_id)
+        assigned = (
+            await self.releases.instructions_by_stage(self.session, owner_id=current.user_id)
+            if slot_id is None
+            else {}  # instructions are released at the default plan's stages only
+        )
         drafts = [
             StageDraft(s.id, s.offset_minutes, tuple(s.notify_contact_ids)) for s in body.stages
         ]
@@ -194,19 +264,19 @@ class PlanService(AuthServiceBase):
             await self._apply(current, plan, body, existing, now)
             plan.version += 1
             plan.updated_at = now
-            await self.services.audit.record(
-                self.session,
-                self._event(
-                    audit.PLAN_UPDATED,
-                    now,
-                    current.user_id,
-                    resource_type="plan",
-                    resource_id=plan.id,
-                    stages=len(body.stages),
-                    removed=len(removed),
-                ),
+            event = self._event(
+                audit.PLAN_UPDATED,
+                now,
+                current.user_id,
+                resource_type="plan",
+                resource_id=plan.id,
+                stages=len(body.stages),
+                removed=len(removed),
             )
-        out = await self._out(current, plan)
+            if slot_id is not None:  # the event this plan belongs to
+                event.metadata["slot"] = slot_id
+            await self.services.audit.record(self.session, event)
+        out = await self._out(current, plan, slot_id=slot_id)
         await self.session.commit()
         return out
 

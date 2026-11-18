@@ -19,6 +19,9 @@ def me_out(user: User, profile: UserProfile | None) -> MeResponse:
         email=user.email,
         tier=user.tier,
         status=user.status,
+        role=user.role,
+        mfa_enabled=user.totp_enabled_at is not None,
+        google_linked=user.google_sub is not None,
         profile=(
             ProfileOut(
                 display_name=profile.display_name,
@@ -68,7 +71,7 @@ class UserService(AuthServiceBase):
             config.version += 1  # the representation (its timezone) changed
             config.updated_at = now
             if config.status == "active":
-                restart_clock(config, changes["timezone"], now)
+                await restart_clock(self.session, config, changes["timezone"], now)
                 await self.services.audit.record(
                     self.session,
                     self._event(

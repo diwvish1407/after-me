@@ -92,5 +92,6 @@
       "revoke_reason": "user_safe"
     }
   ],
-  "server_time": "2026-10-10T14:36:00Z"
+  "server_time": "2026-10-10T14:36:00Z",
+  "acknowledgements": []
 }

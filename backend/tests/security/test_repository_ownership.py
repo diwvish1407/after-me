@@ -18,6 +18,10 @@ pytestmark = pytest.mark.no_db
 EXEMPT: dict[tuple[str, str], str] = {
     ("UserRepository", "get"): "users rows are the owners themselves",
     ("UserRepository", "get_by_email"): "sign-in and signup find the account by email",
+    (
+        "UserRepository",
+        "get_by_google_sub",
+    ): "Sign in with Google finds the account by its Google id",
     ("UserRepository", "insert_if_absent"): "creates the owner row",
     ("UserRepository", "record_failed_login"): "login bookkeeping on the owner row",
     ("AuthTokenRepository", "find_link"): "lookup by SHA-256 of the presented link secret",

@@ -483,7 +483,12 @@ final _screens = <_Screen>[
       await typeInto(tester, 'Email', 'bad');
       await tapText(tester, 'Send my code');
       // Tapping scrolled the page; the guidelines measure the visible slices of targets.
-      await tester.ensureVisible(find.text("Let's set you up"));
+      // A little below the top edge: the contrast check samples 4 dp around the text, and
+      // the header above the page is the brand blue.
+      await Scrollable.ensureVisible(
+        tester.element(find.text("Let's set you up")),
+        alignment: 0.05,
+      );
       await tester.pump();
     },
   ),

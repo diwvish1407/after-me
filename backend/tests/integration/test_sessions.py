@@ -30,6 +30,9 @@ async def test_me(h: Harness) -> None:
             "locale": "en",
         },
         "created_at": "2026-10-08T09:00:00Z",
+        "role": "user",
+        "mfa_enabled": False,
+        "google_linked": False,
     }
 
 

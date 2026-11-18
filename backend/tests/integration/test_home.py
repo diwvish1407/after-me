@@ -43,6 +43,9 @@ async def test_a_new_account(h: Harness) -> None:
                 "due_local_time": "20:00",
                 "reminder_lead_minutes": 60,
             },
+            "next_due_event_id": None,
+            "next_due_label": None,
+            "events": [],
         },
         "incident": None,
         "plan_summary": {

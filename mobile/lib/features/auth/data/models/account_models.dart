@@ -40,6 +40,11 @@ abstract class MeResponse with _$MeResponse {
     required String status,
     required Profile profile,
     required DateTime createdAt,
+
+    /// `admin` for administrators (the admin screens are shown), otherwise `user`.
+    @Default('user') String role,
+    @Default(false) bool mfaEnabled,
+    @Default(false) bool googleLinked,
   }) = _MeResponse;
 
   factory MeResponse.fromJson(Map<String, dynamic> json) =>

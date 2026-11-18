@@ -70,15 +70,31 @@ async def open_incident(
     user = await EngineStore.user(session, user_id)
     if user is None or user.status != "active":
         return OpenResult.INELIGIBLE
-    plan = await EngineStore.plan(session, user_id)
+    plan = await EngineStore.plan(session, user_id, slot_id=config.due_slot_id)
     if plan is None:
         await _report_violation(session, user_id, now, audit_writer, reason="no_plan")
         return OpenResult.INCONSISTENT
 
     stages = await EngineStore.stages(session, plan.id)
-    planned = await releases.planned(
-        session, user_id=user_id, step_ids=[step.id for step, _ in stages]
+    # Instructions are released at stages of the default plan. An event's own plan releases,
+    # at its stage N, what the default plan releases at its stage N.
+    release_step: dict[uuid.UUID, uuid.UUID] = {step.id: step.id for step, _ in stages}
+    if plan.slot_id is not None:
+        default = await EngineStore.plan(session, user_id)
+        by_position = (
+            {step.position: step.id for step, _ in await EngineStore.stages(session, default.id)}
+            if default is not None
+            else {}
+        )
+        release_step = {
+            step.id: by_position[step.position]
+            for step, _ in stages
+            if step.position in by_position
+        }
+    by_release = await releases.planned(
+        session, user_id=user_id, step_ids=list(release_step.values())
     )
+    planned = {own: by_release.get(source, []) for own, source in release_step.items()}
     snapshot = build_snapshot(
         plan_id=plan.id,
         plan_version=plan.version,

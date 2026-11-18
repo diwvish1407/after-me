@@ -85,7 +85,12 @@ void main() {
       await openApp(tester, fakes: fakes, route: AppRoutes.home);
 
       expect(find.text("Let's finish your plan"), findsOneWidget);
-      expect(find.text('Hello, Diwakar'), findsOneWidget);
+      expect(
+        find.textContaining(
+          RegExp(r'^Good (morning|afternoon|evening), Diwakar$'),
+        ),
+        findsOneWidget,
+      );
       expect(find.text('Add a trusted contact'), findsOneWidget);
       expect(find.text('Check in every day by 8:00 PM.'), findsOneWidget);
       expect(find.text('Review your plan'), findsOneWidget);
@@ -1202,7 +1207,9 @@ void main() {
       await tester.pumpAndSettle();
 
       final offline = find.text('Offline — showing last known status');
-      final greeting = find.text('Hello, Diwakar');
+      final greeting = find.textContaining(
+        RegExp(r'^Good (morning|afternoon|evening), Diwakar$'),
+      );
       final gap = find.text(noStages);
       final readiness = find.text(
         "One trusted contact hasn't accepted your invitation yet.",
@@ -1317,7 +1324,7 @@ void main() {
       await openHome(tester, fakes);
       expectNoGap();
 
-      await tapText(tester, 'People');
+      await tapText(tester, 'Contacts');
       await tester.pumpAndSettle();
       await tapText(tester, 'Mom');
       await tester.pumpAndSettle();

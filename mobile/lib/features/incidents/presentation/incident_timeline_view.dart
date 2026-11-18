@@ -67,6 +67,10 @@ class IncidentTimelineView extends StatelessWidget {
             timezone: timezone,
             paused: paused,
           ),
+        if (incident.acknowledgements.isNotEmpty) ...[
+          const SizedBox(height: AppSpacing.md),
+          _Acknowledgements(incident: incident, now: now, timezone: timezone),
+        ],
       ],
     );
   }
@@ -150,6 +154,60 @@ class _EventTile extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// "Priya is checking on you" for each contact who said so from their alert.
+class _Acknowledgements extends StatelessWidget {
+  const _Acknowledgements({
+    required this.incident,
+    required this.now,
+    required this.timezone,
+  });
+
+  final Incident incident;
+  final DateTime now;
+  final String? timezone;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final t = context.tokens;
+    final text = Theme.of(context).textTheme;
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: t.okContainer,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Semantics(
+            header: true,
+            child: Text(l10n.incidentAckTitle, style: text.titleSmall),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          for (final ack in incident.acknowledgements)
+            Padding(
+              padding: const EdgeInsets.only(top: AppSpacing.xxs),
+              child: Row(
+                children: [
+                  Icon(Icons.how_to_reg_rounded, color: t.ok, size: 20),
+                  const SizedBox(width: AppSpacing.xs),
+                  Expanded(
+                    child: Text(
+                      '${l10n.incidentAckItem(ack.contactDisplayName)} · '
+                      '${formatDayTime(context, l10n, ack.acknowledgedAt, now: now, timezone: timezone)}',
+                      style: text.bodyMedium,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
       ),
     );
   }

@@ -790,7 +790,7 @@ void main() {
       expect(container.read(instructionAutosaveProvider)!.title, 'Draft title');
 
       // Another tab and back: the tab keeps its page as it was.
-      await tab(tester, 'People');
+      await tab(tester, 'Contacts');
       await tab(tester, 'Instructions');
       expect(_text(tester, 'Title'), 'Draft title');
 

@@ -7,6 +7,7 @@
     python -m cli.admin user set-tier <user-id> free|premium --reason "..."  # users.tier only
     python -m cli.admin user suspend <user-id> --reason "..."    # suspended; every session revoked
     python -m cli.admin user unsuspend <user-id> --reason "..."  # suspended back to active
+    python -m cli.admin user set-role <user-id|email> admin|user --reason "..."  # users.role
     python -m cli.admin kms check                  # wrap/unwrap 32 random bytes with the real KMS
     python -m cli.admin kms rewrap [--dry-run] [--limit N]   # wrapped keys -> the primary version
     python -m cli.admin kms rotate-user <user-id> --reason "..."   # a new DEK for one account
@@ -52,7 +53,7 @@ import uuid
 from datetime import date
 
 from app.api.container import AppServices, build_kms, build_services, build_worker_services
-from app.auth.models import USER_TIERS
+from app.auth.models import USER_ROLES, USER_TIERS
 from app.core.config import load_settings
 from app.core.logging import configure_logging
 from app.notifications.email import EmailMessage
@@ -78,7 +79,7 @@ def _day(value: str) -> date:
     raise argparse.ArgumentTypeError(msg)
 
 
-def _parser() -> argparse.ArgumentParser:
+def _parser() -> argparse.ArgumentParser:  # noqa: PLR0915 - one flat list of commands
     parser = argparse.ArgumentParser(prog="afterme-admin")
     parser.add_argument("--operator", default=None, help="who is running this (default: OS user)")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -111,6 +112,10 @@ def _parser() -> argparse.ArgumentParser:
         one = user_sub.add_parser(name, help=text)
         one.add_argument("user_id", type=uuid.UUID)
         one.add_argument("--reason", required=True, help="why (kept in the audit record)")
+    set_role = user_sub.add_parser("set-role", help="make an account an admin (or not)")
+    set_role.add_argument("account", help="the user id or the email address")
+    set_role.add_argument("role", choices=USER_ROLES)
+    set_role.add_argument("--reason", required=True, help="why (kept in the audit record)")
     kms = sub.add_parser("kms", help="key management: check, re-wrap, rotate one user's key")
     kms_sub = kms.add_subparsers(dest="kms_command", required=True)
     kms_sub.add_parser("check", help="prove the configured KMS wraps and unwraps (no database)")
@@ -253,6 +258,20 @@ async def _user_command(args: argparse.Namespace, services: AppServices, operato
     """``user set-tier | suspend | unsuspend``. Exit ``0`` when the account is as asked (also
     when it already was), ``2`` when the command was refused."""
     try:
+        if args.user_command == "set-role":
+            change = await users.set_role(
+                services,
+                operator=operator,
+                user_id=await users.user_id_for(services, args.account),
+                role=args.role,
+                reason=args.reason,
+            )
+            print(  # noqa: T201
+                f"role set: {change.before} -> {change.after}"
+                if change.changed
+                else f"role is already {change.after}; nothing changed"
+            )
+            return 0
         if args.user_command == "set-tier":
             change = await users.set_tier(
                 services,

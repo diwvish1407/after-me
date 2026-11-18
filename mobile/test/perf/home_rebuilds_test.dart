@@ -146,10 +146,10 @@ void main() {
     }
     // ignore: avoid_print
     print('PERF ticks: Home builds $homeBuilds, all builds $totalBuilds');
-    // About 115 elements are rebuilt per tick (a few milliseconds at most): the redraw
+    // About 410 elements are rebuilt per tick (a few milliseconds at most): the redraw
     // keeps "in 45 minutes" true; it is not a reason to restructure Home.
     expect(homeBuilds, 20, reason: 'one redraw per tick, no more');
-    expect(totalBuilds, lessThan(20 * 200));
+    expect(totalBuilds, lessThan(20 * 450));
     expect(counter.total, 0, reason: 'a tick changes no provider');
     expect(container.read(homeControllerProvider).hasValue, isTrue);
   });
@@ -177,6 +177,8 @@ void main() {
 // and the confirmed answer land in the same frame).
 const _openLimit = 3;
 const _refreshLimit = 2;
-const _refreshAllLimit = 150;
+// The 2026-11 redesign (status card, figures, setup list, quick actions) has about 3.5x
+// the elements of the first Home; Home itself still rebuilds once per refresh.
+const _refreshAllLimit = 450;
 const _refreshProviderUpdates = 2;
 const _checkInLimit = 2;

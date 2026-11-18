@@ -14,7 +14,10 @@
       "interval_minutes": null,
       "due_local_time": "20:00",
       "reminder_lead_minutes": 60
-    }
+    },
+    "next_due_event_id": null,
+    "next_due_label": null,
+    "events": []
   },
   "incident": {
     "id": "00000000-0000-4000-8000-000000000004",
@@ -71,7 +74,8 @@
       }
     ],
     "releases": [],
-    "server_time": "2026-10-09T14:30:41Z"
+    "server_time": "2026-10-09T14:30:41Z",
+    "acknowledgements": []
   },
   "plan_summary": {
     "stages": 1,

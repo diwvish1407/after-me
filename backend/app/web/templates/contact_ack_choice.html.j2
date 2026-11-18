@@ -1,0 +1,18 @@
+{% extends "base.html.j2" %}
+{% block title %}Let {{ person_name }} know · AfterMe{% endblock %}
+{% block content %}
+<h1>Are you checking on {{ person_name }}?</h1>
+{% if not open %}
+<p>{{ person_name }} has already confirmed they are safe, or this alert has ended. Nothing else is needed.</p>
+{% elif already %}
+<p>Thank you, {{ contact_name }}. {{ person_name }} can already see that you are checking on them.</p>
+{% else %}
+<p>Pressing the button lets {{ person_name }} see that you got the alert and are trying to reach them. It does not stop anything AfterMe does: only {{ person_name }} can do that.</p>
+<form method="post" action="/c/ack">
+<input type="hidden" name="csrf" value="{{ csrf }}">
+<input type="hidden" name="token" value="{{ token }}">
+<button type="submit">I'm checking on {{ person_name }}</button>
+</form>
+{% endif %}
+<p class="muted">If you believe someone is in danger, contact your local emergency services. AfterMe is not an emergency service.</p>
+{% endblock %}

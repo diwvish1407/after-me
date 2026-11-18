@@ -13,6 +13,7 @@ from app.api.deps import CurrentUser
 from app.auth.base import AuthServiceBase
 from app.checkins.repository import CheckinConfigRepository
 from app.checkins.schedule import format_hhmm
+from app.checkins.slots import live_slots
 from app.contacts.models import TrustedContact
 from app.contacts.repository import ContactRepository
 from app.core.errors import NotFound
@@ -20,6 +21,7 @@ from app.home.repository import ActivityRepository, service_interruption
 from app.home.schemas import (
     ActivityItem,
     HomeCheckin,
+    HomeEvent,
     HomeResponse,
     HomeSchedule,
     HomeUser,
@@ -97,7 +99,9 @@ class HomeService(AuthServiceBase):
                 mode="json"
             )
         interruption = await service_interruption(self.session)
+        slots = await live_slots(self.session, current.user_id)
         await self.session.commit()
+        due_label = next((x.label for x in slots if x.id == cfg.due_slot_id), None)
 
         issues = readiness_issues(cfg.status, contacts, stage_rows)
         return HomeResponse(
@@ -115,6 +119,19 @@ class HomeService(AuthServiceBase):
                     due_local_time=format_hhmm(cfg.due_local_time),
                     reminder_lead_minutes=cfg.reminder_lead_minutes,
                 ),
+                next_due_event_id=cfg.due_slot_id,
+                next_due_label=due_label,
+                events=[
+                    HomeEvent(
+                        id=x.id,
+                        label=x.label,
+                        due_local_time=format_hhmm(x.due_local_time),
+                        interval_days=x.interval_days,
+                        interval_minutes=x.interval_minutes,
+                        next_due_at=x.next_due_at,
+                    )
+                    for x in slots
+                ],
             ),
             incident=incident_view,
             plan_summary=PlanSummary(

@@ -5,6 +5,8 @@ from __future__ import annotations
 import uuid
 from typing import Literal
 
+from pydantic import Field
+
 from app.core.schemas import ResponseModel, UtcDateTime
 
 IncidentStatus = Literal["grace", "escalating", "escalated", "resolved", "cancelled", "voided"]
@@ -45,6 +47,14 @@ class ReleaseOut(ResponseModel):
     revoke_reason: str | None
 
 
+class AcknowledgementOut(ResponseModel):
+    """A contact confirmed from their alert that they are checking on the person."""
+
+    contact_id: uuid.UUID
+    contact_display_name: str
+    acknowledged_at: UtcDateTime
+
+
 class IncidentOut(ResponseModel):
     id: uuid.UUID
     status: IncidentStatus
@@ -58,6 +68,7 @@ class IncidentOut(ResponseModel):
     timeline: list[TimelineItem]
     releases: list[ReleaseOut]
     server_time: UtcDateTime
+    acknowledgements: list[AcknowledgementOut] = Field(default_factory=list)
 
 
 class IncidentCurrent(ResponseModel):

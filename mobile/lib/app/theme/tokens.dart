@@ -30,7 +30,7 @@ class AppColorTokens {
 
   // --- USER_FLOWS.md §1.2 base tokens -------------------------------------------
 
-  /// App background (warm off-white / deep slate).
+  /// App background (cool blue-white / deep navy).
   final Color bg;
 
   /// Cards, sheets, navigation bar.
@@ -42,7 +42,7 @@ class AppColorTokens {
   /// Secondary text.
   final Color textMuted;
 
-  /// Calm teal: primary actions, I'M OK.
+  /// AfterMe blue: primary actions, I'M OK.
   final Color primary;
 
   /// Checked in / healthy.
@@ -51,7 +51,7 @@ class AppColorTokens {
   /// Due soon / grace period.
   final Color attention;
 
-  /// Contacts notified (muted brick, not alarm red).
+  /// Contacts notified / incident (red).
   final Color escalation;
 
   /// Dividers and decorative card outlines (not for interactive boundaries).
@@ -75,39 +75,39 @@ class AppColorTokens {
   final Color escalationContainer;
 
   static const AppColorTokens light = AppColorTokens(
-    bg: Color(0xFFF7F5F2),
+    bg: Color(0xFFF3F7FF),
     surface: Color(0xFFFFFFFF),
-    text: Color(0xFF1F2A30),
-    textMuted: Color(0xFF5B6770),
-    primary: Color(0xFF1F6F6B),
+    text: Color(0xFF0F1B3D),
+    textMuted: Color(0xFF55627D),
+    primary: Color(0xFF0B57E3),
     onPrimary: Color(0xFFFFFFFF),
-    ok: Color(0xFF2E7D5B),
-    attention: Color(0xFF9A6412),
-    escalation: Color(0xFFA4472F),
-    border: Color(0xFFE3DED7),
-    outline: Color(0xFF737E85),
-    primaryContainer: Color(0xFFE4EEED),
-    okContainer: Color(0xFFE6EFEB),
-    attentionContainer: Color(0xFFF3ECE3),
-    escalationContainer: Color(0xFFF4E9E6),
+    ok: Color(0xFF1B7F3E),
+    attention: Color(0xFFA85A00),
+    escalation: Color(0xFFC62828),
+    border: Color(0xFFDCE5F5),
+    outline: Color(0xFF6B7A99),
+    primaryContainer: Color(0xFFE3EDFF),
+    okContainer: Color(0xFFE5F5EA),
+    attentionContainer: Color(0xFFFFF1DF),
+    escalationContainer: Color(0xFFFDE8E8),
   );
 
   static const AppColorTokens dark = AppColorTokens(
-    bg: Color(0xFF121718),
-    surface: Color(0xFF1B2224),
-    text: Color(0xFFE8ECEC),
-    textMuted: Color(0xFFA9B4B8),
-    primary: Color(0xFF5FB3AD),
-    onPrimary: Color(0xFF121718),
-    ok: Color(0xFF6CC39B),
-    attention: Color(0xFFE3B263),
-    escalation: Color(0xFFE58C74),
-    border: Color(0xFF2C3538),
-    outline: Color(0xFF7F8B90),
-    primaryContainer: Color(0xFF273C3D),
-    okContainer: Color(0xFF2A3F39),
-    attentionContainer: Color(0xFF3F3C2F),
-    escalationContainer: Color(0xFF3F3532),
+    bg: Color(0xFF0B1530),
+    surface: Color(0xFF0F1C40),
+    text: Color(0xFFEAF0FF),
+    textMuted: Color(0xFFA8B6D6),
+    primary: Color(0xFF6EA8FF),
+    onPrimary: Color(0xFF0B1530),
+    ok: Color(0xFF5FD38D),
+    attention: Color(0xFFFFB75E),
+    escalation: Color(0xFFFF8A80),
+    border: Color(0xFF24325C),
+    outline: Color(0xFF7C8DB5),
+    primaryContainer: Color(0xFF1E3270),
+    okContainer: Color(0xFF183D2C),
+    attentionContainer: Color(0xFF3F3018),
+    escalationContainer: Color(0xFF4A2026),
   );
 }
 

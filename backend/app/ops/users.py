@@ -32,7 +32,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.container import AppServices
 from app.audit import writer as audit
 from app.audit.writer import MAX_OPERATOR_TEXT, OPERATOR_TEXT_KEY, AuditEvent
-from app.auth.models import USER_TIERS, User
+from app.auth.models import USER_ROLES, USER_TIERS, User
 from app.auth.repository import SessionRepository
 from app.checkins.models import CheckinConfiguration
 from app.contacts.repository import ContactRepository
@@ -318,3 +318,49 @@ async def unsuspend(
             "reminders first) unless the person checks in before that",
         )
     return UserChange(user_id, "unsuspend", before, "active", changed=True, notes=notes)
+
+
+async def set_role(
+    services: AppServices, *, operator: str, user_id: uuid.UUID, role: str, reason: str
+) -> UserChange:
+    """``users.role`` and nothing else (``admin`` opens /v1/admin; the first admin is made
+    here, later ones may also be made from the admin screen)."""
+    if role not in USER_ROLES:
+        msg = f"role must be one of: {', '.join(USER_ROLES)}"
+        raise UserCommandError(msg)
+    text = clean_reason(reason)
+    operator = _safe_operator(operator)
+    async with services.db.sessionmaker() as session, session.begin():
+        now = await services.clock.now(session)
+        user = await _lock_user(session, user_id)
+        before = user.role
+        if before == role:
+            return UserChange(user_id, "set_role", before, role, changed=False)
+        user.role = role
+        user.updated_at = now
+        await services.audit.record(
+            session,
+            _event(
+                audit.ADMIN_SET_ROLE, now, user_id, operator, text, from_role=before, to_role=role
+            ),
+        )
+    _log.warning("operator.user_role_set", user_id=str(user_id), to_role=role, operator=operator)
+    return UserChange(user_id, "set_role", before, role, changed=True)
+
+
+async def user_id_for(services: AppServices, account: str) -> uuid.UUID:
+    """A user id, or the id of the account with this email address."""
+    try:
+        return uuid.UUID(account)
+    except ValueError:
+        pass
+    async with services.db.sessionmaker() as session:
+        found = (
+            await session.execute(
+                select(User.id).where(User.email_normalized == account.strip().lower())
+            )
+        ).scalar_one_or_none()
+    if found is None:
+        msg = "no account with that id or email"
+        raise UserCommandError(msg)
+    return found

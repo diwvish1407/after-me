@@ -63,7 +63,14 @@ class CheckinConfiguration(Base):
     status: Mapped[str] = mapped_column(Text, server_default=text("'inactive'"))
     baseline_at: Mapped[datetime | None]  # last check-in or schedule change
     last_checkin_at: Mapped[datetime | None]
+    # The earliest deadline of all the person's check-in events: what the engine watches.
     next_due_at: Mapped[datetime | None]
+    # The primary event's own deadline (the fields above), and which event ``next_due_at``
+    # belongs to (``None``: the primary one; otherwise a ``checkin_slots`` row).
+    primary_due_at: Mapped[datetime | None]
+    # Not a foreign key (the two tables would reference each other): every write of a slot
+    # happens under the lock on this row and re-syncs it (app/checkins/slots.py).
+    due_slot_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
     activated_at: Mapped[datetime | None]
     version: Mapped[int] = mapped_column(Integer, server_default=text("1"))
     created_at: Mapped[datetime] = mapped_column(server_default=text("now()"))
@@ -122,3 +129,43 @@ class CheckinEvent(Base):
     )
     response_snapshot: Mapped[dict[str, Any]] = mapped_column(JSONB)
     created_at: Mapped[datetime] = mapped_column(server_default=text("now()"))
+
+
+MAX_EXTRA_SLOTS = 5
+SLOT_LABEL_MAX = 60
+
+
+class CheckinSlot(Base):
+    """An additional daily (or every-N-days, or every-N-minutes) check-in event, next to the
+    primary one held in ``checkin_configurations``. Each event may have its own escalation plan
+    (``escalation_plans.slot_id``); without one the default plan applies. The per-user lock is
+    still the configuration row: every change to a slot happens under it."""
+
+    __tablename__ = "checkin_slots"
+    __table_args__ = (
+        CheckConstraint("interval_days BETWEEN 1 AND 30", name="interval_days"),
+        CheckConstraint(
+            "interval_minutes IS NULL OR interval_minutes BETWEEN 1 AND 43200",
+            name="interval_minutes",
+        ),
+        CheckConstraint(f"char_length(label) BETWEEN 1 AND {SLOT_LABEL_MAX}", name="label_length"),
+        UniqueConstraint("id", "user_id", name="uq_checkin_slots_id_user"),
+        Index("ix_checkin_slots_user", "user_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE")
+    )
+    label: Mapped[str] = mapped_column(Text)
+    interval_days: Mapped[int] = mapped_column(SmallInteger, server_default=text("1"))
+    interval_minutes: Mapped[int | None] = mapped_column(Integer)
+    due_local_time: Mapped[time] = mapped_column(Time)
+    next_due_at: Mapped[datetime | None]
+    # Removed events are kept (never hard-deleted): their plan may be referenced by past
+    # incidents, and incidents must never disappear with it.
+    deleted_at: Mapped[datetime | None]
+    created_at: Mapped[datetime] = mapped_column(server_default=text("now()"))
+    updated_at: Mapped[datetime] = mapped_column(server_default=text("now()"))

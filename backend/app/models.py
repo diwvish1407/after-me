@@ -6,11 +6,11 @@ from sqlalchemy import MetaData
 
 from app.audit.models import AuditLog
 from app.auth.models import AuthSession, AuthToken, Device, RefreshToken, User
-from app.checkins.models import CheckinConfiguration, CheckinEvent
+from app.checkins.models import CheckinConfiguration, CheckinEvent, CheckinSlot
 from app.contacts.models import ContactVerification, EmailSuppression, TrustedContact
 from app.core.db import Base
 from app.core.models import SystemFlag
-from app.incidents.models import EscalationIncident, IncidentAction
+from app.incidents.models import EscalationIncident, IncidentAcknowledgement, IncidentAction
 from app.instructions.models import Instruction, InstructionCategory, InstructionRecipient
 from app.notifications.models import EmailReceipt, Notification, NotificationLog
 from app.ops.models import IngestionProbe, ServiceHeartbeat, SystemHold
@@ -31,6 +31,7 @@ __all__ = [
     "AuthToken",
     "CheckinConfiguration",
     "CheckinEvent",
+    "CheckinSlot",
     "ContactVerification",
     "Device",
     "EmailReceipt",
@@ -39,6 +40,7 @@ __all__ = [
     "EscalationPlan",
     "EscalationStep",
     "EscalationStepContact",
+    "IncidentAcknowledgement",
     "IncidentAction",
     "IngestionProbe",
     "Instruction",
@@ -116,6 +118,14 @@ PHASE6_TABLES: tuple[str, ...] = (
 )
 # Phase 8: what a provider told us about mail that was sent straight to a contact.
 PHASE8_TABLES: tuple[str, ...] = ("email_receipts",)
+# Phase 14: extra check-in events and contact acknowledgements.
+PHASE14_TABLES: tuple[str, ...] = ("checkin_slots", "incident_acknowledgements")
 ALL_TABLES: tuple[str, ...] = (
-    PHASE1_TABLES + PHASE3_TABLES + PHASE4_TABLES + PHASE5_TABLES + PHASE6_TABLES + PHASE8_TABLES
+    PHASE1_TABLES
+    + PHASE3_TABLES
+    + PHASE4_TABLES
+    + PHASE5_TABLES
+    + PHASE6_TABLES
+    + PHASE8_TABLES
+    + PHASE14_TABLES
 )

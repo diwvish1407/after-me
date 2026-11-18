@@ -8,5 +8,6 @@
   "FIREBASE_APP_ID": "",
   "FIREBASE_MESSAGING_SENDER_ID": "",
   "FIREBASE_PROJECT_ID": "",
-  "SCREENSHOT_MODE": "false"
+  "SCREENSHOT_MODE": "false",
+  "GOOGLE_SERVER_CLIENT_ID": "578394594864-o42rkiogo0t4atefiti3s25n16njos4k.apps.googleusercontent.com"
 }

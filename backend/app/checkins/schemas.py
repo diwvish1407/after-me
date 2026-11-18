@@ -66,6 +66,10 @@ class ScheduleOut(ResponseModel):
     next_due_at: UtcDateTime | None
     last_checkin_at: UtcDateTime | None
     version: int
+    # Several check-in events: the primary event's own deadline, and which event the
+    # earliest deadline (``next_due_at``) belongs to (``None``: the primary event).
+    primary_due_at: UtcDateTime | None = None
+    due_event_id: uuid.UUID | None = None
 
 
 class SchedulePutRequest(RequestModel):
@@ -104,3 +108,30 @@ class CheckinItem(ResponseModel):
 class CheckinPage(ResponseModel):
     items: list[CheckinItem]
     next_cursor: str | None
+
+
+EventLabel = Annotated[str, Field(min_length=1, max_length=60)]
+
+
+class EventIn(RequestModel):
+    """An extra check-in event (API: ``/v1/checkin/events``)."""
+
+    label: EventLabel
+    interval_days: Annotated[int, Field(strict=True, ge=1, le=30)] = 1
+    interval_minutes: IntervalMinutes | None = None
+    due_local_time: Annotated[str, BeforeValidator(_hhmm)]
+
+
+class EventOut(ResponseModel):
+    id: uuid.UUID
+    label: str
+    interval_days: int
+    interval_minutes: int | None
+    due_local_time: str
+    next_due_at: UtcDateTime | None
+    has_own_plan: bool
+
+
+class EventList(ResponseModel):
+    items: list[EventOut]
+    max_events: int

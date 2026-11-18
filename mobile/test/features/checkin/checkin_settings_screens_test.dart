@@ -2,6 +2,7 @@ import 'package:afterme/app/router.dart';
 import 'package:afterme/core/api/failures/app_failure.dart';
 import 'package:afterme/features/checkin/application/schedule_controller.dart';
 import 'package:afterme/features/checkin/data/models/checkin_models.dart';
+import 'package:afterme/features/checkin/presentation/checkin_history_screen.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
@@ -675,7 +676,14 @@ void main() {
         fakes: fakes,
         route: AppRoutes.settingsCheckInHistory,
       );
-      expect(find.text('Check-in'), findsOneWidget);
+      // (the navigation bar has a "Check-in" destination too)
+      expect(
+        find.descendant(
+          of: find.byType(CheckInHistoryScreen),
+          matching: find.text('Check-in'),
+        ),
+        findsOneWidget,
+      );
       expect(find.text('From another place'), findsOneWidget);
       expect(find.text('Confirmed safe'), findsOneWidget);
     });

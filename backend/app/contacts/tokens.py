@@ -111,3 +111,34 @@ def suppression_hash(pepper: Pepper, email_normalized: str) -> bytes:
 def suppression_hash_candidates(pepper: Pepper, email_normalized: str) -> list[bytes]:
     """Hashes to look up: also the previous pepper's, so a rotation never un-suppresses."""
     return pepper.candidates("email_suppression", email_normalized)
+
+
+# --- acknowledgement links (a contact says "I'm checking on them" from an alert) ---------------
+
+ACK_PREFIX: Final = "ak_"
+_ACK_CONTEXT: Final = "incident_ack"
+_UUID = r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+_ACK_RE: Final = re.compile(
+    rf"^ak_(?P<incident>{_UUID})\.(?P<contact>{_UUID})\.(?P<mac>[A-Za-z0-9_-]{{43}})$"
+)
+
+
+def new_ack_token(pepper: Pepper, incident_id: uuid.UUID, contact_id: uuid.UUID) -> str:
+    """``ak_<incident>.<contact>.<mac>``: stateless, bound to one incident and one contact."""
+    mac = pepper.hmac(_ACK_CONTEXT, str(incident_id), str(contact_id))
+    return f"{ACK_PREFIX}{incident_id}.{contact_id}.{_b64(mac)}"
+
+
+def ack_link(public_base_url: str, token: str) -> str:
+    return f"{public_base_url}/c/ack#{token}"
+
+
+def parse_ack_token(pepper: Pepper, token: str) -> tuple[uuid.UUID, uuid.UUID] | None:
+    """``(incident_id, contact_id)`` for a token this server issued, else ``None``."""
+    match = _ACK_RE.fullmatch(token)
+    if match is None:
+        return None
+    mac = _unb64(match["mac"])
+    if mac is None or not pepper.verify(mac, _ACK_CONTEXT, match["incident"], match["contact"]):
+        return None
+    return uuid.UUID(match["incident"]), uuid.UUID(match["contact"])

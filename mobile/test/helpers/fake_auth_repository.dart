@@ -188,6 +188,7 @@ class FakeAuthRepository implements AuthRepository {
   Future<TokenResponse> login({
     required String email,
     required String password,
+    String? otp,
   }) async {
     await _enter('login', {'email': email});
     if (email.trim().toLowerCase() != this.email.toLowerCase() ||
@@ -312,4 +313,11 @@ class FakeAuthRepository implements AuthRepository {
     me_ = _buildMe();
     return me_;
   }
+
+  @override
+  Future<TokenResponse> googleLogin({
+    required String idToken,
+    required String timezone,
+    String? otp,
+  }) async => throw const UnknownFailure();
 }

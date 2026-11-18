@@ -168,7 +168,7 @@ void main() {
       await tapText(tester, 'Home');
       await tester.pumpAndSettle();
       expect(find.byType(HomeScreen), findsOneWidget);
-      await tapText(tester, 'People');
+      await tapText(tester, 'Contacts');
       await tester.pumpAndSettle();
       expect(find.byType(ContactDetailScreen), findsOneWidget);
     });

@@ -19,5 +19,7 @@
       2880,
       4320
     ]
-  }
+  },
+  "slot_id": null,
+  "inherits_default": false
 }

@@ -10,5 +10,8 @@
     "timezone": "Asia/Kolkata",
     "locale": "en"
   },
+  "role": "user",
+  "mfa_enabled": false,
+  "google_linked": false,
   "created_at": "2026-10-08T09:00:00Z"
 }

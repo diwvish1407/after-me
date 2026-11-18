@@ -125,6 +125,7 @@ class CurrentUser:
     tier: str
     status: str
     reauthenticated_at: datetime | None
+    role: str = "user"
 
 
 def _bearer_token(request: Request) -> str:
@@ -185,6 +186,7 @@ async def get_current_user(
         tier=user.tier,
         status=user.status,
         reauthenticated_at=auth_session.reauthenticated_at,
+        role=user.role,
     )
 
 

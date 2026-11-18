@@ -1,6 +1,6 @@
-import 'package:afterme/core/alarm/deadline_alarm.dart';
 import 'package:afterme/app/repository_providers.dart';
 import 'package:afterme/app/theme/app_theme.dart';
+import 'package:afterme/core/alarm/deadline_alarm.dart';
 import 'package:afterme/core/api/client_info.dart';
 import 'package:afterme/core/auth/auth_controller.dart';
 import 'package:afterme/core/auth/session_store.dart';
@@ -37,6 +37,7 @@ import 'fake_auth_repository.dart';
 import 'fake_checkin_server.dart';
 import 'fake_incident_server.dart';
 import 'fake_instructions_server.dart';
+import 'fake_phase14.dart';
 import 'fake_plan_server.dart';
 import 'fake_platform.dart';
 import 'fake_privacy.dart';
@@ -232,6 +233,11 @@ class TestFakes {
       FakeLocalNotificationGateway();
   final FakeDevicesRepository devices = FakeDevicesRepository();
 
+  /// Phase 14: the extra check-in times, two-step verification and the admin API.
+  final FakeEventsRepository checkInEvents = FakeEventsRepository();
+  final FakeMfaRepository mfa = FakeMfaRepository();
+  final FakeAdminRepository admin = FakeAdminRepository();
+
   /// Retry timers of the push registration (fired by hand), and where a tapped
   /// notification went.
   final FakeTimers pushTimers = FakeTimers();
@@ -285,6 +291,9 @@ class TestFakes {
       homeRepositoryProvider.overrideWithValue(server),
     ],
     if (!realPlanRepository) planRepositoryProvider.overrideWithValue(plan),
+    eventsRepositoryProvider.overrideWithValue(checkInEvents),
+    mfaRepositoryProvider.overrideWithValue(mfa),
+    adminRepositoryProvider.overrideWithValue(admin),
     if (!realInstructionsRepository)
       instructionsRepositoryProvider.overrideWithValue(instructions),
     if (!realIncidentsRepository)

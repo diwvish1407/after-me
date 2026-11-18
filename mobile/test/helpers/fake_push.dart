@@ -1,7 +1,6 @@
-import 'package:afterme/core/alarm/deadline_alarm.dart';
-
 import 'dart:async';
 
+import 'package:afterme/core/alarm/deadline_alarm.dart';
 import 'package:afterme/core/device/device_info_source.dart';
 import 'package:afterme/core/push/local_notification_gateway.dart';
 import 'package:afterme/core/push/push_gateway.dart';

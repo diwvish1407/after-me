@@ -18,6 +18,12 @@ abstract final class AppRadius {
   static const double md = 12;
   static const double lg = 16;
   static const double xl = 28;
+
+  /// Text fields (2026-11 redesign).
+  static const double field = 14;
+
+  /// Cards (2026-11 redesign).
+  static const double card = 20;
 }
 
 /// Accessibility sizes (USER_FLOWS.md §1.3–1.4).

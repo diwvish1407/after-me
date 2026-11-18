@@ -241,6 +241,19 @@ abstract class IncidentRelease with _$IncidentRelease {
 
 /// An incident (API_SPEC.md §9): `GET /incidents/{id}`, `incident` of
 /// `GET /incidents/current` and of `GET /home`.
+/// A contact confirmed from their alert that they are checking on the person.
+@freezed
+abstract class IncidentAcknowledgement with _$IncidentAcknowledgement {
+  const factory IncidentAcknowledgement({
+    required String contactId,
+    required String contactDisplayName,
+    required DateTime acknowledgedAt,
+  }) = _IncidentAcknowledgement;
+
+  factory IncidentAcknowledgement.fromJson(Map<String, dynamic> json) =>
+      _$IncidentAcknowledgementFromJson(json);
+}
+
 @freezed
 abstract class Incident with _$Incident {
   const Incident._();
@@ -265,6 +278,10 @@ abstract class Incident with _$Incident {
     @Default(<TimelineItem>[]) List<TimelineItem> timeline,
     @Default(<IncidentRelease>[]) List<IncidentRelease> releases,
     required DateTime serverTime,
+
+    /// Contacts who said, from their alert, that they are checking on the person.
+    @Default(<IncidentAcknowledgement>[])
+    List<IncidentAcknowledgement> acknowledgements,
   }) = _Incident;
 
   factory Incident.fromJson(Map<String, dynamic> json) =>

@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import Any
 
 from sqlalchemy import (
+    BigInteger,
     CheckConstraint,
     ForeignKey,
     Index,
@@ -21,6 +22,7 @@ from app.core.db import Base, in_list
 
 USER_STATUSES = ("active", "pending_deletion", "suspended")
 USER_TIERS = ("free", "premium")
+USER_ROLES = ("user", "admin")
 SESSION_KINDS = ("app", "web")
 REVOKE_REASONS = (
     "logout",
@@ -52,6 +54,13 @@ class User(Base):
         CheckConstraint("char_length(email) <= 254", name="email_length"),
         CheckConstraint(in_list("status", USER_STATUSES), name="status"),
         CheckConstraint(in_list("tier", USER_TIERS), name="tier"),
+        CheckConstraint(in_list("role", USER_ROLES), name="role"),
+        Index(
+            "uq_users_google_sub",
+            "google_sub",
+            unique=True,
+            postgresql_where=text("google_sub IS NOT NULL"),
+        ),
         CheckConstraint(
             "status <> 'pending_deletion' OR deletion_requested_at IS NOT NULL",
             name="pending_has_request",
@@ -66,6 +75,18 @@ class User(Base):
     password_changed_at: Mapped[datetime] = _now_default()
     status: Mapped[str] = mapped_column(Text, server_default=text("'active'"))
     tier: Mapped[str] = mapped_column(Text, server_default=text("'free'"))
+    # ``admin``: may use /v1/admin (every user's status, never instruction content).
+    role: Mapped[str] = mapped_column(Text, server_default=text("'user'"))
+    # Two-factor authentication (TOTP, RFC 6238). The secret is wrapped by the KMS like a data
+    # key; ``totp_enabled_at`` is set once a first code was confirmed. ``totp_last_step`` stops
+    # a code from being used twice; recovery codes are stored as HMAC digests (one use each).
+    totp_secret_wrapped: Mapped[bytes | None] = mapped_column(BYTEA)
+    totp_key_id: Mapped[str | None] = mapped_column(Text)
+    totp_enabled_at: Mapped[datetime | None]
+    totp_last_step: Mapped[int | None] = mapped_column(BigInteger)
+    totp_recovery: Mapped[list[str] | None] = mapped_column(JSONB)
+    # The Google account ("sub" claim) linked by Sign in with Google.
+    google_sub: Mapped[str | None] = mapped_column(Text)
     deletion_requested_at: Mapped[datetime | None]
     failed_login_count: Mapped[int] = mapped_column(SmallInteger, server_default=text("0"))
     locked_until: Mapped[datetime | None]

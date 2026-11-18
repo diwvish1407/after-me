@@ -9,6 +9,9 @@ from __future__ import annotations
 from fastapi import APIRouter, FastAPI
 
 from app.activity.router import router as activity_router
+from app.admin.router import router as admin_router
+from app.auth.google_router import router as google_router
+from app.auth.mfa_router import router as mfa_router
 from app.auth.router import router as auth_router
 from app.checkins.router import router as checkins_router
 from app.contacts.router import router as contacts_router
@@ -21,6 +24,8 @@ from app.users.router import router as users_router
 
 V1_ROUTERS: tuple[APIRouter, ...] = (
     auth_router,
+    google_router,
+    mfa_router,
     users_router,
     contacts_router,
     checkins_router,
@@ -30,6 +35,7 @@ V1_ROUTERS: tuple[APIRouter, ...] = (
     instructions_router,
     activity_router,
     devices_router,
+    admin_router,
 )
 
 

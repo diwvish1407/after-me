@@ -7,5 +7,7 @@
   "status": "inactive",
   "next_due_at": null,
   "last_checkin_at": null,
-  "version": 2
+  "version": 2,
+  "primary_due_at": null,
+  "due_event_id": null
 }

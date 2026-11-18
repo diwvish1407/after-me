@@ -7,6 +7,7 @@ import '../../../core/api/client_info.dart';
 import '../../../core/api/failures/app_failure.dart';
 import '../../../core/api/failures/failure_mapper.dart';
 import '../../../core/api/models/token_response.dart';
+import '../../../core/auth/auth_controller.dart';
 import '../../../core/auth/session_store.dart';
 import '../../../core/device/device_info_source.dart';
 import 'models/account_models.dart';
@@ -70,10 +71,20 @@ abstract interface class AuthRepository {
   /// `POST /auth/register/resend`. Returns the seconds before the next resend.
   Future<int> registerResend({required String email});
 
-  /// `POST /auth/login`. `403 email_unverified` arrives as a [ForbiddenFailure].
+  /// `POST /auth/login`. `403 email_unverified` arrives as a [ForbiddenFailure];
+  /// `401 mfa_required` / `invalid_otp` as an [UnauthorizedFailure] (send [otp]).
   Future<TokenResponse> login({
     required String email,
     required String password,
+    String? otp,
+  });
+
+  /// `POST /auth/google` with a Google ID token (and [otp] when the account has
+  /// two-step verification). `503 google_unavailable` when the server has no client ID.
+  Future<TokenResponse> googleLogin({
+    required String idToken,
+    required String timezone,
+    String? otp,
   });
 
   /// `POST /auth/logout`.
@@ -228,6 +239,7 @@ class DioAuthRepository implements AuthRepository {
   Future<TokenResponse> login({
     required String email,
     required String password,
+    String? otp,
   }) => _run(() async {
     final response = await dio.post<Object?>(
       '/v1/auth/login',
@@ -235,6 +247,26 @@ class DioAuthRepository implements AuthRepository {
         'email': email,
         'password': password,
         'device': await _device(includeId: true),
+        if (otp != null && otp.isNotEmpty) 'otp': otp,
+      },
+      options: _public,
+    );
+    return TokenResponse.fromJson(_object(response));
+  });
+
+  @override
+  Future<TokenResponse> googleLogin({
+    required String idToken,
+    required String timezone,
+    String? otp,
+  }) => _run(() async {
+    final response = await dio.post<Object?>(
+      '/v1/auth/google',
+      data: <String, Object?>{
+        'id_token': idToken,
+        'timezone': timezone,
+        'device': await _device(includeId: true),
+        if (otp != null && otp.isNotEmpty) 'otp': otp,
       },
       options: _public,
     );
@@ -334,3 +366,12 @@ final authRepositoryProvider = Provider<AuthRepository>(
     sessionStore: ref.watch(sessionStoreProvider),
   ),
 );
+
+/// The signed-in account as `GET /v1/me` reports it (its role, two-step verification).
+/// Read again after a sign-in; empty while signed out.
+final accountProvider = FutureProvider<MeResponse?>((ref) async {
+  if (ref.watch(authControllerProvider) != AuthStatus.signedIn) {
+    return null;
+  }
+  return ref.watch(authRepositoryProvider).me();
+});

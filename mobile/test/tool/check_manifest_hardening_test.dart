@@ -62,6 +62,10 @@ String _merged({
             <intent-filter><action android:name="androidx.profileinstaller.action.INSTALL_PROFILE"/></intent-filter>
             <intent-filter><action android:name="androidx.profileinstaller.action.SAVE_PROFILE"/></intent-filter>
         </receiver>''' : ''}
+        <service android:name="com.google.android.gms.auth.api.signin.RevocationBoundService"
+            android:exported="true"
+            android:permission="com.google.android.gms.auth.api.signin.permission.REVOCATION_NOTIFICATION"
+            android:visibleToInstantApps="true" />
         $extra
     </application>
 </manifest>''';
@@ -81,6 +85,7 @@ void main() {
             'com.google.android.c2dm.permission.SEND',
         'receiver androidx.profileinstaller.ProfileInstallReceiver':
             'android.permission.DUMP',
+        'service com.google.android.gms.auth.api.signin.RevocationBoundService': 'com.google.android.gms.auth.api.signin.permission.REVOCATION_NOTIFICATION',
       });
       expect(exportedComponentsOf(_merged()), exportedComponents);
     });

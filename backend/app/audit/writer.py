@@ -116,6 +116,14 @@ ACCOUNT_PURGED: Final = "account.purged"
 WEB_LOGIN_SUCCEEDED: Final = "auth.web_login_succeeded"
 CONTACT_BOUNCED: Final = "contact.bounced"
 
+# --- Phase 14 actions: two-step verification, Google sign-in, acknowledgements, admin --------
+MFA_ENABLED: Final = "auth.mfa_enabled"
+MFA_DISABLED: Final = "auth.mfa_disabled"
+GOOGLE_LINKED: Final = "auth.google_linked"
+CONTACT_ACKNOWLEDGED: Final = "incident.contact_acknowledged"
+ADMIN_VIEWED_USER: Final = "admin.viewed_user"
+ADMIN_SET_ROLE: Final = "admin.set_role"
+
 PHASE1_ACTIONS: Final = frozenset(
     {
         SIGNUP_STARTED,
@@ -213,8 +221,19 @@ PHASE7_ACTIONS: Final = frozenset(
         CONTACT_BOUNCED,
     }
 )
+PHASE14_ACTIONS: Final = frozenset(
+    {
+        MFA_ENABLED,
+        MFA_DISABLED,
+        GOOGLE_LINKED,
+        CONTACT_ACKNOWLEDGED,
+        ADMIN_VIEWED_USER,
+        ADMIN_SET_ROLE,
+    }
+)
 KNOWN_ACTIONS: Final = (
-    PHASE1_ACTIONS
+    PHASE14_ACTIONS
+    | PHASE1_ACTIONS
     | PHASE2_ACTIONS
     | PHASE3_ACTIONS
     | PHASE4_ACTIONS
@@ -227,6 +246,10 @@ KNOWN_ACTIONS: Final = (
 # new device, which the caller states explicitly.
 USER_VISIBLE_ACTIONS: Final = frozenset(
     {
+        MFA_ENABLED,
+        MFA_DISABLED,
+        GOOGLE_LINKED,
+        CONTACT_ACKNOWLEDGED,
         LOGOUT_ALL,
         REFRESH_REUSE_DETECTED,
         PASSWORD_CHANGED,
@@ -271,6 +294,7 @@ OPERATOR_TEXT_ACTIONS: Final = frozenset(
         OPERATOR_UNSUSPEND_USER,
         OPERATOR_KMS_ROTATE_USER,
         OPERATOR_REVIEWER_ACCOUNT,
+        ADMIN_SET_ROLE,
     }
 )
 OPERATOR_TEXT_KEY: Final = "operator_note"

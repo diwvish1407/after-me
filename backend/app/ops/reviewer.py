@@ -411,7 +411,7 @@ async def _seed(
     cfg.reminder_lead_minutes = REMINDER_LEAD_MINUTES
     cfg.status = "active"
     cfg.activated_at = now
-    restart_clock(cfg, TIMEZONE, now)
+    await restart_clock(session, cfg, TIMEZONE, now)
     cfg.version += 1
     cfg.updated_at = now
     await session.flush()

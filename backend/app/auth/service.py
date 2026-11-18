@@ -26,6 +26,7 @@ from app.auth.codes import (
     generate_code,
     hash_code,
 )
+from app.auth.mfa_service import MfaService
 from app.auth.models import AuthSession, Device, RefreshToken, User
 from app.auth.repository import (
     AuthTokenRepository,
@@ -55,6 +56,8 @@ from app.core.errors import (
     EmailUnverified,
     InvalidCode,
     InvalidCredentials,
+    InvalidOtp,
+    MfaRequired,
     NotFound,
     SessionRevoked,
 )
@@ -84,6 +87,7 @@ class IssuedSession:
     user_id: uuid.UUID
     email: str
     tier: str
+    role: str = "user"
 
 
 @dataclass(frozen=True)
@@ -175,6 +179,7 @@ class AuthService(AuthServiceBase):
             user_id=user.id,
             email=user.email,
             tier=user.tier,
+            role=user.role,
         )
 
     # ------------------------------------------------------------------ signup
@@ -416,6 +421,8 @@ class AuthService(AuthServiceBase):
             await self._commit_and_send(outbox)
             raise EmailUnverified
 
+        await self._second_factor(user, body.otp, now, budget)
+
         if self.services.passwords.needs_rehash(user.password_hash):
             user.password_hash = await self.services.passwords.hash(body.password)
         user.last_login_at = now
@@ -450,18 +457,39 @@ class AuthService(AuthServiceBase):
         await self._commit_and_send(outbox)
         return issued
 
+    async def _second_factor(self, user: User, otp: str | None, now: datetime, budget: str) -> None:
+        """Two-step verification, after a correct password (the user row is locked). A missing
+        code asks for one; a wrong one counts as a failed sign-in, recorded after this
+        transaction is rolled back so the bookkeeping connection never waits on our lock."""
+        if user.totp_enabled_at is None:
+            return
+        if otp is None:
+            await self.session.rollback()
+            raise MfaRequired
+        mfa = MfaService(session=self.session, services=self.services, ctx=self.ctx)
+        if not await mfa.check(user, otp, now):
+            user_id, email = user.id, user.email  # read before the rollback expires them
+            await self.session.rollback()
+            await self._record_failed_login_for(user_id, email, now, budget)
+            raise InvalidOtp
+
     async def _record_failed_login(self, user: User, now: datetime, budget: str) -> None:
+        await self._record_failed_login_for(user.id, user.email, now, budget)
+
+    async def _record_failed_login_for(
+        self, user_id: uuid.UUID, email: str, now: datetime, budget: str
+    ) -> None:
         """Count the failure and maybe lock, on a separate connection (survives the 401)."""
         await self.services.limiter.hit([(LOGIN_PER_ACCOUNT_NETWORK, budget)], now=now)
         async with self.services.db.independent_session() as bookkeeping:
             outcome = await UserRepository(bookkeeping).record_failed_login(
-                user.id, now=now, threshold=LOCK_THRESHOLD, lock_until=now + LOCK_DURATION
+                user_id, now=now, threshold=LOCK_THRESHOLD, lock_until=now + LOCK_DURATION
             )
             writer = self.services.audit
             await writer.record(
                 bookkeeping,
                 self._event(
-                    audit.LOGIN_FAILED, now, user.id, unauthenticated=True, reason="bad_password"
+                    audit.LOGIN_FAILED, now, user_id, unauthenticated=True, reason="bad_password"
                 ),
             )
             if outcome.locked_now:
@@ -470,7 +498,7 @@ class AuthService(AuthServiceBase):
                     self._event(
                         audit.LOCKED,
                         now,
-                        user.id,
+                        user_id,
                         unauthenticated=True,
                         reason="too_many_failures",
                         lock_minutes=int(LOCK_DURATION.total_seconds() // 60),
@@ -481,7 +509,7 @@ class AuthService(AuthServiceBase):
                 [
                     self.services.mailer.render(
                         EmailTemplate.ACCOUNT_LOCKED,
-                        to=user.email,
+                        to=email,
                         lock_minutes=int(LOCK_DURATION.total_seconds() // 60),
                     )
                 ]

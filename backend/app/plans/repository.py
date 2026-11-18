@@ -18,15 +18,49 @@ class PlanRepository:
         self._session = session
 
     async def ensure(self, *, owner_id: uuid.UUID, now: datetime) -> None:
-        """Create the user's (empty) plan if it does not exist yet. Idempotent."""
+        """Create the user's (empty) default plan if it does not exist yet. Idempotent."""
         await self._session.execute(
             insert(EscalationPlan)
             .values(user_id=owner_id, created_at=now, updated_at=now)
-            .on_conflict_do_nothing(index_elements=[EscalationPlan.user_id])
+            .on_conflict_do_nothing(
+                index_elements=[EscalationPlan.user_id],
+                index_where=EscalationPlan.slot_id.is_(None),
+            )
         )
 
-    async def get(self, *, owner_id: uuid.UUID, for_update: bool = False) -> EscalationPlan | None:
-        stmt = select(EscalationPlan).where(EscalationPlan.user_id == owner_id)
+    async def ensure_for_slot(
+        self, *, owner_id: uuid.UUID, slot_id: uuid.UUID, grace_minutes: int, now: datetime
+    ) -> None:
+        """Create a check-in event's own plan if it has none. Idempotent."""
+        await self._session.execute(
+            insert(EscalationPlan)
+            .values(
+                user_id=owner_id,
+                slot_id=slot_id,
+                grace_minutes=grace_minutes,
+                created_at=now,
+                updated_at=now,
+            )
+            .on_conflict_do_nothing(
+                index_elements=[EscalationPlan.slot_id],
+                index_where=EscalationPlan.slot_id.is_not(None),
+            )
+        )
+
+    async def get(
+        self,
+        *,
+        owner_id: uuid.UUID,
+        for_update: bool = False,
+        slot_id: uuid.UUID | None = None,
+    ) -> EscalationPlan | None:
+        """The default plan, or (with ``slot_id``) that check-in event's own plan."""
+        stmt = select(EscalationPlan).where(
+            EscalationPlan.user_id == owner_id,
+            EscalationPlan.slot_id.is_(None)
+            if slot_id is None
+            else EscalationPlan.slot_id == slot_id,
+        )
         if for_update:
             stmt = stmt.with_for_update().execution_options(populate_existing=True)
         return (await self._session.execute(stmt)).scalar_one_or_none()
@@ -57,7 +91,8 @@ class PlanRepository:
         stmt = (
             select(func.count())
             .select_from(EscalationStep)
-            .where(EscalationStep.user_id == owner_id)
+            .join(EscalationPlan, EscalationPlan.id == EscalationStep.plan_id)
+            .where(EscalationStep.user_id == owner_id, EscalationPlan.slot_id.is_(None))
         )
         return int((await self._session.execute(stmt)).scalar_one())
 
@@ -117,12 +152,13 @@ class PlanRepository:
     async def stage_contacts(
         self, *, owner_id: uuid.UUID
     ) -> list[tuple[uuid.UUID, uuid.UUID | None]]:
-        """``(step_id, contact_id | None)`` for every stage; ``None`` marks a stage with no
-        contact at all. Ordered by position."""
+        """``(step_id, contact_id | None)`` for every stage of the default plan; ``None`` marks
+        a stage with no contact at all. Ordered by position."""
         stmt = (
             select(EscalationStep.id, EscalationStepContact.contact_id)
             .outerjoin(EscalationStepContact, EscalationStepContact.step_id == EscalationStep.id)
-            .where(EscalationStep.user_id == owner_id)
+            .join(EscalationPlan, EscalationPlan.id == EscalationStep.plan_id)
+            .where(EscalationStep.user_id == owner_id, EscalationPlan.slot_id.is_(None))
             .order_by(EscalationStep.position)
         )
         return [(row[0], row[1]) for row in (await self._session.execute(stmt)).all()]
@@ -134,7 +170,8 @@ class PlanRepository:
         stmt = (
             select(EscalationStepContact.contact_id, EscalationStep.position)
             .join(EscalationStep, EscalationStep.id == EscalationStepContact.step_id)
-            .where(EscalationStepContact.user_id == owner_id)
+            .join(EscalationPlan, EscalationPlan.id == EscalationStep.plan_id)
+            .where(EscalationStepContact.user_id == owner_id, EscalationPlan.slot_id.is_(None))
             .order_by(EscalationStep.position)
         )
         grouped: dict[uuid.UUID, list[int]] = {}

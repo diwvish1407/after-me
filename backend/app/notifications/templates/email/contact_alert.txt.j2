@@ -4,7 +4,9 @@ Hi {{ contact_name }},
 
 This doesn't necessarily mean anything is wrong. Phones get lost and batteries run out. You may want to try reaching {{ user_name }} or someone close to them.
 
-If you believe someone is in danger, contact your local emergency services.
+{% if ack_link is defined and ack_link %}Trying to reach {{ user_name }}? Let them know you're on it: {{ ack_link }}
+
+{% endif %}If you believe someone is in danger, contact your local emergency services.
 
 We'll email you when {{ user_name }} checks in.
 

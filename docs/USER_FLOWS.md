@@ -20,30 +20,30 @@ Calm, trustworthy, premium, human, serious without being grim. Think of a though
 | Plain words, short sentences | Jargon ("payload", "trigger", "dead man's switch") |
 | Subtle motion (state changes, check-in confirmation) | Decorative or looping animation; respect "reduce motion" |
 
-### 1.2 Starting tokens (validated for WCAG AA contrast in Phase 2)
+### 1.2 Colour tokens (blue redesign from `docs/AfterMe_UI_Screens_01-29.pdf`, WCAG AA checked)
 
 | Token | Light | Dark | Use |
 |---|---|---|---|
-| `bg` | `#F7F5F2` | `#121718` | App background (warm off-white) |
-| `surface` | `#FFFFFF` | `#1B2224` | Cards, sheets |
-| `text` | `#1F2A30` | `#E8ECEC` | Primary text |
-| `textMuted` | `#5B6770` | `#A9B4B8` | Secondary text |
-| `primary` | `#1F6F6B` | `#5FB3AD` | Calm teal: primary actions, I'M OK |
-| `ok` | `#2E7D5B` | `#6CC39B` | Checked in / healthy |
-| `attention` | `#9A6412` | `#E3B263` | Due soon / grace period |
-| `escalation` | `#A4472F` | `#E58C74` | Contacts notified (muted brick, not alarm red) |
-| `border` | `#E3DED7` | `#2C3538` | Dividers |
+| `bg` | `#F3F7FF` | `#0B1530` | App background (cool blue-white) |
+| `surface` | `#FFFFFF` | `#0F1C40` | Cards, sheets |
+| `text` | `#0F1B3D` | `#EAF0FF` | Primary text |
+| `textMuted` | `#55627D` | `#A8B6D6` | Secondary text |
+| `primary` | `#0B57E3` | `#6EA8FF` | AfterMe blue: primary actions, I'M OK |
+| `ok` | `#1B7F3E` | `#5FD38D` | Checked in / healthy |
+| `attention` | `#A85A00` | `#FFB75E` | Due soon / grace period |
+| `escalation` | `#C62828` | `#FF8A80` | Contacts notified / incident (red, per the 2026-11 UI screens) |
+| `border` | `#DCE5F5` | `#24325C` | Dividers |
 
 **Derived tokens (added in Phase 1).** The app builds its Material 3 colour scheme explicitly from the tokens above plus these:
 
 | Token | Light | Dark | Use |
 |---|---|---|---|
-| `onPrimary` | `#FFFFFF` | `#121718` | Text/icons on filled `primary`, `ok`, `attention`, `escalation` |
-| `outline` | `#737E85` | `#7F8B90` | Boundaries of interactive components (text fields, outlined buttons), ≥ 3:1 |
-| `primaryContainer` | `#E4EEED` | `#273C3D` | Info banners, selected navigation indicator |
-| `okContainer` | `#E6EFEB` | `#2A3F39` | Tinted status background |
-| `attentionContainer` | `#F3ECE3` | `#3F3C2F` | Tinted status background |
-| `escalationContainer` | `#F4E9E6` | `#3F3532` | Tinted status background |
+| `onPrimary` | `#FFFFFF` | `#0B1530` | Text/icons on filled `primary`, `ok`, `attention`, `escalation` |
+| `outline` | `#6B7A99` | `#7C8DB5` | Boundaries of interactive components (text fields, outlined buttons), ≥ 3:1 |
+| `primaryContainer` | `#E3EDFF` | `#1E3270` | Info banners, selected navigation indicator |
+| `okContainer` | `#E5F5EA` | `#183D2C` | Tinted status background |
+| `attentionContainer` | `#FFF1DF` | `#3F3018` | Tinted status background |
+| `escalationContainer` | `#FDE8E8` | `#4A2026` | Tinted status background |
 
 **Contrast (verified in Phase 1).** `mobile/test/app/theme/contrast_test.dart` checks WCAG 2.x ratios in both themes; every base token above passed unchanged. `text` and `textMuted` on `bg`/`surface`, `primary`/`onPrimary`, and `ok`/`attention`/`escalation` **as text** on `bg`/`surface` are all ≥ 4.5:1 (lowest: light `ok`/`attention` on `bg`, 4.59:1). On the tinted containers the status colours are used only for icons and accents (≥ 3:1); text on containers always uses `text`.
 

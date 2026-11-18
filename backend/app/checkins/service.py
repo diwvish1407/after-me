@@ -15,7 +15,6 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 from typing import Any, Final
-from zoneinfo import ZoneInfo
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -26,7 +25,7 @@ from app.auth.base import AuthServiceBase
 from app.auth.guards import ensure_owner_active
 from app.checkins.models import CheckinConfiguration
 from app.checkins.repository import CheckinConfigRepository, CheckinEventRepository
-from app.checkins.schedule import format_hhmm, next_due_for, parse_hhmm
+from app.checkins.schedule import format_hhmm, parse_hhmm
 from app.checkins.schemas import (
     CheckinItem,
     CheckinPage,
@@ -35,6 +34,13 @@ from app.checkins.schemas import (
     CheckinResponse,
     ScheduleOut,
     SchedulePutRequest,
+)
+from app.checkins.slots import (
+    clear_all,
+    live_slots,
+    restart_all,
+    restart_primary,
+    satisfy,
 )
 from app.contacts.repository import ContactRepository
 from app.core.errors import (
@@ -73,6 +79,8 @@ def schedule_out(cfg: CheckinConfiguration, timezone: str) -> ScheduleOut:
         next_due_at=cfg.next_due_at,
         last_checkin_at=cfg.last_checkin_at,
         version=cfg.version,
+        primary_due_at=cfg.primary_due_at,
+        due_event_id=cfg.due_slot_id,
     )
 
 
@@ -81,17 +89,18 @@ def _interval_span(interval_days: int, interval_minutes: int | None) -> int:
     return interval_minutes if interval_minutes is not None else interval_days * 1440
 
 
-def restart_clock(cfg: CheckinConfiguration, timezone: str, now: datetime) -> None:
-    """Make ``now`` the baseline and compute the deadline from it (ESCALATION_ENGINE §3.4).
-    Only for an active schedule; the caller holds the per-user lock.
+async def restart_clock(
+    session: AsyncSession, cfg: CheckinConfiguration, timezone: str, now: datetime
+) -> None:
+    """Make ``now`` the baseline and restart every check-in event from it (ESCALATION_ENGINE
+    §3.4). Only for an active schedule; the caller holds the per-user lock.
 
     ``now`` is the start of this request's transaction, which can be *earlier* than a
     check-in that committed while this request waited for the lock. The baseline never goes
     behind the last check-in or the previous baseline, so ``baseline_at >= received_at`` of
     every recorded check-in (the engine treats the opposite as an inconsistency, §6.3)."""
     at = max(now, cfg.baseline_at or now, cfg.last_checkin_at or now)
-    cfg.baseline_at = at
-    cfg.next_due_at = next_due_for(cfg, at, ZoneInfo(timezone))
+    restart_all(cfg, await live_slots(session, cfg.user_id), timezone, at)
 
 
 class CheckinService(AuthServiceBase):
@@ -170,7 +179,8 @@ class CheckinService(AuthServiceBase):
             cfg.due_local_time = due
             cfg.reminder_lead_minutes = body.reminder_lead_minutes
             if cfg.status == "active":
-                restart_clock(cfg, timezone, now)
+                at = max(now, cfg.baseline_at or now, cfg.last_checkin_at or now)
+                restart_primary(cfg, await live_slots(self.session, cfg.user_id), timezone, at)
             cfg.version += 1
             cfg.updated_at = now
             await self.services.audit.record(
@@ -204,7 +214,7 @@ class CheckinService(AuthServiceBase):
 
         cfg.status = "active"
         cfg.activated_at = now
-        restart_clock(cfg, timezone, now)
+        await restart_clock(self.session, cfg, timezone, now)
         cfg.version += 1
         cfg.updated_at = now
         await self.services.audit.record(
@@ -245,8 +255,7 @@ class CheckinService(AuthServiceBase):
         timezone = await self._timezone(current.user_id)
         if cfg.status == "active":
             cfg.status = "inactive"
-            cfg.baseline_at = None
-            cfg.next_due_at = None
+            clear_all(cfg, await live_slots(self.session, cfg.user_id))
             cfg.activated_at = None
             cfg.version += 1
             cfg.updated_at = now
@@ -317,9 +326,7 @@ class CheckinService(AuthServiceBase):
         next_due_at: datetime | None = None
         if cfg.status != "inactive" or incident is not None:
             cfg.status = "active"
-            cfg.baseline_at = at
-            cfg.next_due_at = next_due_for(cfg, at, ZoneInfo(timezone))
-            next_due_at = cfg.next_due_at
+            next_due_at = satisfy(cfg, await live_slots(self.session, cfg.user_id), timezone, at)
         cfg.updated_at = now
 
         event_id = uuid.uuid4()

@@ -4,9 +4,11 @@ import '../core/api/api_client.dart';
 import '../core/auth/auth_controller.dart';
 import '../features/activity/data/activity_repository.dart';
 import '../features/activity/data/dio_activity_repository.dart';
+import '../features/admin/data/admin_repository.dart';
 import '../features/checkin/data/checkin_repository.dart';
 import '../features/checkin/data/dio_checkin_repository.dart';
 import '../features/checkin/data/dio_schedule_repository.dart';
+import '../features/checkin/data/events_repository.dart';
 import '../features/checkin/data/schedule_repository.dart';
 import '../features/contacts/data/contacts_repository.dart';
 import '../features/contacts/data/dio_contacts_repository.dart';
@@ -22,6 +24,7 @@ import '../features/plan/data/dio_plan_repository.dart';
 import '../features/plan/data/plan_repository.dart';
 import '../features/privacy/data/dio_privacy_repository.dart';
 import '../features/privacy/data/privacy_repository.dart';
+import '../features/settings/data/mfa_repository.dart';
 
 /// The one place where repositories are chosen: the real contacts API (Phase 3), the
 /// real check-in, schedule and Home APIs (Phase 4), the real plan API (Phase 5), the
@@ -98,3 +101,28 @@ final devicesRepositoryProvider = Provider<DevicesRepository>((ref) {
   _signedIn(ref);
   return DioDevicesRepository(dio: ref.watch(apiClientProvider));
 });
+
+/// The extra check-in events (several check-ins a day, each with its own plan).
+final eventsRepositoryProvider = Provider<EventsRepository>((ref) {
+  _signedIn(ref);
+  return DioEventsRepository(dio: ref.watch(apiClientProvider));
+});
+
+/// Two-step verification with an authenticator app.
+final mfaRepositoryProvider = Provider<MfaRepository>((ref) {
+  _signedIn(ref);
+  return DioMfaRepository(dio: ref.watch(apiClientProvider));
+});
+
+/// The administrator API (admin accounts only).
+final adminRepositoryProvider = Provider<AdminRepository>((ref) {
+  _signedIn(ref);
+  return DioAdminRepository(dio: ref.watch(apiClientProvider));
+});
+
+/// An event's own plan, through the same plan editor as the main plan.
+PlanRepository eventPlanRepository(Ref ref, String eventId) =>
+    DioPlanRepository(
+      dio: ref.watch(apiClientProvider),
+      path: '/v1/checkin/events/$eventId/plan',
+    );

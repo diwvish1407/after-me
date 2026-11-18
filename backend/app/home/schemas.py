@@ -5,6 +5,8 @@ from __future__ import annotations
 import uuid
 from typing import Any, Literal
 
+from pydantic import Field
+
 from app.checkins.schemas import CheckinStatus
 from app.core.schemas import ResponseModel, UtcDateTime
 
@@ -33,11 +35,27 @@ class HomeSchedule(ResponseModel):
     reminder_lead_minutes: int
 
 
+class HomeEvent(ResponseModel):
+    """An extra check-in event (the primary one is ``schedule``)."""
+
+    id: uuid.UUID
+    label: str
+    due_local_time: str
+    interval_days: int
+    interval_minutes: int | None
+    next_due_at: UtcDateTime | None
+
+
 class HomeCheckin(ResponseModel):
     status: CheckinStatus
     next_due_at: UtcDateTime | None
     last_checkin_at: UtcDateTime | None
     schedule: HomeSchedule
+    # The event whose deadline ``next_due_at`` is (``None``: the primary schedule), and the
+    # extra events with their own deadlines.
+    next_due_event_id: uuid.UUID | None = None
+    next_due_label: str | None = None
+    events: list[HomeEvent] = Field(default_factory=list)
 
 
 class PlanSummary(ResponseModel):

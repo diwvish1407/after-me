@@ -46,6 +46,9 @@ class MeResponse(ResponseModel):
     tier: str
     status: str
     profile: ProfileOut | None
+    role: str = "user"
+    mfa_enabled: bool = False
+    google_linked: bool = False
     created_at: UtcDateTime
 
 

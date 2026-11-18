@@ -5,11 +5,13 @@ import 'package:afterme/core/api/failures/app_failure.dart';
 import 'package:afterme/core/api/models/api_problem.dart';
 import 'package:afterme/core/design_system/design_system.dart';
 import 'package:afterme/features/contacts/data/contacts_repository.dart';
+import 'package:afterme/features/home/presentation/home_screen.dart';
 import 'package:afterme/features/incidents/presentation/incident_history_screen.dart';
 import 'package:afterme/features/instructions/data/models/instruction_models.dart';
 import 'package:afterme/features/plan/data/plan_repository.dart';
 import 'package:afterme/features/plan/presentation/plan_editor_screen.dart';
 import 'package:afterme/features/plan/presentation/plan_screen.dart';
+import 'package:afterme/features/shell/presentation/app_shell.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
@@ -1459,62 +1461,78 @@ void main() {
       expect(find.text('Stage 1: after 3 hours'), findsOneWidget);
     });
 
-    testWidgets('tapping the Plan tab again asks the same question as Back and '
-        'does not throw the draft away', (tester) async {
-      // The tab bar used to reset the branch to its first page without asking: the
-      // editor's PopScope was bypassed and its autoDispose draft was gone.
-      final fakes = _world();
-      await openApp(tester, fakes: fakes, route: AppRoutes.plan);
-      await tapText(tester, 'Edit your plan');
-      await tester.pumpAndSettle();
-      await tester.tap(find.widgetWithText(ChoiceChip, '6 hours').first);
-      await tester.pumpAndSettle();
-      final tab = find.descendant(
-        of: find.byType(NavigationBar),
-        matching: find.text('Plan'),
-      );
+    testWidgets(
+      'choosing "My plan" again from the menu asks the same question as '
+      'Back and does not throw the draft away',
+      (tester) async {
+        // The plan has no tab of its own (2026-11 redesign); the menu switches to its
+        // branch. Choosing it while it is shown must not reset the branch past the editor's
+        // PopScope (its autoDispose draft would be gone).
+        final fakes = _world();
+        await openApp(tester, fakes: fakes, route: AppRoutes.plan);
+        await tapText(tester, 'Edit your plan');
+        await tester.pumpAndSettle();
+        await tester.tap(find.widgetWithText(ChoiceChip, '6 hours').first);
+        await tester.pumpAndSettle();
 
-      await tester.tap(tab);
-      await tester.pumpAndSettle();
-      expect(find.text('Leave without saving?'), findsOneWidget);
-      await tester.tap(find.text('Keep editing'));
-      await tester.pumpAndSettle();
-      expect(find.byType(PlanEditorScreen), findsOneWidget);
-      expect(
-        find.text('Stage 1: after 6 hours'),
-        findsOneWidget,
-        reason: 'the edit is still there',
-      );
+        Future<void> myPlanFromTheMenu() async {
+          openAppDrawer();
+          await tester.pumpAndSettle();
+          await tester.tap(find.text('My plan'));
+          await tester.pumpAndSettle();
+        }
 
-      await tester.tap(tab);
-      await tester.pumpAndSettle();
-      expect(find.text('Leave without saving?'), findsOneWidget);
-      await tester.tap(find.text('Leave'));
-      await tester.pumpAndSettle();
-      expect(find.byType(PlanEditorScreen), findsNothing);
-      expect(find.byType(PlanScreen), findsOneWidget);
-      expect(fakes.plan.saved, isEmpty);
-    });
+        await myPlanFromTheMenu();
+        expect(find.text('Leave without saving?'), findsOneWidget);
+        await tester.tap(find.text('Keep editing'));
+        await tester.pumpAndSettle();
+        expect(find.byType(PlanEditorScreen), findsOneWidget);
+        expect(
+          find.text('Stage 1: after 6 hours'),
+          findsOneWidget,
+          reason: 'the edit is still there',
+        );
 
-    testWidgets('with nothing to lose the tab still goes back to the first '
-        'page', (tester) async {
-      final fakes = _world();
-      await openApp(tester, fakes: fakes, route: AppRoutes.plan);
-      await tapText(tester, 'Edit your plan');
-      await tester.pumpAndSettle();
-      expect(find.byType(PlanEditorScreen), findsOneWidget);
+        await myPlanFromTheMenu();
+        expect(find.text('Leave without saving?'), findsOneWidget);
+        await tester.tap(find.text('Leave'));
+        await tester.pumpAndSettle();
+        expect(find.byType(PlanEditorScreen), findsNothing);
+        expect(find.byType(PlanScreen), findsOneWidget);
+        expect(fakes.plan.saved, isEmpty);
+      },
+    );
 
-      await tester.tap(
-        find.descendant(
-          of: find.byType(NavigationBar),
-          matching: find.text('Plan'),
-        ),
-      );
-      await tester.pumpAndSettle();
-      expect(find.text('Leave without saving?'), findsNothing);
-      expect(find.byType(PlanEditorScreen), findsNothing);
-      expect(find.byType(PlanScreen), findsOneWidget);
-    });
+    testWidgets(
+      'going Home keeps the draft: the menu brings the editor back as it '
+      'was',
+      (tester) async {
+        final fakes = _world();
+        await openApp(tester, fakes: fakes, route: AppRoutes.plan);
+        await tapText(tester, 'Edit your plan');
+        await tester.pumpAndSettle();
+        await tester.tap(find.widgetWithText(ChoiceChip, '6 hours').first);
+        await tester.pumpAndSettle();
+
+        await tester.tap(
+          find.descendant(
+            of: find.byType(NavigationBar),
+            matching: find.text('Home'),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(find.text('Leave without saving?'), findsNothing);
+        expect(find.byType(HomeScreen), findsOneWidget);
+
+        openAppDrawer();
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('My plan'));
+        await tester.pumpAndSettle();
+        expect(find.byType(PlanEditorScreen), findsOneWidget);
+        expect(find.text('Stage 1: after 6 hours'), findsOneWidget);
+        expect(fakes.plan.saved, isEmpty);
+      },
+    );
   });
 }
 

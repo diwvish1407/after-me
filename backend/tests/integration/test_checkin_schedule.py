@@ -74,6 +74,8 @@ async def test_a_new_account_has_the_default_inactive_schedule(h: Harness) -> No
         "next_due_at": None,
         "last_checkin_at": None,
         "version": 1,
+        "primary_due_at": None,
+        "due_event_id": None,
     }
     assert response.headers["etag"] == '"sched-1"'
     assert response.headers["cache-control"] == "no-store"
@@ -128,6 +130,8 @@ async def test_put_saves_the_schedule_of_an_inactive_account(h: Harness, owner_d
         "next_due_at": None,
         "last_checkin_at": None,
         "version": 2,
+        "primary_due_at": None,
+        "due_event_id": None,
     }
     assert response.headers["etag"] == '"sched-2"'
     assert (await _get(h, tokens)).json() == response.json()

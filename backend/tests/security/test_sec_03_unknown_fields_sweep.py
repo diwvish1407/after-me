@@ -15,6 +15,7 @@ table, email or counter-visible state may have changed.
 from __future__ import annotations
 
 import copy
+import re
 import uuid
 from dataclasses import dataclass
 from typing import Any
@@ -50,6 +51,7 @@ EXTRAS: dict[str, Any] = {
 LEGITIMATE: dict[tuple[str, str], set[str]] = {
     ("POST", "/v1/instructions"): {"status"},
     ("PATCH", "/v1/instructions/{instruction_id}"): {"status"},
+    ("POST", "/v1/admin/users/{user_id}/tier"): {"tier"},
 }
 
 EMAIL = "sweeper@example.com"
@@ -71,6 +73,7 @@ PUBLIC_BODIES: dict[tuple[str, str], dict[str, Any]] = {
     },
     ("POST", "/v1/auth/register/resend"): {"email": "new.person@example.com"},
     ("POST", "/v1/auth/login"): {"email": EMAIL, "password": PASSWORD, "device": dict(DEVICE)},
+    ("POST", "/v1/auth/google"): {"id_token": "x" * 40, "device": dict(DEVICE)},
     ("POST", "/v1/auth/refresh"): {"refresh_token": "rt_" + "A" * 43},
     ("POST", "/v1/auth/password/forgot"): {"email": "new.person@example.com"},
 }
@@ -89,6 +92,7 @@ NESTED: dict[tuple[str, str], list[tuple[str, dict[str, Any]]]] = {
         ("device", PUBLIC_BODIES[("POST", "/v1/auth/register/verify")])
     ],
     ("POST", "/v1/auth/login"): [("device", PUBLIC_BODIES[("POST", "/v1/auth/login")])],
+    ("POST", "/v1/auth/google"): [("device", PUBLIC_BODIES[("POST", "/v1/auth/google")])],
     ("PUT", "/v1/plan"): [
         (
             "stages[0]",
@@ -192,11 +196,15 @@ async def test_unknown_fields_are_refused_and_change_nothing(
     path = case.path
     if not isinstance(policy, Public):
         headers.update(bearer(tokens))
+    if path.startswith("/v1/admin/"):
+        # the admin check comes first; an admin's request reaches the validator
+        owner_db.execute("UPDATE users SET role = 'admin' WHERE id = %s", (tokens["user"]["id"],))
     if isinstance(policy, Owned):
         resource = await FACTORIES[policy.factory](h, tokens)
         path = path.replace("{" + policy.param + "}", resource)
     if isinstance(policy, (Reauth, FreshReauth)):
         assert (await h.reauth(tokens)).status_code == 204  # so the 422 is not hidden by a 403
+    path = re.sub(r"\{[a-z_]+\}", str(uuid.uuid4()), path)  # any id left: a well-formed one
 
     legitimate = LEGITIMATE.get(key, set()) if not case.where else set()
     extras = {k: v for k, v in EXTRAS.items() if k not in legitimate}

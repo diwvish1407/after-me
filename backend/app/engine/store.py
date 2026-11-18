@@ -112,9 +112,27 @@ class EngineStore:
         return (await session.execute(select(User).where(User.id == user_id))).scalar_one_or_none()
 
     @staticmethod
-    async def plan(session: AsyncSession, user_id: uuid.UUID) -> EscalationPlan | None:
+    async def plan(
+        session: AsyncSession, user_id: uuid.UUID, *, slot_id: uuid.UUID | None = None
+    ) -> EscalationPlan | None:
+        """The plan for the event whose deadline was missed: the event's own plan when it has
+        one, otherwise the person's default plan."""
+        if slot_id is not None:
+            own = (
+                await session.execute(
+                    select(EscalationPlan).where(
+                        EscalationPlan.user_id == user_id, EscalationPlan.slot_id == slot_id
+                    )
+                )
+            ).scalar_one_or_none()
+            if own is not None:
+                return own
         return (
-            await session.execute(select(EscalationPlan).where(EscalationPlan.user_id == user_id))
+            await session.execute(
+                select(EscalationPlan).where(
+                    EscalationPlan.user_id == user_id, EscalationPlan.slot_id.is_(None)
+                )
+            )
         ).scalar_one_or_none()
 
     @staticmethod

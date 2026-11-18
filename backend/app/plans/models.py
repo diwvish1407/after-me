@@ -33,7 +33,26 @@ class EscalationPlan(Base):
     __tablename__ = "escalation_plans"
     __table_args__ = (
         CheckConstraint("grace_minutes BETWEEN 1 AND 4320", name="grace_minutes"),
-        UniqueConstraint("user_id", name="uq_escalation_plans_user"),
+        # One default plan per person (slot_id NULL) and at most one plan per check-in event.
+        Index(
+            "uq_escalation_plans_user_default",
+            "user_id",
+            unique=True,
+            postgresql_where=text("slot_id IS NULL"),
+        ),
+        # Same-owner link to the event (a NULL slot_id is the default plan).
+        ForeignKeyConstraint(
+            ["slot_id", "user_id"],
+            ["checkin_slots.id", "checkin_slots.user_id"],
+            name="fk_escalation_plans_slot",
+            ondelete="CASCADE",
+        ),
+        Index(
+            "uq_escalation_plans_slot",
+            "slot_id",
+            unique=True,
+            postgresql_where=text("slot_id IS NOT NULL"),
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -42,6 +61,8 @@ class EscalationPlan(Base):
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE")
     )
+    # NULL: the default plan. Otherwise the plan of one check-in event (same owner).
+    slot_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
     grace_minutes: Mapped[int] = mapped_column(
         Integer, server_default=text(str(GRACE_DEFAULT_MINUTES))
     )

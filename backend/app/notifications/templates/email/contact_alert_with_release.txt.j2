@@ -10,7 +10,9 @@ View it securely: {{ release_link }}
 
 For your security we'll send a one-time code to this email address. The link works until {{ expires_on }}.
 
-If you believe someone is in danger, contact your local emergency services.
+{% if ack_link is defined and ack_link %}Trying to reach {{ user_name }}? Let them know you're on it: {{ ack_link }}
+
+{% endif %}If you believe someone is in danger, contact your local emergency services.
 
 We'll email you when {{ user_name }} checks in.
 

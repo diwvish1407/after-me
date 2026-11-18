@@ -13,6 +13,7 @@ from typing import Any
 from sqlalchemy import (
     CheckConstraint,
     ForeignKey,
+    ForeignKeyConstraint,
     Index,
     Integer,
     SmallInteger,
@@ -124,3 +125,33 @@ class IncidentAction(Base):
     dedupe_key: Mapped[str] = mapped_column(Text, unique=True)
     created_at: Mapped[datetime] = mapped_column(server_default=text("now()"))
     updated_at: Mapped[datetime] = mapped_column(server_default=text("now()"))
+
+
+class IncidentAcknowledgement(Base):
+    """A trusted contact confirmed, from the link in their alert, that they are checking on the
+    person. Informational only: it never changes what the engine does (the person's own I'M
+    SAFE is the only thing that stands contacts down)."""
+
+    __tablename__ = "incident_acknowledgements"
+    __table_args__ = (
+        UniqueConstraint("incident_id", "contact_id", name="uq_incident_ack_contact"),
+        ForeignKeyConstraint(
+            ["contact_id", "user_id"],
+            ["trusted_contacts.id", "trusted_contacts.user_id"],
+            ondelete="CASCADE",
+            name="fk_incident_ack_contact",
+        ),
+        Index("ix_incident_ack_incident", "incident_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    incident_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("escalation_incidents.id", ondelete="CASCADE")
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE")
+    )
+    contact_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
+    acknowledged_at: Mapped[datetime]

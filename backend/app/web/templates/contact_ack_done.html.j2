@@ -1,0 +1,10 @@
+{% extends "base.html.j2" %}
+{% block title %}Thank you · AfterMe{% endblock %}
+{% block content %}
+<h1>Thank you, {{ contact_name }}</h1>
+{% if open %}
+<p>{{ person_name }} can now see that you are checking on them. Please keep trying to reach them. If you believe someone is in danger, contact your local emergency services.</p>
+{% else %}
+<p>This alert has already ended, so nothing was recorded. {{ person_name }} has confirmed they are safe or the alert was withdrawn.</p>
+{% endif %}
+{% endblock %}

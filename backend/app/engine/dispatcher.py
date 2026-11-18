@@ -30,7 +30,13 @@ from app.audit.writer import AuditEvent
 from app.auth.models import Device
 from app.checkins.models import CheckinConfiguration
 from app.contacts.models import TrustedContact
-from app.contacts.tokens import new_optout_token, optout_link, suppression_hash_candidates
+from app.contacts.tokens import (
+    ack_link,
+    new_ack_token,
+    new_optout_token,
+    optout_link,
+    suppression_hash_candidates,
+)
 from app.core.logging import get_logger
 from app.engine.gate import ContactFacts, contact_problem
 from app.engine.store import EngineStore
@@ -719,6 +725,14 @@ class Dispatcher:
             contact_context["due_at"] = day_time(missed, timezone)
             contact_context["last_checkin"] = (
                 day_time(datetime.fromisoformat(last), timezone) if last else ""
+            )
+            contact_context["ack_link"] = (
+                ack_link(
+                    self.settings.public_base_url,
+                    new_ack_token(self.services.pepper, row.incident_id, contact.id),
+                )
+                if row.incident_id is not None
+                else ""
             )
         elif row.template_key != outbox.CONTACT_RELEASE:
             at = row.params.get("checked_in_at")

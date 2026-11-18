@@ -93,6 +93,7 @@
         "revoke_reason": null
       }
     ],
-    "server_time": "2026-10-10T14:36:00Z"
+    "server_time": "2026-10-10T14:36:00Z",
+    "acknowledgements": []
   }
 }

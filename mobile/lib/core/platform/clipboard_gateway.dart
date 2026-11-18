@@ -3,10 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 /// Puts text on the system clipboard.
 ///
-/// The app has exactly one use: the "Copy diagnostic text" button on the About screen,
-/// which the person taps on purpose to paste four facts about this build (version, build
-/// number, environment, API host) into a bug report. Nothing else is ever copied, and the
-/// app never *reads* the clipboard.
+/// Only ever on a deliberate tap: the "Copy diagnostic text" button on the About screen
+/// (four facts about this build for a bug report), and, while setting up two-step
+/// verification, the authenticator key and the recovery codes (shown once, so the person
+/// can paste them into a password manager). The app never *reads* the clipboard.
 abstract interface class ClipboardGateway {
   /// Returns false when the system refused (the caller then says so).
   Future<bool> copy(String text);

@@ -118,6 +118,8 @@ def test_single_linear_history() -> None:
     assert len(heads) == 1
     revisions = list(script.walk_revisions())
     assert [r.revision for r in revisions] == [
+        "0015",
+        "0014",
         "0013",
         "0012",
         "0011",
@@ -249,7 +251,10 @@ def test_migration_grants_runtime_roles(scratch_url: str, engine: Engine) -> Non
     assert grants.pop("incident_actions") == {"SELECT"}
     assert grants.pop("notifications") == {"SELECT", "INSERT"}
     assert grants.pop("notification_logs") == {"SELECT", "INSERT"}  # webhooks (Phase 8)
-    assert grants.pop("system_holds") == {"SELECT"}
+    # Phase 14: an admin may start (INSERT) and end (UPDATE of ended_at, column-limited) a Hold.
+    assert grants.pop("system_holds") == {"SELECT", "INSERT"}
+    assert grants.pop("checkin_slots") == {"SELECT", "INSERT", "UPDATE", "DELETE"}
+    assert grants.pop("incident_acknowledgements") == {"SELECT", "INSERT"}
     assert grants.pop("ingestion_probes") == {"INSERT"}
     # Phase 6: the API serves the owner and the portal; it cannot create releases, portal
     # access or link tokens (the engine's), and cannot modify a wrapped key. Phase 7: it can

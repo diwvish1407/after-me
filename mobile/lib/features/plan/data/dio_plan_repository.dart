@@ -11,11 +11,13 @@ import 'plan_repository.dart';
 /// `Idempotency-Key`; the retry policy only repeats GET and keyed requests): a failed
 /// save is shown to the person, who decides.
 class DioPlanRepository implements PlanRepository {
-  DioPlanRepository({required this.dio});
+  DioPlanRepository({required this.dio, this.path = '/v1/plan'});
 
   final Dio dio;
 
-  static const _plan = '/v1/plan';
+  /// `/v1/plan` (the main plan) or `/v1/checkin/events/<id>/plan` (an event's own plan,
+  /// which starts as a copy of the main plan the first time it is saved).
+  final String path;
 
   Future<T> _run<T>(Future<T> Function() call) async {
     try {
@@ -40,7 +42,7 @@ class DioPlanRepository implements PlanRepository {
 
   @override
   Future<Plan> get() => _run(() async {
-    return _snapshot(await dio.get<Object?>(_plan));
+    return _snapshot(await dio.get<Object?>(path));
   });
 
   @override
@@ -48,7 +50,7 @@ class DioPlanRepository implements PlanRepository {
       _run(() async {
         return _snapshot(
           await dio.put<Object?>(
-            _plan,
+            path,
             data: draft.toJson(),
             options: Options(headers: <String, Object>{'If-Match': ifMatch}),
           ),

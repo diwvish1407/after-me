@@ -12,7 +12,6 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
-from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,7 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.audit import writer as audit
 from app.audit.writer import AuditEvent, AuditWriter
 from app.checkins.repository import CheckinConfigRepository
-from app.checkins.schedule import next_due_for
+from app.checkins.slots import restart_everything
 from app.contacts.repository import ContactRepository
 from app.incidents.models import EscalationIncident
 from app.incidents.repository import IncidentRepository
@@ -267,8 +266,7 @@ async def _resume_schedule(
     ).scalar_one_or_none() or "UTC"
     at = max(now, config.baseline_at or now, config.last_checkin_at or now)
     config.status = "active"
-    config.baseline_at = at
-    config.next_due_at = next_due_for(config, at, ZoneInfo(timezone))
+    await restart_everything(session, config, timezone, at)
     config.updated_at = now
     if incident.contacts_messaged_at is not None:
         return  # the all-clear confirmation covers it, and "nobody was contacted" would be false

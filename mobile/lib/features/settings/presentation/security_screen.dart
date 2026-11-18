@@ -68,6 +68,14 @@ class SecurityScreen extends ConsumerWidget {
           subtitle: lock.enabled ? l10n.appLockOn : l10n.appLockOff,
           onTap: () => context.push(AppRoutes.settingsAppLock),
         ),
+        SettingsTile(
+          icon: Icons.verified_user_outlined,
+          title: l10n.twoStepTitle,
+          subtitle: me == null
+              ? null
+              : (me.mfaEnabled ? l10n.twoStepStatusOn : l10n.twoStepNotSetUp),
+          onTap: () => context.push(AppRoutes.settingsTwoStep),
+        ),
         Gap.lg,
         AppButton.secondary(
           label: l10n.logoutAll,

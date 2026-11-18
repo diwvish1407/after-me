@@ -62,7 +62,12 @@ void main() {
     await tester.pumpAndSettle();
     // A returning account has no onboarding to resume.
     expect(find.byType(HomeScreen), findsOneWidget);
-    expect(find.text('Hello, Diwakar'), findsOneWidget);
+    expect(
+      find.textContaining(
+        RegExp(r'^Good (morning|afternoon|evening), Diwakar$'),
+      ),
+      findsOneWidget,
+    );
     expect(find.text("Let's finish your plan"), findsOneWidget);
 
     // The checklist opens the same steps.

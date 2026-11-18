@@ -113,7 +113,7 @@ void main() {
       true,
     ], reason: 'a page on top of another never cleared it for the one below');
 
-    await _tab(tester, 'People');
+    await _tab(tester, 'Contacts');
     expect(fakes.secureScreen.secure, isFalse);
   });
 
@@ -151,7 +151,7 @@ void main() {
     await tester.pageBack();
     await tester.pumpAndSettle();
     expect(fakes.secureScreen.secure, isTrue);
-    await _tab(tester, 'Plan');
+    await _tab(tester, 'Check-in');
     expect(fakes.secureScreen.secure, isFalse);
   });
 

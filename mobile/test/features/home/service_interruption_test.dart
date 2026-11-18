@@ -176,7 +176,15 @@ void main() {
       final banner = tester.getTopLeft(_banner).dy;
       expect(
         banner,
-        lessThan(tester.getTopLeft(find.text('Hello, Diwakar')).dy),
+        lessThan(
+          tester
+              .getTopLeft(
+                find.textContaining(
+                  RegExp(r'^Good (morning|afternoon|evening), Diwakar$'),
+                ),
+              )
+              .dy,
+        ),
       );
       expect(
         banner,

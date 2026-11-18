@@ -79,7 +79,7 @@ def _token_response(issued: IssuedSession) -> TokenResponse:
         refresh_token=issued.refresh_token,
         session_id=issued.session_id,
         device_id=issued.device_id,
-        user=TokenUser(id=issued.user_id, email=issued.email, tier=issued.tier),
+        user=TokenUser(id=issued.user_id, email=issued.email, tier=issued.tier, role=issued.role),
     )
 
 

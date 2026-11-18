@@ -362,8 +362,11 @@ def test_the_api_role_cannot_rewrite_or_resend_a_notification(api: Conn) -> None
 
 def test_the_api_role_cannot_touch_hold_or_heartbeats(api: Conn) -> None:
     assert _table_privilege(api, "system_holds", "SELECT")
-    for kind in ("INSERT", "UPDATE", "DELETE"):
-        assert not _table_privilege(api, "system_holds", kind), kind
+    # Phase 14: an admin may start an operator Hold and end it from the app (INSERT, and
+    # UPDATE of ``ended_at`` only); a Hold is never deleted or rewritten.
+    assert _table_privilege(api, "system_holds", "INSERT")
+    assert not _table_privilege(api, "system_holds", "UPDATE")  # not the whole row
+    assert not _table_privilege(api, "system_holds", "DELETE")
     for kind in ("SELECT", "INSERT", "UPDATE", "DELETE"):
         assert not _table_privilege(api, "service_heartbeats", kind), kind
     assert _table_privilege(api, "ingestion_probes", "INSERT")

@@ -245,6 +245,24 @@ async def test_a_form_with_more_than_ten_fields_is_not_read(h: Harness, owner_db
 # --- pages: limit 1..100 --------------------------------------------------------------------------
 
 LIST_ROUTES = ["/v1/incidents", "/v1/activity", "/v1/checkins"]
+# Admin-only lists (tested with an admin account below).
+ADMIN_LIST_ROUTES = ["/v1/admin/users"]
+
+
+@pytest.mark.parametrize("path", ADMIN_LIST_ROUTES)
+async def test_an_admin_page_is_at_most_a_hundred_rows(
+    h: Harness, owner_db: Any, path: str
+) -> None:
+    tokens = await h.signup(EMAIL)
+    owner_db.execute("UPDATE users SET role = 'admin' WHERE id = %s", (tokens["user"]["id"],))
+    headers = bearer(tokens)
+    for limit in ("100", "1"):
+        ok = await h.client.get(path, params={"limit": limit}, headers=headers)
+        assert ok.status_code == 200, (path, limit, ok.text)
+        assert len(ok.json()["items"]) <= int(limit)
+    for limit in ("101", "0", "-1", "abc"):
+        refused = await h.client.get(path, params={"limit": limit}, headers=headers)
+        assert refused.status_code == 422, (path, limit)
 
 
 @pytest.mark.parametrize("path", LIST_ROUTES)
@@ -282,5 +300,5 @@ async def test_every_list_route_that_takes_a_limit_is_listed_above() -> None:
         for parameter in operation.get("parameters", []):
             if parameter["name"] == "limit":
                 paged[path] = parameter["schema"].get("maximum")
-    assert set(paged) == set(LIST_ROUTES), paged
+    assert set(paged) == set(LIST_ROUTES) | set(ADMIN_LIST_ROUTES), paged
     assert all(maximum == 100 for maximum in paged.values()), paged

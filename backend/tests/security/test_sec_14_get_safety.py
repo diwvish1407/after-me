@@ -118,7 +118,13 @@ async def test_the_pages_that_read_state_show_it_without_touching_it(world: Worl
 
 # Reading an instruction decrypts it and is audited by design (``instruction.viewed``): the one
 # write a GET is allowed to make, and only that.
-AUDITED_READS = {"/v1/instructions", "/v1/instructions/{instruction_id}"}
+# Reads that are themselves audited, with the action they write: opening instructions, and an
+# admin opening an account (Phase 14).
+AUDITED_READS = {
+    "/v1/instructions": "instruction.viewed",
+    "/v1/instructions/{instruction_id}": "instruction.viewed",
+    "/v1/admin/users/{user_id}": "admin.viewed_user",
+}
 
 
 def _api_gets() -> list[str]:
@@ -140,11 +146,21 @@ async def test_a_get_of_any_api_route_changes_nothing_after_a_released_incident(
     assert (await world.h.reauth(person.tokens)).status_code == 204  # for the step-up GETs
     instruction = person.contacts["_instruction"]
     sessions = (await world.h.client.get("/v1/auth/sessions", headers=person.headers)).json()
+    # Phase 14: an extra check-in time, and admin rights so the admin reads answer too.
+    # (written directly: the API refuses schedule changes while an incident is open)
+    (event_row,) = world.db.execute(
+        "INSERT INTO checkin_slots (user_id, label, due_local_time) "
+        "VALUES (%s, 'Morning', '09:00') RETURNING id",
+        (person.user_id,),
+    ).fetchall()
+    world.db.execute("UPDATE users SET role = 'admin' WHERE id = %s", (person.user_id,))
     params = {
         "contact_id": person.contacts["Brother"],
         "incident_id": str(incident["id"]),
         "instruction_id": instruction,
         "session_id": sessions["items"][0]["id"],
+        "event_id": str(event_row["id"]),
+        "user_id": person.user_id,
     }
     covered = 0
     for template in _api_gets():
@@ -163,7 +179,7 @@ async def test_a_get_of_any_api_route_changes_nothing_after_a_released_incident(
             assert [c.split(" ")[0] for c in changed] == ["audit_logs"], (path, changed)
             added = set(after["audit_logs"]) - set(before["audit_logs"])
             assert len(added) == 1
-            assert '"action": "instruction.viewed"' in next(iter(added))
+            assert f'"action": "{AUDITED_READS[template]}"' in next(iter(added))
         else:
             assert not changed, f"GET {path} changed {changed}"
         covered += 1

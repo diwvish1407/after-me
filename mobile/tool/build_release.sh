@@ -136,6 +136,12 @@ fi
 
 # --- Build -------------------------------------------------------------------------------
 mkdir -p "$SYMBOLS_DIR"
+# A newer local Flutter than the pinned one refuses the project's AGP version; set
+# AFTERME_SKIP_AGP_CHECK=1 to build anyway (the pinned Flutter in CI does not need it).
+EXTRA_ARGS=()
+if [ "${AFTERME_SKIP_AGP_CHECK:-0}" = "1" ]; then
+  EXTRA_ARGS+=(--android-skip-build-dependency-validation)
+fi
 echo "build_release: flutter build $TARGET --flavor prod --release --obfuscate --split-debug-info=$SYMBOLS_DIR ${VERSION_ARGS[*]-}"
 flutter build "$TARGET" \
   --flavor prod \
@@ -143,7 +149,8 @@ flutter build "$TARGET" \
   --dart-define-from-file="$CONFIG" \
   --obfuscate \
   --split-debug-info="$SYMBOLS_DIR" \
-  ${VERSION_ARGS[@]+"${VERSION_ARGS[@]}"}
+  ${VERSION_ARGS[@]+"${VERSION_ARGS[@]}"} \
+  ${EXTRA_ARGS[@]+"${EXTRA_ARGS[@]}"}
 
 if [ "$TARGET" = "apk" ]; then
   ARTIFACT="build/app/outputs/flutter-apk/app-prod-release.apk"

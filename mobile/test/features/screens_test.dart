@@ -3,6 +3,7 @@ import 'package:afterme/app/theme/app_theme.dart';
 import 'package:afterme/core/auth/auth_controller.dart';
 import 'package:afterme/core/design_system/check_in_button.dart';
 import 'package:afterme/features/auth/presentation/sign_in_screen.dart';
+import 'package:afterme/features/checkin/presentation/check_in_hub_screen.dart';
 import 'package:afterme/features/contacts/presentation/people_screen.dart';
 import 'package:afterme/features/dev/presentation/design_gallery_screen.dart';
 import 'package:afterme/features/home/presentation/home_screen.dart';
@@ -212,11 +213,13 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(HomeScreen), findsOneWidget);
 
+    // The 2026-11 bar: Home, Instructions, Check-in, Contacts, Profile (the plan opens
+    // from Home and the menu).
     for (final (label, type, index) in [
-      ('People', PeopleScreen, 1),
-      ('Instructions', InstructionsScreen, 2),
-      ('Plan', PlanScreen, 3),
-      ('Settings', SettingsScreen, 4),
+      ('Contacts', PeopleScreen, 3),
+      ('Instructions', InstructionsScreen, 1),
+      ('Check-in', CheckInHubScreen, 2),
+      ('Profile', SettingsScreen, 4),
       ('Home', HomeScreen, 0),
     ]) {
       await tester.tap(

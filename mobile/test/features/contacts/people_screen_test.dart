@@ -449,7 +449,7 @@ void main() {
       final gate = Completer<void>();
       fakes.contacts.listGate = gate.future;
       final calls = fakes.contacts.calls.where((c) => c == 'list').length;
-      await tester.tap(tab('People'));
+      await tester.tap(tab('Contacts'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 50));
       expect(find.byType(CircularProgressIndicator), findsNothing);
@@ -492,7 +492,7 @@ void main() {
       await tester.tap(tab('Home'));
       await tester.pumpAndSettle();
       fakes.contacts.respond('c1', VerificationStatus.verified);
-      await tester.tap(tab('People'));
+      await tester.tap(tab('Contacts'));
       await tester.pumpAndSettle();
 
       expect(find.text('Accepted'), findsWidgets);

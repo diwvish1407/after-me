@@ -124,6 +124,7 @@ ROUTE_POLICY: dict[tuple[str, str], Policy] = {
     ("POST", "/v1/auth/register/verify"): Public(rate_limited=True),
     ("POST", "/v1/auth/register/resend"): Public(rate_limited=True),
     ("POST", "/v1/auth/login"): Public(rate_limited=True),
+    ("POST", "/v1/auth/google"): Public(rate_limited=True),
     ("POST", "/v1/auth/refresh"): Public(rate_limited=True),
     ("POST", "/v1/auth/logout"): Authenticated(),
     ("POST", "/v1/auth/logout-all"): Authenticated(),
@@ -200,6 +201,53 @@ ROUTE_POLICY: dict[tuple[str, str], Policy] = {
         headers={"Idempotency-Key": "matrix-idempotency-key-0001"},
         reauth=True,
     ),
+    # Phase 14: extra check-in events, each with its own plan.
+    ("GET", "/v1/checkin/events"): Authenticated(),
+    ("POST", "/v1/checkin/events"): Authenticated(
+        body={"label": "Morning", "due_local_time": "09:00"}
+    ),
+    ("PUT", "/v1/checkin/events/{event_id}"): Owned(
+        "event_id",
+        factory="event",
+        body={"label": "Morning", "due_local_time": "09:00"},
+        tables=("checkin_slots", "checkin_configurations"),
+    ),
+    ("DELETE", "/v1/checkin/events/{event_id}"): Owned(
+        "event_id", factory="event", tables=("checkin_slots", "checkin_configurations")
+    ),
+    ("GET", "/v1/checkin/events/{event_id}/plan"): Owned(
+        "event_id", factory="event", tables=("checkin_slots", "escalation_plans")
+    ),
+    ("PUT", "/v1/checkin/events/{event_id}/plan"): Owned(
+        "event_id",
+        factory="event",
+        body={"grace_minutes": 180, "stages": [{"offset_minutes": 180, "notify_contact_ids": []}]},
+        tables=("checkin_slots", "escalation_plans", "escalation_steps"),
+        headers={"If-Match": '"plan-0"'},
+    ),
+    # Phase 14: two-step verification. Setting it up and turning it off are step-up actions.
+    ("GET", "/v1/me/2fa"): Authenticated(),
+    ("POST", "/v1/me/2fa/setup"): Reauth(),
+    ("POST", "/v1/me/2fa/enable"): Authenticated(body={"code": "123456"}),
+    ("POST", "/v1/me/2fa/disable"): Reauth(body={"code": "123456"}),
+    # Phase 14: the admin API. A signed-in non-admin gets 403 admin_required (tested in
+    # tests/integration/test_phase14.py); every change also needs a fresh password.
+    ("GET", "/v1/admin/overview"): Authenticated(),
+    ("GET", "/v1/admin/users"): Authenticated(),
+    ("GET", "/v1/admin/users/{user_id}"): Authenticated(),
+    ("POST", "/v1/admin/users/{user_id}/tier"): Authenticated(
+        body={"tier": "free", "reason": "matrix"}
+    ),
+    ("POST", "/v1/admin/users/{user_id}/suspend"): Authenticated(body={"reason": "matrix"}),
+    ("POST", "/v1/admin/users/{user_id}/unsuspend"): Authenticated(body={"reason": "matrix"}),
+    ("POST", "/v1/admin/users/{user_id}/role"): Authenticated(
+        body={"role": "user", "reason": "matrix"}
+    ),
+    ("GET", "/v1/admin/incidents"): Authenticated(),
+    ("POST", "/v1/admin/incidents/{incident_id}/void"): Authenticated(),
+    ("GET", "/v1/admin/hold"): Authenticated(),
+    ("POST", "/v1/admin/hold/enter"): Authenticated(body={"reason": "matrix"}),
+    ("POST", "/v1/admin/hold/exit"): Authenticated(),
     ("GET", "/v1/plan"): Authenticated(),
     ("PUT", "/v1/plan"): Authenticated(
         body={"grace_minutes": 180, "stages": [{"offset_minutes": 180, "notify_contact_ids": []}]}
@@ -266,6 +314,18 @@ ROUTE_POLICY: dict[tuple[str, str], Policy] = {
     ("POST", "/a/logout"): Web(csrf_page="/a/login"),
     ("GET", "/c/open"): Web(csrf_page="/c/open"),
     ("GET", "/c/optout"): Web(csrf_page="/c/open"),
+    # Phase 14: a contact says "I'm checking on them" from an alert (shares the budget).
+    ("GET", "/c/ack"): Web(csrf_page="/c/open"),
+    ("POST", "/c/ack/confirm"): Web(
+        form={"token": "ak_" + str(uuid.uuid4()) + "." + str(uuid.uuid4()) + "." + "A" * 43},
+        csrf_page="/c/open",
+        ip_limit=20,
+    ),
+    ("POST", "/c/ack"): Web(
+        form={"token": "ak_" + str(uuid.uuid4()) + "." + str(uuid.uuid4()) + "." + "A" * 43},
+        csrf_page="/c/open",
+        ip_limit=20,
+    ),
     # One shared budget of 20 an hour per address for the five invitation and opt-out POSTs.
     ("POST", "/c/session"): Web(form={"token": "ci_" + "A" * 43}, csrf_page="/c/open", ip_limit=20),
     ("POST", "/c/invite/accept"): Web(
@@ -406,6 +466,10 @@ def test_no_route_can_trigger_escalation_or_release(settings: Settings) -> None:
         ("GET", "/v1/incidents"),
         ("GET", "/v1/incidents/{incident_id}"),
         ("POST", "/v1/incidents/{incident_id}/safe"),
+        # Phase 14: an admin may list incidents and end one (a void stops it, like the
+        # operator command; nothing creates an incident).
+        ("GET", "/v1/admin/incidents"),
+        ("POST", "/v1/admin/incidents/{incident_id}/void"),
     }
     # no write method on the collection or on an incident itself
     for method, path in routes:
@@ -585,7 +649,18 @@ async def _make_instruction(h: Harness, owner: dict[str, Any]) -> str:
     return str(response.json()["id"])
 
 
+async def _make_event(h: Harness, owner: dict[str, Any]) -> str:
+    response = await h.client.post(
+        "/v1/checkin/events",
+        json={"label": "Morning", "due_local_time": "09:00"},
+        headers=bearer(owner),
+    )
+    assert response.status_code == 201, response.text
+    return str(response.json()["id"])
+
+
 FACTORIES: dict[str, Callable[[Harness, dict[str, Any]], Awaitable[str]]] = {
+    "event": _make_event,
     "session": _make_session,
     "contact": _make_contact,
     "incident": _make_incident,

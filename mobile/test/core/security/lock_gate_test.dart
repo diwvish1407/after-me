@@ -56,14 +56,25 @@ void main() {
         expect(find.text('AfterMe is locked'), findsOneWidget);
         expect(fakes.localAuth.prompts, 1, reason: 'asked once on its own');
         // Nothing from the app is visible, tappable or readable.
-        expect(find.text('Hello, Diwakar'), findsNothing, reason: 'offstage');
+        expect(
+          find.textContaining(
+            RegExp(r'^Good (morning|afternoon|evening), Diwakar$'),
+          ),
+          findsNothing,
+          reason: 'offstage',
+        );
         expect(find.bySemanticsLabel(RegExp('Hello')), findsNothing);
         expect(find.text('Unlock whenever you\'re ready.'), findsOneWidget);
 
         await tester.tap(find.text('Unlock'));
         await tester.pumpAndSettle();
         expect(find.text('AfterMe is locked'), findsNothing);
-        expect(find.text('Hello, Diwakar'), findsOneWidget);
+        expect(
+          find.textContaining(
+            RegExp(r'^Good (morning|afternoon|evening), Diwakar$'),
+          ),
+          findsOneWidget,
+        );
         expect(container.read(appLockControllerProvider).locked, isFalse);
         expect(fakes.localAuth.reasons.last, 'Unlock AfterMe');
         handle.dispose();
@@ -80,10 +91,20 @@ void main() {
         status: AuthStatus.signedIn,
         settle: false,
       );
-      expect(find.text('Hello, Diwakar'), findsNothing);
+      expect(
+        find.textContaining(
+          RegExp(r'^Good (morning|afternoon|evening), Diwakar$'),
+        ),
+        findsNothing,
+      );
       expect(find.text('Home'), findsNothing);
       await tester.pumpAndSettle();
-      expect(find.text('Hello, Diwakar'), findsOneWidget);
+      expect(
+        find.textContaining(
+          RegExp(r'^Good (morning|afternoon|evening), Diwakar$'),
+        ),
+        findsOneWidget,
+      );
     });
 
     testWidgets('signed out is never covered', (tester) async {
@@ -130,7 +151,12 @@ void main() {
         await tester.tap(find.text('Turn off app lock and continue'));
         await tester.pumpAndSettle();
         expect(container.read(appLockControllerProvider).enabled, isFalse);
-        expect(find.text('Hello, Diwakar'), findsOneWidget);
+        expect(
+          find.textContaining(
+            RegExp(r'^Good (morning|afternoon|evening), Diwakar$'),
+          ),
+          findsOneWidget,
+        );
       },
     );
 
@@ -211,7 +237,12 @@ void main() {
         fakes: fakes,
         status: AuthStatus.signedIn,
       );
-      expect(find.text('Hello, Diwakar'), findsOneWidget);
+      expect(
+        find.textContaining(
+          RegExp(r'^Good (morning|afternoon|evening), Diwakar$'),
+        ),
+        findsOneWidget,
+      );
 
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
@@ -222,7 +253,9 @@ void main() {
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
       await tester.pumpAndSettle();
       expect(
-        find.text('Hello, Diwakar'),
+        find.textContaining(
+          RegExp(r'^Good (morning|afternoon|evening), Diwakar$'),
+        ),
         findsOneWidget,
         reason: 'only 2 of 5 minutes',
       );

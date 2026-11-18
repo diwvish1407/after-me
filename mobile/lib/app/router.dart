@@ -6,11 +6,14 @@ import '../core/auth/auth_controller.dart';
 import '../core/auth/session_ended_notice.dart';
 import '../core/config/app_config.dart';
 import '../features/activity/presentation/activity_screen.dart';
+import '../features/admin/presentation/admin_screens.dart';
 import '../features/auth/presentation/create_account_screen.dart';
 import '../features/auth/presentation/enter_code_screen.dart';
 import '../features/auth/presentation/forgot_password_screen.dart';
 import '../features/auth/presentation/sign_in_screen.dart';
+import '../features/checkin/presentation/check_in_hub_screen.dart';
 import '../features/checkin/presentation/checkin_history_screen.dart';
+import '../features/checkin/presentation/event_screens.dart';
 import '../features/checkin/presentation/schedule_settings_screen.dart';
 import '../features/contacts/presentation/add_contact_screen.dart';
 import '../features/contacts/presentation/contact_detail_screen.dart';
@@ -51,6 +54,7 @@ import '../features/settings/presentation/profile_screen.dart';
 import '../features/settings/presentation/security_screen.dart';
 import '../features/settings/presentation/sessions_screen.dart';
 import '../features/settings/presentation/settings_screen.dart';
+import '../features/settings/presentation/two_step_screen.dart';
 import '../features/settings/presentation/your_plan_screen.dart';
 import '../features/shell/presentation/app_shell.dart';
 
@@ -80,6 +84,31 @@ abstract final class AppRoutes {
   /// The plan editor, opened from the Plan tab.
   static const planEdit = '/plan/edit';
   static const settings = '/settings';
+  static const checkIn = '/check-in';
+  static const checkInSchedule = '/check-in/schedule';
+  static const checkInHistory = '/check-in/history';
+  static const checkInEventNew = '/check-in/events/new';
+  static const settingsTwoStep = '/settings/security/two-step';
+  static const admin = '/settings/admin';
+  static const adminIncidents = '/settings/admin/incidents';
+
+  /// An extra check-in event, and its own plan.
+  static String checkInEvent(String id) => '/check-in/events/$id';
+  static String checkInEventPlan(String id) => '/check-in/events/$id/plan';
+
+  /// One account in the admin screens.
+  static String adminUser(String id) => '/settings/admin/users/$id';
+
+  static final RegExp _eventRoute = RegExp(
+    r'^/check-in/events/[A-Za-z0-9_-]{1,64}(/plan)?$',
+  );
+  static final RegExp _adminUserRoute = RegExp(
+    r'^/settings/admin/users/[A-Za-z0-9_-]{1,64}$',
+  );
+
+  static bool isEventRoute(String location) => _eventRoute.hasMatch(location);
+  static bool isAdminUserRoute(String location) =>
+      _adminUserRoute.hasMatch(location);
   static const settingsProfile = '/settings/profile';
   static const settingsSecurity = '/settings/security';
   static const settingsChangePassword = '/settings/security/password';
@@ -156,8 +185,17 @@ abstract final class AppRoutes {
   static bool isInstructionRoute(String location) =>
       _instructionRoute.hasMatch(location);
 
-  /// Tabs of the signed-in shell, in navigation-bar order.
-  static const shellTabs = [home, people, instructions, plan, settings];
+  /// Branches of the signed-in shell, in branch order. The navigation bar shows them as
+  /// Home · Instructions · Check-in · Contacts · Profile (the plan opens from Home and the
+  /// menu); see `AppShell`.
+  static const shellTabs = [
+    home,
+    people,
+    instructions,
+    plan,
+    settings,
+    checkIn,
+  ];
 
   /// Settings sub-screens (inside the Settings tab).
   static const settingsScreens = [
@@ -178,6 +216,9 @@ abstract final class AppRoutes {
     settingsExport,
     settingsDelete,
     settingsLostPhone,
+    settingsTwoStep,
+    admin,
+    adminIncidents,
   ];
 
   /// The onboarding steps after the account exists.
@@ -204,6 +245,9 @@ abstract final class AppRoutes {
     peopleAdd,
     instructionNew,
     planEdit,
+    checkInSchedule,
+    checkInHistory,
+    checkInEventNew,
     ...settingsScreens,
     ...onboardingSteps,
   };
@@ -280,7 +324,9 @@ String? authRedirect({
       return AppRoutes.signedInRoutes().contains(location) ||
               AppRoutes.isContactRoute(location) ||
               AppRoutes.isInstructionRoute(location) ||
-              AppRoutes.isIncidentRoute(location)
+              AppRoutes.isIncidentRoute(location) ||
+              AppRoutes.isEventRoute(location) ||
+              AppRoutes.isAdminUserRoute(location)
           ? null
           : AppRoutes.home;
   }
@@ -477,6 +523,7 @@ final routerProvider = Provider<GoRouter>((ref) {
                       ),
                       simpleRoute('email', (_) => const ChangeEmailScreen()),
                       simpleRoute('sessions', (_) => const SessionsScreen()),
+                      simpleRoute('two-step', (_) => const TwoStepScreen()),
                       simpleRoute(
                         'app-lock',
                         (_) => const AppLockSettingsScreen(),
@@ -519,6 +566,56 @@ final routerProvider = Provider<GoRouter>((ref) {
                     ],
                   ),
                   simpleRoute('lost-phone', (_) => const LostPhoneScreen()),
+                  GoRoute(
+                    path: 'admin',
+                    builder: (context, state) => const AdminDashboardScreen(),
+                    routes: [
+                      simpleRoute(
+                        'incidents',
+                        (_) => const AdminIncidentsScreen(),
+                      ),
+                      GoRoute(
+                        path: 'users/:id',
+                        builder: (context, state) => AdminUserScreen(
+                          userId: state.pathParameters['id'] ?? '',
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: AppRoutes.checkIn,
+                builder: (context, state) => const CheckInHubScreen(),
+                routes: [
+                  simpleRoute(
+                    'schedule',
+                    (_) => const ScheduleSettingsScreen(),
+                  ),
+                  simpleRoute('history', (_) => const CheckInHistoryScreen()),
+                  // 'new' is declared before ':id' so it is never read as an id.
+                  simpleRoute(
+                    'events/new',
+                    (_) => const CheckInEventFormScreen(),
+                  ),
+                  GoRoute(
+                    path: 'events/:id',
+                    builder: (context, state) => CheckInEventFormScreen(
+                      eventId: state.pathParameters['id'],
+                    ),
+                    routes: [
+                      GoRoute(
+                        path: 'plan',
+                        builder: (context, state) => EventPlanScreen(
+                          eventId: state.pathParameters['id'] ?? '',
+                        ),
+                      ),
+                    ],
+                  ),
                 ],
               ),
             ],

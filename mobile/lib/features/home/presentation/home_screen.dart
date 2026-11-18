@@ -12,6 +12,7 @@ import '../../../core/design_system/design_system.dart';
 import '../../../core/security/secure_screen.dart';
 import '../../../core/time/clock.dart';
 import '../../../core/time/time_format.dart';
+import '../../../core/time/zoned_time.dart';
 import '../../../l10n/gen/app_localizations.dart';
 import '../../activity/presentation/recent_activity_card.dart';
 import '../../auth/application/me_controller.dart';
@@ -25,10 +26,13 @@ import '../../incidents/presentation/incident_timeline_view.dart';
 import '../../incidents/presentation/safe_action_button.dart';
 import '../../onboarding/application/onboarding_controller.dart';
 import '../../onboarding/application/setup_controller.dart';
+import '../../shell/presentation/app_shell.dart';
 import '../application/client_checks.dart';
 import '../application/home_controller.dart';
 import '../application/home_status.dart';
 import '../data/models/home_models.dart';
+
+import 'home_design.dart';
 import 'service_interruption_banner.dart';
 
 /// Home (USER_FLOWS.md §4, §5): the status, I'M OK, the next and last check-in, the plan,
@@ -256,7 +260,33 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       content = const LoadingView();
     }
     return Scaffold(
-      appBar: AppBar(title: Text(l10n.navHome)),
+      appBar: AppBar(
+        title: Semantics(label: l10n.navHome, child: const BrandBar()),
+        centerTitle: true,
+        foregroundColor: Colors.white,
+        backgroundColor: BrandColors.skyTop,
+        iconTheme: const IconThemeData(color: Colors.white),
+        actionsIconTheme: const IconThemeData(color: Colors.white),
+        flexibleSpace: const DecoratedBox(
+          decoration: BoxDecoration(gradient: brandHeaderGradient),
+        ),
+        // The menu, unless Home was opened on top of another page (a notification
+        // tap): then the usual back button.
+        leading: (ModalRoute.of(context)?.canPop ?? false)
+            ? null
+            : IconButton(
+                icon: const Icon(Icons.menu_rounded),
+                tooltip: l10n.drawerOpen,
+                onPressed: openAppDrawer,
+              ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.notifications_none_rounded),
+            tooltip: l10n.drawerActivity,
+            onPressed: () => context.push(AppRoutes.settingsActivity),
+          ),
+        ],
+      ),
       body: SafeArea(
         child: RefreshIndicator(
           onRefresh: _pullToRefresh,
@@ -396,13 +426,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             ),
             Gap.md,
           ],
-          if (name.isNotEmpty && incident == null) ...[
-            Text(
-              l10n.homeGreeting(name),
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-            Gap.md,
-          ],
+          HomeHero(
+            name: name,
+            status: incident != null ? HomeStatus.incident : status,
+            localNow: inTimezone(now, timezone),
+            // Only the "finish setup" card goes above: there I'M OK is off anyway.
+            showCard: status == HomeStatus.notActive,
+          ),
+          Gap.md,
           if (gap != null) ...[
             // The banner is only judged while check-ins are on (see `gap` above).
             _SafetyNetGapBanner(
@@ -774,42 +805,65 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         SafeActionButton(incidentId: safeIncidentId),
       ],
       const SizedBox(height: AppSpacing.xl),
-      Card(
-        margin: EdgeInsets.zero,
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.md),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _InfoRow(
-                label: l10n.homeNextCheckIn,
-                value: next == null
-                    ? l10n.homeNextCheckInNone
-                    : formatDayTime(
-                        context,
-                        l10n,
-                        next,
-                        now: now,
-                        timezone: timezone,
-                      ),
-              ),
-              Gap.sm,
-              _InfoRow(
-                label: l10n.homeLastCheckIn,
-                value: last == null
-                    ? l10n.homeLastCheckInNone
-                    : formatDayTime(
-                        context,
-                        l10n,
-                        last,
-                        now: now,
-                        timezone: timezone,
-                      ),
-              ),
+      if (status == HomeStatus.active ||
+          status == HomeStatus.dueSoon ||
+          status == HomeStatus.overdue) ...[
+        HomeStatusCard(status: status),
+        Gap.md,
+      ],
+      HomeStats(snapshot: snapshot, now: now, timezone: timezone),
+      Gap.md,
+      GlassCard(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        child: Row(
+          children: [
+            if (homeRoomy(context)) ...[
+              const BrandImage(BrandIllustration.calendarClock, height: 64),
+              const SizedBox(width: AppSpacing.sm),
             ],
-          ),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _InfoRow(
+                    label: l10n.homeNextCheckIn,
+                    value: next == null
+                        ? l10n.homeNextCheckInNone
+                        : _nextText(
+                            snapshot.checkin.nextDueLabel,
+                            formatDayTime(
+                              context,
+                              l10n,
+                              next,
+                              now: now,
+                              timezone: timezone,
+                            ),
+                            l10n,
+                          ),
+                  ),
+                  Gap.sm,
+                  _InfoRow(
+                    label: l10n.homeLastCheckIn,
+                    value: last == null
+                        ? l10n.homeLastCheckInNone
+                        : formatDayTime(
+                            context,
+                            l10n,
+                            last,
+                            now: now,
+                            timezone: timezone,
+                          ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
+      Gap.lg,
+      HomeSetupCard(snapshot: snapshot),
+      Gap.md,
+      const HomeQuickActions(),
       Gap.md,
       _PlanCard(summary: snapshot.planSummary),
       if (snapshot.recentActivity.isNotEmpty) ...[
@@ -822,6 +876,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       ],
     ];
   }
+
+  /// "Morning, tomorrow at 9:00 AM" when the next deadline is an extra check-in time.
+  String _nextText(String? label, String when, AppLocalizations l10n) =>
+      label == null || label.isEmpty ? when : l10n.homeNextEvent(label, when);
 
   /// The id of the open incident: the aggregate's, else the one `safe_required` named.
   String? _incidentIdFor(HomeSnapshot snapshot, CheckInState checkIn) {

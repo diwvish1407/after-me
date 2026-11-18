@@ -685,7 +685,7 @@ void main() {
         matching: find.text(label),
       );
 
-      await tester.tap(tab('People'));
+      await tester.tap(tab('Contacts'));
       await tester.pumpAndSettle();
       final away = homes();
       for (var i = 0; i < 6; i++) {

@@ -4,6 +4,7 @@ import 'package:afterme/features/onboarding/application/onboarding_controller.da
 import 'package:afterme/features/plan/presentation/plan_editor_screen.dart';
 import 'package:afterme/features/plan/presentation/plan_screen.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../helpers/contacts_harness.dart';
 
@@ -57,7 +58,11 @@ void main() {
     container.read(routerProvider).go(AppRoutes.planEdit);
     await tester.pumpAndSettle();
     expect(find.byType(PlanEditorScreen), findsOneWidget);
-    expect(find.text('Plan'), findsWidgets, reason: 'the tab bar stays');
+    expect(
+      find.byType(NavigationBar),
+      findsOneWidget,
+      reason: 'the tab bar stays',
+    );
     await tester.pageBack();
     await tester.pumpAndSettle();
     expect(find.byType(PlanScreen), findsOneWidget);

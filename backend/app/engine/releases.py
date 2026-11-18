@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.incidents.snapshot import SnapshotRelease
 from app.instructions.models import Instruction, InstructionRecipient
+from app.plans.models import EscalationPlan, EscalationStep
 
 
 class ReleaseSource(Protocol):
@@ -112,14 +113,46 @@ class InstructionReleases:
             return "instruction_deleted"
         if row.status != "active":
             return "instruction_inactive"
+        release_step_id = await _release_step_for(session, user_id=user_id, step_id=step_id)
+        if release_step_id is None:
+            return "recipient_removed"
         mapped = (
             await session.execute(
                 select(InstructionRecipient.id).where(
                     InstructionRecipient.instruction_id == release.instruction_id,
                     InstructionRecipient.contact_id == release.contact_id,
-                    InstructionRecipient.release_step_id == step_id,
+                    InstructionRecipient.release_step_id == release_step_id,
                     InstructionRecipient.user_id == user_id,
                 )
             )
         ).first()
         return None if mapped is not None else "recipient_removed"
+
+
+async def _release_step_for(
+    session: AsyncSession, *, user_id: uuid.UUID, step_id: uuid.UUID
+) -> uuid.UUID | None:
+    """Instructions are mapped to stages of the default plan. For a stage of an event's own
+    plan, that is the default plan's stage at the same position (as at opening, opener.py)."""
+    row = (
+        await session.execute(
+            select(EscalationStep.position, EscalationPlan.slot_id)
+            .join(EscalationPlan, EscalationPlan.id == EscalationStep.plan_id)
+            .where(EscalationStep.id == step_id, EscalationStep.user_id == user_id)
+        )
+    ).first()
+    if row is None:
+        return step_id  # the stage is gone: the mapping check below reports it
+    if row.slot_id is None:
+        return step_id
+    return (
+        await session.execute(
+            select(EscalationStep.id)
+            .join(EscalationPlan, EscalationPlan.id == EscalationStep.plan_id)
+            .where(
+                EscalationPlan.user_id == user_id,
+                EscalationPlan.slot_id.is_(None),
+                EscalationStep.position == row.position,
+            )
+        )
+    ).scalar_one_or_none()

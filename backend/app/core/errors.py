@@ -85,6 +85,43 @@ class InvalidCredentials(_BearerChallenge):
     default_detail = "The email or password is incorrect."
 
 
+class MfaRequired(_BearerChallenge):
+    """The password was right; the account has two-factor authentication: send ``otp`` too."""
+
+    status_code = 401
+    code = "mfa_required"
+    title = "Verification code required"
+    default_detail = "Enter the 6-digit code from your authenticator app."
+
+
+class InvalidOtp(_BearerChallenge):
+    status_code = 401
+    code = "invalid_otp"
+    title = "Invalid code"
+    default_detail = "That code is not right or has expired. Try the newest code."
+
+
+class GoogleSignInUnavailable(AppError):
+    status_code = 503
+    code = "google_unavailable"
+    title = "Google sign-in is not available"
+    default_detail = "Sign in with Google is not set up yet. Use your email and password."
+
+
+class GoogleTokenRejected(_BearerChallenge):
+    status_code = 401
+    code = "google_token_invalid"
+    title = "Google sign-in failed"
+    default_detail = "Google could not confirm this account. Try again."
+
+
+class AdminRequired(AppError):
+    status_code = 403
+    code = "admin_required"
+    title = "Admins only"
+    default_detail = "This needs an administrator account."
+
+
 class ReauthRequired(AppError):
     status_code = 403
     code = "reauth_required"

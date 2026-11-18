@@ -18,6 +18,7 @@ from app.audit.writer import (
     PHASE5_ACTIONS,
     PHASE6_ACTIONS,
     PHASE7_ACTIONS,
+    PHASE14_ACTIONS,
     USER_VISIBLE_ACTIONS,
     AuditEvent,
     AuditMetadataError,
@@ -306,7 +307,26 @@ def test_audit_action_catalogue() -> None:
         | PHASE5_ACTIONS
         | PHASE6_ACTIONS
         | PHASE7_ACTIONS
+        | PHASE14_ACTIONS
     )
+    assert PHASE14_ACTIONS.isdisjoint(
+        PHASE1_ACTIONS
+        | PHASE2_ACTIONS
+        | PHASE3_ACTIONS
+        | PHASE4_ACTIONS
+        | PHASE5_ACTIONS
+        | PHASE6_ACTIONS
+        | PHASE7_ACTIONS
+    )
+    # Phase 14: the person sees two-step verification changes, a linked Google account and a
+    # contact who is checking on them; admin views of an account are never shown to it.
+    assert {
+        "auth.mfa_enabled",
+        "auth.mfa_disabled",
+        "auth.google_linked",
+        "incident.contact_acknowledged",
+    } <= USER_VISIBLE_ACTIONS
+    assert {"admin.viewed_user", "admin.set_role"}.isdisjoint(USER_VISIBLE_ACTIONS)
     # Phase 7: the owner sees their own export and web sign-ins; a closed account sees nothing.
     assert {"account.exported", "auth.web_login_succeeded"} <= USER_VISIBLE_ACTIONS
     assert {"account.deletion_requested", "account.purged"}.isdisjoint(USER_VISIBLE_ACTIONS)

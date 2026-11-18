@@ -75,6 +75,10 @@ abstract class HomeCheckIn with _$HomeCheckIn {
     DateTime? nextDueAt,
     DateTime? lastCheckinAt,
     HomeSchedule? schedule,
+
+    /// The name of the extra check-in time the next deadline belongs to (null: the
+    /// main schedule).
+    String? nextDueLabel,
   }) = _HomeCheckIn;
 
   factory HomeCheckIn.fromJson(Map<String, dynamic> json) =>

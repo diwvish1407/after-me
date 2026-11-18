@@ -7,5 +7,7 @@
   "status": "active",
   "next_due_at": "2026-10-09T14:30:00Z",
   "last_checkin_at": null,
-  "version": 2
+  "version": 2,
+  "primary_due_at": "2026-10-09T14:30:00Z",
+  "due_event_id": null
 }

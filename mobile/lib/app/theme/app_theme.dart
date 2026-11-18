@@ -73,6 +73,9 @@ abstract final class AppTypography {
 
 /// Builds the light and dark Material 3 themes explicitly from [AppColorTokens].
 abstract final class AppTheme {
+  /// The header colour of every app bar (the dark end of the brand gradient).
+  static const Color headerBlue = Color(0xFF07267F);
+
   /// [fontFamily] is null in the app (the platform font). Layout tests pass `Roboto`
   /// so they measure real glyphs instead of the test engine's square fallback font.
   static ThemeData light({String? fontFamily}) =>
@@ -141,12 +144,11 @@ abstract final class AppTheme {
       horizontal: AppSpacing.lg,
       vertical: AppSpacing.sm,
     );
-    final buttonShape = RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(AppRadius.md),
-    );
+    // The 2026-11 redesign: pill buttons, softly filled fields, rounder cards.
+    const buttonShape = StadiumBorder();
     OutlineInputBorder inputBorder(Color color, {double width = 1}) =>
         OutlineInputBorder(
-          borderRadius: BorderRadius.circular(AppRadius.md),
+          borderRadius: BorderRadius.circular(AppRadius.field),
           borderSide: BorderSide(color: color, width: width),
         );
 
@@ -164,13 +166,19 @@ abstract final class AppTheme {
       // Pages stand still when the phone is set to remove animations.
       pageTransitionsTheme: reducedMotionPageTransitions(),
       extensions: [AppTokens(t)],
+      // The 2026-11 redesign: every screen's header is the deep brand blue with white
+      // text (>= 12:1), like the gradient headers of the design screens.
       appBarTheme: AppBarThemeData(
-        backgroundColor: t.bg,
-        foregroundColor: t.text,
+        backgroundColor: AppTheme.headerBlue,
+        foregroundColor: const Color(0xFFFFFFFF),
+        iconTheme: const IconThemeData(color: Color(0xFFFFFFFF)),
+        actionsIconTheme: const IconThemeData(color: Color(0xFFFFFFFF)),
         elevation: 0,
         scrolledUnderElevation: 0,
         centerTitle: false,
-        titleTextStyle: text.titleLarge,
+        titleTextStyle: text.titleLarge?.copyWith(
+          color: const Color(0xFFFFFFFF),
+        ),
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
@@ -209,7 +217,9 @@ abstract final class AppTheme {
       ),
       inputDecorationTheme: InputDecorationThemeData(
         filled: true,
-        fillColor: t.surface,
+        fillColor: brightness == Brightness.light
+            ? const Color(0xFFF4F7FF)
+            : t.surface,
         contentPadding: const EdgeInsets.symmetric(
           horizontal: AppSpacing.md,
           vertical: AppSpacing.md,
@@ -230,10 +240,11 @@ abstract final class AppTheme {
       ),
       cardTheme: CardThemeData(
         color: t.surface,
-        elevation: 0,
+        elevation: 3,
+        shadowColor: const Color(0x2E0B4FE0),
         margin: EdgeInsets.zero,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppRadius.lg),
+          borderRadius: BorderRadius.circular(AppRadius.card),
           side: BorderSide(color: t.border),
         ),
       ),
@@ -247,7 +258,7 @@ abstract final class AppTheme {
         labelTextStyle: WidgetStateProperty.resolveWith(
           (states) => states.contains(WidgetState.selected)
               ? text.labelMedium?.copyWith(
-                  color: t.text,
+                  color: t.primary,
                   fontSize: AppSizes.navLabelSp,
                 )
               : text.labelMedium?.copyWith(

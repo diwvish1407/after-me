@@ -203,6 +203,9 @@ const exportedComponents = <String, String?>{
       'com.google.android.c2dm.permission.SEND',
   'receiver androidx.profileinstaller.ProfileInstallReceiver':
       'android.permission.DUMP',
+  // Sign in with Google (Phase 14): Play services tells the app that a Google account's
+  // access was revoked; only Google Play services holds this signature permission.
+  'service com.google.android.gms.auth.api.signin.RevocationBoundService': 'com.google.android.gms.auth.api.signin.permission.REVOCATION_NOTIFICATION',
 };
 
 /// The launcher activity, by its name in the merged manifest.

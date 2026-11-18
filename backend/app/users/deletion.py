@@ -37,6 +37,7 @@ from app.auth.links import (
 )
 from app.auth.models import AUTH_TOKEN_PURPOSES
 from app.checkins.repository import CheckinConfigRepository
+from app.checkins.slots import clear_all, live_slots
 from app.contacts.repository import ContactRepository
 from app.core.errors import SessionRevoked
 from app.core.validation import normalize_email
@@ -202,8 +203,7 @@ class DeletionService(AuthServiceBase):
         )
         if config is not None and config.status != "inactive":
             config.status = "inactive"
-            config.baseline_at = None
-            config.next_due_at = None
+            clear_all(config, await live_slots(session, user_id))
             config.activated_at = None
             config.version += 1
             config.updated_at = now

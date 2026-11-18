@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from sqlalchemy.dialects.postgresql import insert
 
 from app.audit.writer import AuditWriter
+from app.auth.google import GoogleVerifier
 from app.auth.tokens import AccessTokenService
 from app.core.clock import Clock, DbClock
 from app.core.config import Settings, decode_kek
@@ -36,6 +37,8 @@ class AppServices:
     audit: AuditWriter
     mailer: Mailer
     vault: InstructionVault
+    # Sign in with Google (off while ``google_client_ids`` is empty).
+    google: GoogleVerifier = field(default_factory=lambda: GoogleVerifier([]))
 
 
 def _email_provider(settings: Settings) -> EmailProvider:
@@ -90,6 +93,7 @@ def build_services(
     database_url: str | None = None,
     application_name: str = "afterme-api",
     vault: InstructionVault | None = None,
+    google: GoogleVerifier | None = None,
 ) -> AppServices:
     if settings.hmac_pepper is None:  # pragma: no cover - Settings already refuses this
         msg = "HMAC_PEPPER is required"
@@ -126,6 +130,7 @@ def build_services(
             abuse_email=settings.abuse_email,
         ),
         vault=vault if vault is not None else _vault(settings, db),
+        google=google if google is not None else GoogleVerifier(settings.google_client_ids),
     )
 
 

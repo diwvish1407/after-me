@@ -45,6 +45,12 @@ class UserRepository:
             )
         return await self._session.get(User, user_id)
 
+    async def get_by_google_sub(self, sub: str, *, for_update: bool = False) -> User | None:
+        stmt = select(User).where(User.google_sub == sub)
+        if for_update:
+            stmt = stmt.with_for_update().execution_options(populate_existing=True)
+        return (await self._session.execute(stmt)).scalar_one_or_none()
+
     async def get_by_email(self, email_normalized: str, *, for_update: bool = False) -> User | None:
         stmt = select(User).where(User.email_normalized == email_normalized)
         if for_update:

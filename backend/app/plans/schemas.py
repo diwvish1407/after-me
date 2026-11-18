@@ -48,3 +48,7 @@ class PlanOut(ResponseModel):
     grace_minutes: int
     stages: list[StageOut]
     rules: RulesOut
+    # Set on a check-in event's plan. ``inherits_default``: the event has no plan of its own
+    # yet, so the default plan (shown here, with version 0) applies; the first PUT creates one.
+    slot_id: uuid.UUID | None = None
+    inherits_default: bool = False
