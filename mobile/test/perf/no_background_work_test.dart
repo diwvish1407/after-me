@@ -83,6 +83,9 @@ const _forbiddenAllowed = <String, Map<String, String>>{
         'One alarm at the deadline the server gave (never computed on the phone), so '
         'the person hears it in time to tap I\'M OK. Cancelled and set again whenever '
         'the server sends a new deadline; cancelled when check-ins stop or on sign-out.',
+    'lib/core/alarm/pending_contact_reminder.dart':
+        'Two inexact daily reminders (10:00 and 18:00) while a trusted contact has not '
+        'accepted the invitation; cancelled as soon as nobody is pending.',
   },
   'boot receiver': {
     'android/app/src/main/AndroidManifest.xml':

@@ -211,7 +211,7 @@ void main() {
         'PUT /v1/plan': _saved(),
       });
       expect(find.text('At 11:00 PM, Mom is notified.'), findsOneWidget);
-      await tapText(tester, 'Use this plan');
+      await tapText(tester, 'Continue');
       await tester.pumpAndSettle();
 
       final put = _to(adapter, 'PUT', '/v1/plan').single;
@@ -243,43 +243,38 @@ void main() {
     testWidgets('the chosen delay is the grace period and the first stage\'s '
         'offset', (tester) async {
       final (_, adapter) = await _openStep(tester, 'plan', {
-        'PUT /v1/plan': _saved(grace: 360),
+        'GET /v1/plan': (r) => FakeReply.json(200, _plan(custom: true), const {
+          'ETag': '"plan-1"',
+        }),
+        'PUT /v1/plan': _saved(grace: 60),
       });
-      await tapText(tester, '6 hours');
-      expect(
-        find.text('At 2:00 AM the next day, Mom is notified.'),
-        findsOneWidget,
-      );
-      await tapText(tester, 'Use this plan');
+      await tapText(tester, '1 hour');
+      await tapText(tester, 'Continue');
       await tester.pumpAndSettle();
       final body =
           _to(adapter, 'PUT', '/v1/plan').single.data! as Map<String, dynamic>;
-      expect(body['grace_minutes'], 360);
+      expect(body['grace_minutes'], 60);
       final stage = (body['stages'] as List).single as Map<String, dynamic>;
-      expect(stage['offset_minutes'], 360);
+      expect(stage['offset_minutes'], 60);
     });
 
-    testWidgets('a free account is offered only the delays its tier allows', (
-      tester,
-    ) async {
+    testWidgets('a free account is offered only the delays its tier allows, '
+        'and Custom', (tester) async {
       await _openStep(tester, 'plan', {});
-      for (final choice in ['3 hours', '6 hours', '12 hours', '1 day']) {
-        expect(find.widgetWithText(ChoiceChip, choice), findsOneWidget);
-      }
       expect(find.widgetWithText(ChoiceChip, '1 hour'), findsNothing);
-      expect(find.widgetWithText(ChoiceChip, '2 hours'), findsNothing);
+      expect(find.widgetWithText(ChoiceChip, '30 minutes'), findsNothing);
+      expect(find.byType(ChoiceChip), findsOneWidget, reason: 'Custom');
     });
 
-    testWidgets('an account with custom offsets is offered the shorter ones', (
-      tester,
-    ) async {
+    testWidgets('an account with custom offsets is offered 1 hour and Custom '
+        'on one line', (tester) async {
       await _openStep(tester, 'plan', {
         'GET /v1/plan': (r) => FakeReply.json(200, _plan(custom: true), const {
           'ETag': '"plan-1"',
         }),
       });
       expect(find.widgetWithText(ChoiceChip, '1 hour'), findsOneWidget);
-      expect(find.widgetWithText(ChoiceChip, '2 hours'), findsOneWidget);
+      expect(find.byType(ChoiceChip), findsNWidgets(2));
     });
 
     testWidgets('a plan saved elsewhere is shown as it is; choosing the '
@@ -301,17 +296,17 @@ void main() {
       });
       expect(
         tester
-            .widget<ChoiceChip>(find.widgetWithText(ChoiceChip, '6 hours'))
+            .widget<ChoiceChip>(find.widgetWithText(ChoiceChip, '06:00'))
             .selected,
         isTrue,
-        reason: 'the saved delay is the selected one',
+        reason: 'the saved delay is the selected one (as Custom)',
       );
       expect(
         find.text('At 8:00 PM the next day, Mom is notified.'),
         findsOneWidget,
         reason: 'stage 2 is part of what would happen',
       );
-      await tapText(tester, 'Use this plan');
+      await tapText(tester, 'Continue');
       await tester.pumpAndSettle();
       final put = _to(adapter, 'PUT', '/v1/plan').single;
       expect(put.header('If-Match'), '"plan-5"');
@@ -345,7 +340,7 @@ void main() {
         find.textContaining("haven't added a trusted contact"),
         findsOneWidget,
       );
-      expect(find.text('Use this plan'), findsNothing);
+      expect(find.text('Skip'), findsNothing, reason: 'nothing to skip');
       await tapText(tester, 'Continue');
       await tester.pumpAndSettle();
       expect(find.text('Add a first instruction'), findsOneWidget);
@@ -380,7 +375,7 @@ void main() {
               : _saved(version: 3, grace: 180)(r);
         },
       });
-      await tapText(tester, 'Use this plan');
+      await tapText(tester, 'Continue');
       await tester.pumpAndSettle();
 
       expect(
@@ -391,7 +386,7 @@ void main() {
       expect(_to(adapter, 'GET', '/v1/plan'), hasLength(2));
       expect(container.read(setupControllerProvider).value!.plan!.version, 2);
 
-      await tapText(tester, 'Use this plan');
+      await tapText(tester, 'Continue');
       await tester.pumpAndSettle();
       expect(_to(adapter, 'PUT', '/v1/plan').map((r) => r.header('If-Match')), [
         '"plan-1"',
@@ -411,7 +406,7 @@ void main() {
               : _saved()(r);
         },
       });
-      await tapText(tester, 'Use this plan');
+      await tapText(tester, 'Continue');
       for (var i = 0; i < 10; i++) {
         await tester.pump(const Duration(milliseconds: 100));
       }
@@ -449,7 +444,7 @@ void main() {
           },
         ),
       });
-      await tapText(tester, 'Use this plan');
+      await tapText(tester, 'Continue');
       await tester.pumpAndSettle();
       expect(
         find.text(
@@ -483,7 +478,7 @@ void main() {
           },
         ),
       });
-      await tapText(tester, 'Use this plan');
+      await tapText(tester, 'Continue');
       await tester.pumpAndSettle();
       expect(
         find.text(
@@ -501,7 +496,7 @@ void main() {
           extra: {'resource': 'stages', 'limit': 2, 'current': 3},
         ),
       });
-      await tapText(tester, 'Use this plan');
+      await tapText(tester, 'Continue');
       await tester.pumpAndSettle();
       expect(
         find.text("You've reached the number of stages your account includes."),
@@ -515,7 +510,7 @@ void main() {
         'PUT /v1/plan': (r) => FakeReply.problem(404, 'not_found'),
       });
       expect(_to(adapter, 'GET', '/v1/contacts'), hasLength(1));
-      await tapText(tester, 'Use this plan');
+      await tapText(tester, 'Continue');
       await tester.pumpAndSettle();
       expect(
         find.textContaining("Someone in this plan can't be found any more"),
@@ -529,7 +524,7 @@ void main() {
       await _openStep(tester, 'plan', {
         'PUT /v1/plan': (r) => FakeReply.problem(409, 'incident_open'),
       });
-      await tapText(tester, 'Use this plan');
+      await tapText(tester, 'Continue');
       await tester.pumpAndSettle();
       expect(
         find.text(
@@ -549,14 +544,14 @@ void main() {
           return puts == 1 ? const FakeReply.networkError() : _saved()(r);
         },
       });
-      await tapText(tester, 'Use this plan');
+      await tapText(tester, 'Continue');
       await tester.pumpAndSettle();
       expect(
         find.textContaining("We couldn't confirm that this was saved"),
         findsOneWidget,
       );
       expect(_to(adapter, 'PUT', '/v1/plan'), hasLength(1));
-      await tapText(tester, 'Use this plan');
+      await tapText(tester, 'Continue');
       await tester.pumpAndSettle();
       expect(find.text('Add a first instruction'), findsOneWidget);
     });
@@ -596,11 +591,7 @@ void main() {
         ),
       });
       expect(_to(adapter, 'POST', '/v1/checkin/activate'), hasLength(1));
-      expect(find.text("You're set"), findsOneWidget);
-      expect(
-        find.text('We wait 3 hours before telling your contact'),
-        findsOneWidget,
-      );
+      expect(find.text('You are set'), findsOneWidget);
       expect(find.text('Review your plan'), findsNothing);
       expect(
         container.read(setupControllerProvider).value!.scheduleActive,
@@ -637,13 +628,13 @@ void main() {
       await tapText(tester, 'Review your plan');
       await tester.pumpAndSettle();
       expect(find.text('Your plan'), findsOneWidget);
-      expect(find.text('Step 6 of 9'), findsOneWidget);
+      expect(find.bySemanticsLabel('Step 6 of 9'), findsOneWidget);
 
-      await tapText(tester, 'Use this plan');
+      await tapText(tester, 'Continue');
       await tester.pumpAndSettle();
       expect(_to(adapter, 'PUT', '/v1/plan'), hasLength(1));
       // Back at the last step, which asks the server again.
-      expect(find.text("You're set"), findsOneWidget);
+      expect(find.text('You are set'), findsOneWidget);
       expect(_to(adapter, 'POST', '/v1/checkin/activate'), hasLength(2));
     });
 
@@ -662,7 +653,7 @@ void main() {
       expect(find.text('Add a trusted contact'), findsNothing);
       await tapText(tester, 'Review your plan');
       await tester.pumpAndSettle();
-      expect(find.text('Step 6 of 9'), findsOneWidget);
+      expect(find.bySemanticsLabel('Step 6 of 9'), findsOneWidget);
     });
 
     testWidgets('no_contacts and no_stages: both are said, contact first, '
@@ -686,7 +677,7 @@ void main() {
         find.text("Who should we tell if you don't check in?"),
         findsOneWidget,
       );
-      expect(find.text('Step 4 of 9'), findsOneWidget);
+      expect(find.bySemanticsLabel('Step 4 of 9'), findsOneWidget);
     });
 
     testWidgets('a requirement this version does not know offers no button, '

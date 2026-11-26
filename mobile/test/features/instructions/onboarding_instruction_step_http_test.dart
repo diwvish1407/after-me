@@ -7,6 +7,7 @@ import 'package:afterme/core/storage/preferences_store.dart';
 import 'package:afterme/core/storage/secure_store.dart';
 import 'package:afterme/features/contacts/data/contacts_repository.dart';
 import 'package:afterme/features/instructions/application/instructions_controller.dart';
+import 'package:afterme/features/instructions/data/instructions_repository.dart';
 import 'package:afterme/features/onboarding/application/onboarding_controller.dart';
 import 'package:afterme/features/onboarding/application/setup_controller.dart';
 import 'package:afterme/features/plan/data/plan_repository.dart';
@@ -221,14 +222,7 @@ class _Step {
 /// Chooses the time "1 day" in the form: the plan's own stage, or, with a plan that has
 /// none that far out, a time that is added to it.
 Future<void> _chooseDay(WidgetTester tester) async {
-  final finder = find.widgetWithText(
-    RadioListTile<String>,
-    "If you haven't checked in for 1 day",
-  );
-  await tester.ensureVisible(finder.first);
-  await tester.pump();
-  await tester.tap(finder.first);
-  await tester.pumpAndSettle();
+  await pickDropdown<String>(tester, "If you haven't checked in for 1 day");
 }
 
 void main() {
@@ -241,7 +235,7 @@ void main() {
       await tester.pumpAndSettle();
       await typeInto(tester, 'Title', 'House keys');
       await _chooseDay(tester);
-      await tapText(tester, 'Save instruction');
+      await tapText(tester, 'Save');
       await tester.pumpAndSettle();
 
       final post = step.to('POST', '/v1/instructions').single;
@@ -278,7 +272,7 @@ void main() {
         await step.open(tester);
         await tapText(tester, 'Write your own');
         await tester.pumpAndSettle();
-        await tester.tap(find.widgetWithText(ChoiceChip, 'Pets'));
+        await pickDropdown<InstructionCategory>(tester, 'Pets');
         await tester.pump();
         await typeInto(tester, 'Title', 'A-very-secret-title');
         await tester.enterText(
@@ -287,7 +281,7 @@ void main() {
         );
         await tester.pumpAndSettle();
         await _chooseDay(tester);
-        await tapText(tester, 'Save instruction');
+        await tapText(tester, 'Save');
         await tester.pumpAndSettle();
 
         expect(step.server.created, hasLength(1));
@@ -313,7 +307,7 @@ void main() {
         findsOneWidget,
       );
       await _chooseDay(tester);
-      await tapText(tester, 'Save instruction');
+      await tapText(tester, 'Save');
       await tester.pumpAndSettle();
 
       final put = step.to('PUT', '/v1/plan').single;
@@ -361,7 +355,7 @@ void main() {
       await tapText(tester, 'Pets');
       await tester.pumpAndSettle();
       await _chooseDay(tester);
-      await tapText(tester, 'Save instruction');
+      await tapText(tester, 'Save');
       await tester.pumpAndSettle();
       expect(
         find.text("More instructions aren't available yet"),
@@ -375,7 +369,7 @@ void main() {
       await tapText(tester, 'Close');
       await tester.pumpAndSettle();
       expect(find.text('Stay protected'), findsNothing);
-      expect(find.text('Save instruction'), findsOneWidget);
+      expect(find.text('Save'), findsOneWidget);
     });
 
     testWidgets('a field the server refuses is said on that field', (
@@ -399,7 +393,7 @@ void main() {
       await tapText(tester, 'Pets');
       await tester.pumpAndSettle();
       await _chooseDay(tester);
-      await tapText(tester, 'Save instruction');
+      await tapText(tester, 'Save');
       await tester.pumpAndSettle();
       expect(
         find.text('That title is too long. Use 120 characters or fewer.'),
@@ -421,7 +415,7 @@ void main() {
       await tapText(tester, 'Pets');
       await tester.pumpAndSettle();
       await _chooseDay(tester);
-      await tapText(tester, 'Save instruction');
+      await tapText(tester, 'Save');
       await tester.pumpAndSettle();
       expect(
         find.textContaining("We couldn't confirm that this was saved"),
@@ -461,7 +455,7 @@ void main() {
         await tester.pumpAndSettle();
         await typeInto(tester, 'Title', 'House keys');
         await _chooseDay(tester);
-        await tapText(tester, 'Save instruction');
+        await tapText(tester, 'Save');
         await tester.pumpAndSettle();
 
         expect(step.to('POST', '/v1/instructions'), hasLength(1));
@@ -477,7 +471,7 @@ void main() {
         step.container.read(routerProvider).go(OnboardingStep.instruction.path);
         await tester.pumpAndSettle();
         expect(find.textContaining('Saved: House keys'), findsOneWidget);
-        expect(find.text('Save instruction'), findsNothing);
+        expect(find.text('Save'), findsNothing);
       },
     );
 

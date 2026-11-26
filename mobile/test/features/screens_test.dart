@@ -53,51 +53,45 @@ Future<void> _pumpScreen(
 
 void main() {
   group('welcome screen', () {
-    testWidgets(
-      'shows the product, tagline, the three cards, an enabled Get started and '
-      'the disclaimer',
-      (tester) async {
-        await _pumpScreen(tester, const WelcomeScreen(showDevGallery: false));
+    testWidgets('shows the product, tagline, the first card, Next, Sign in, Skip and '
+        'the disclaimer', (tester) async {
+      await _pumpScreen(tester, const WelcomeScreen(showDevGallery: false));
 
-        expect(find.text('AfterMe'), findsOneWidget);
-        expect(
-          find.text("If you can't answer, your instructions can."),
-          findsOneWidget,
-        );
-        expect(find.textContaining('not an emergency service'), findsOneWidget);
-        expect(
-          find.text('Prepare today for what someone may need tomorrow.'),
-          findsOneWidget,
-        );
-        final getStarted = tester.widget<FilledButton>(
-          find.widgetWithText(FilledButton, 'Get started'),
-        );
-        expect(getStarted.onPressed, isNotNull);
-        expect(
-          find.text('Design system gallery (developer build)'),
-          findsNothing,
-        );
-      },
-    );
+      expect(find.text('AfterMe'), findsOneWidget);
+      expect(
+        find.text("If you can't answer, your instructions can."),
+        findsOneWidget,
+      );
+      expect(find.textContaining('not an emergency service'), findsOneWidget);
+      expect(
+        find.text('Prepare today for what someone may need tomorrow.'),
+        findsOneWidget,
+      );
+      // Get started waits for the last card; Sign in and Skip are always there.
+      expect(find.text('Get started'), findsNothing);
+      expect(find.text('Next'), findsOneWidget);
+      expect(find.text('Sign in'), findsOneWidget);
+      expect(find.text('Skip'), findsOneWidget);
+      expect(
+        find.text('Design system gallery (developer build)'),
+        findsNothing,
+      );
+    });
 
-    testWidgets('Next walks through the three cards', (tester) async {
+    testWidgets('Next walks through the three cards; Get started is on the '
+        'last', (tester) async {
       await _pumpScreen(tester, const WelcomeScreen(showDevGallery: false));
       await tester.tap(find.text('Next'));
-      await tester.pump();
+      await tester.pumpAndSettle();
       expect(find.textContaining('Check in with one tap'), findsOneWidget);
       await tester.tap(find.text('Next'));
-      await tester.pump();
+      await tester.pumpAndSettle();
       expect(find.textContaining('You decide who gets what'), findsOneWidget);
-      expect(
-        tester
-            .widget<TextButton>(find.widgetWithText(TextButton, 'Next'))
-            .onPressed,
-        isNull,
-        reason: 'the slot stays, disabled, so focus is not lost',
-      );
+      expect(find.text('Next'), findsNothing);
+      expect(find.text('Get started'), findsOneWidget);
       await tester.tap(find.text('Back'));
-      await tester.pump();
-      expect(find.textContaining('Check in with one tap'), findsOneWidget);
+      await tester.pumpAndSettle();
+      expect(find.text('Next'), findsOneWidget);
     });
 
     testWidgets('the new card is announced as one live region after Next', (
@@ -142,7 +136,6 @@ void main() {
       find.textContaining('Turn on check-ins to start checking in.'),
       findsOneWidget,
     );
-    expect(find.text("Let's finish your plan"), findsOneWidget);
     expect(find.text('Add a trusted contact'), findsOneWidget);
     await expectLater(tester, meetsGuideline(textContrastGuideline));
     await expectLater(tester, meetsGuideline(androidTapTargetGuideline));

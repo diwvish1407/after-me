@@ -63,12 +63,22 @@ void main() {
   });
 
   group('Validators.newPassword', () {
-    test('needs 10 to 128 characters', () {
+    test('needs 8 to 128 characters', () {
       expect(Validators.newPassword(''), FieldIssue.required);
-      expect(Validators.newPassword('123456789'), FieldIssue.passwordTooShort);
-      expect(Validators.newPassword('1234567890'), isNull);
-      expect(Validators.newPassword('a' * 128), isNull);
-      expect(Validators.newPassword('a' * 129), FieldIssue.passwordTooLong);
+      expect(Validators.newPassword('Abc12#x'), FieldIssue.passwordTooShort);
+      expect(Validators.newPassword('Abc12#xy'), isNull);
+      expect(Validators.newPassword('A1#${'a' * 125}'), isNull);
+      expect(
+        Validators.newPassword('A1#${'a' * 126}'),
+        FieldIssue.passwordTooLong,
+      );
+    });
+
+    test('needs a capital letter, a number and a special character', () {
+      expect(Validators.newPassword('abcdefgh'), FieldIssue.passwordWeak);
+      expect(Validators.newPassword('Abcdefgh'), FieldIssue.passwordWeak);
+      expect(Validators.newPassword('Abcdefg1'), FieldIssue.passwordWeak);
+      expect(Validators.newPassword('Abcdef1!'), isNull);
     });
 
     test('rejects the email address and its local part', () {
@@ -87,11 +97,11 @@ void main() {
         FieldIssue.passwordMatchesEmail,
       );
       expect(
-        Validators.newPassword('something else entirely', email: 'a@b.co'),
+        Validators.newPassword('Something else 1!', email: 'a@b.co'),
         isNull,
       );
       expect(
-        Validators.newPassword('longlocalpart', email: '   '),
+        Validators.newPassword('Longlocalpart1!', email: '   '),
         isNull,
         reason: 'an empty email gives nothing to compare with',
       );
@@ -352,10 +362,11 @@ void main() {
     test('is gentle and graded', () {
       expect(passwordStrength(''), PasswordStrength.empty);
       expect(passwordStrength('short'), PasswordStrength.tooShort);
-      expect(passwordStrength('abcdefghij'), PasswordStrength.fine);
+      expect(passwordStrength('abcdefghij'), PasswordStrength.tooShort);
+      expect(passwordStrength('Abcdef1!'), PasswordStrength.fine);
       expect(passwordStrength('Abcdefg1hijk!'), PasswordStrength.strong);
       expect(
-        passwordStrength('correct horse battery staple'),
+        passwordStrength('Correct horse battery staple 1!'),
         PasswordStrength.strong,
       );
       expect(

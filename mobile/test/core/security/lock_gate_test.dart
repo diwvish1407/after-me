@@ -111,7 +111,7 @@ void main() {
       final fakes = _lockedFakes(outcomes: [AuthOutcome.canceled]);
       await pumpAfterMe(tester, fakes: fakes, status: AuthStatus.signedOut);
       expect(find.text('AfterMe is locked'), findsNothing);
-      expect(find.text('Get started'), findsOneWidget);
+      expect(find.text('Next'), findsOneWidget, reason: 'the welcome screen');
       expect(fakes.localAuth.prompts, 0);
     });
 

@@ -55,7 +55,6 @@ void main() {
     final fakes = _world()..incidents.addClosed(_closed(1));
     await openApp(tester, fakes: fakes, route: AppRoutes.settings);
     expect(find.text('Past incidents'), findsOneWidget);
-    expect(find.text('Missed check-ins and how they ended'), findsOneWidget);
     await tapText(tester, 'Past incidents');
     await tester.pumpAndSettle();
     expect(find.textContaining('Missed check-in on'), findsOneWidget);

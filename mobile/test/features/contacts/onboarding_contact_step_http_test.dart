@@ -90,7 +90,7 @@ void main() {
     });
     expect(find.text('Preview: nothing is saved or sent yet.'), findsNothing);
     await fillContactForm(tester);
-    await tapText(tester, 'Save and continue');
+    await tapText(tester, 'Continue');
     await tester.pumpAndSettle();
 
     final post = adapter.requests.singleWhere(
@@ -132,7 +132,7 @@ void main() {
       return _entitlements(request);
     });
     await fillContactForm(tester);
-    await tapText(tester, 'Save and continue');
+    await tapText(tester, 'Continue');
     await tester.pumpAndSettle();
     expect(
       find.text("More trusted contacts aren't available yet"),
@@ -140,7 +140,7 @@ void main() {
     );
     await tapText(tester, 'Close');
     await tester.pumpAndSettle();
-    await tapText(tester, 'Skip for now');
+    await tapText(tester, 'Skip');
     await tester.pumpAndSettle();
     expect(find.text('When should you check in?'), findsOneWidget);
   });
@@ -155,10 +155,10 @@ void main() {
       return FakeReply.problem(409, 'contact_duplicate');
     });
     await fillContactForm(tester);
-    await tapText(tester, 'Save and continue');
+    await tapText(tester, 'Continue');
     await tester.pumpAndSettle();
     expect(
-      fieldError(tester, 'Their email'),
+      fieldError(tester, 'Email'),
       "You've already added someone with this email address.",
     );
     expect(find.text('When should you check in?'), findsNothing);
@@ -174,10 +174,10 @@ void main() {
       return FakeReply.problem(422, 'cannot_be_own_email');
     });
     await fillContactForm(tester);
-    await tapText(tester, 'Save and continue');
+    await tapText(tester, 'Continue');
     await tester.pumpAndSettle();
     expect(
-      fieldError(tester, 'Their email'),
+      fieldError(tester, 'Email'),
       "That's your own email address. Choose someone else.",
     );
   });
@@ -199,7 +199,7 @@ void main() {
       return _entitlements(request);
     });
     await fillContactForm(tester);
-    await tapText(tester, 'Save and continue');
+    await tapText(tester, 'Continue');
     await tester.pumpAndSettle();
     expect(find.textContaining("You're offline"), findsOneWidget);
     expect(
@@ -207,7 +207,7 @@ void main() {
       1,
       reason: 'a failed write is not repeated behind their back',
     );
-    await tapText(tester, 'Save and continue');
+    await tapText(tester, 'Continue');
     await tester.pumpAndSettle();
     expect(find.text('When should you check in?'), findsOneWidget);
   });

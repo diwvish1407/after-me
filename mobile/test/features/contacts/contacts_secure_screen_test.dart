@@ -53,7 +53,7 @@ void main() {
 
     await tapText(tester, 'Edit');
     await tester.pumpAndSettle();
-    expect(find.text('Save changes'), findsOneWidget);
+    expect(find.text('Save'), findsOneWidget);
     expect(fakes.secureScreen.secure, isTrue, reason: 'edit contact');
 
     await tester.pageBack();
@@ -73,7 +73,7 @@ void main() {
       'afterme.onboardingStep': OnboardingStep.contact.name,
     });
     await pumpAfterMe(tester, fakes: fakes, status: AuthStatus.signedIn);
-    expect(find.text('Save and continue'), findsOneWidget);
+    expect(find.text('Continue'), findsOneWidget);
     expect(fakes.secureScreen.secure, isTrue);
   });
 }

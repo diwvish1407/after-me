@@ -184,7 +184,8 @@ void main() {
     testWidgets('dev: the gallery is reachable from welcome', (tester) async {
       await _pumpApp(tester, status: AuthStatus.signedOut, config: devConfig);
       final link = find.text('Design system gallery (developer build)');
-      await tester.scrollUntilVisible(link, 100);
+      await tester.ensureVisible(link);
+      await tester.pump();
       await tester.tap(link);
       // The gallery shows spinners forever, so pump frames instead of settling.
       await tester.pump();
@@ -235,8 +236,9 @@ void main() {
       tester,
     ) async {
       await _pumpApp(tester, status: AuthStatus.signedOut);
-      final link = find.text('I already have an account');
-      await tester.scrollUntilVisible(link, 100);
+      final link = find.text('Sign in');
+      await tester.ensureVisible(link);
+      await tester.pump();
       await tester.tap(link);
       await tester.pumpAndSettle();
       expect(find.byType(SignInScreen), findsOneWidget);

@@ -96,7 +96,7 @@ void main() {
 
     await tapText(tester, 'Edit');
     await tester.pumpAndSettle();
-    expect(find.text('Save changes'), findsOneWidget);
+    expect(find.text('Save'), findsOneWidget);
     expect(fakes.secureScreen.secure, isTrue);
 
     await tester.pageBack();
@@ -208,7 +208,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(fakes.secureScreen.secure, isTrue);
 
-      await tapText(tester, 'Skip for now');
+      await tapText(tester, 'Skip');
       await tester.pumpAndSettle();
       expect(find.text('Stay protected'), findsOneWidget);
       expect(fakes.secureScreen.secure, isFalse);

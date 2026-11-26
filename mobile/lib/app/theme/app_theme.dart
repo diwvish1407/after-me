@@ -234,7 +234,10 @@ abstract final class AppTheme {
         floatingLabelStyle: text.bodyMedium?.copyWith(color: t.primary),
         hintStyle: text.bodyLarge?.copyWith(color: t.textMuted),
         helperStyle: text.bodySmall?.copyWith(color: t.textMuted),
-        errorStyle: text.bodySmall?.copyWith(color: t.escalation),
+        errorStyle: text.bodySmall?.copyWith(
+          color: t.escalation,
+          fontWeight: FontWeight.w500,
+        ),
         errorMaxLines: 3,
         helperMaxLines: 3,
       ),

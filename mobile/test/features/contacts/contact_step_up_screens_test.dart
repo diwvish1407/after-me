@@ -211,8 +211,8 @@ void main() {
       String email = 'mum@example.com',
     }) async {
       await openApp(tester, fakes: fakes, route: AppRoutes.contactEdit(id));
-      await typeInto(tester, 'Their email', email);
-      await tapText(tester, 'Save changes');
+      await typeInto(tester, 'Email', email);
+      await tapText(tester, 'Save');
       await _frames(tester);
     }
 
@@ -259,7 +259,7 @@ void main() {
       expect(find.byType(FailureNotice), findsNothing);
       expect(
         tester
-            .widget<TextField>(find.widgetWithText(TextField, 'Their email'))
+            .widget<TextField>(find.widgetWithText(TextField, 'Email'))
             .controller!
             .text,
         'mum@example.com',
@@ -268,9 +268,7 @@ void main() {
       expect(find.textContaining('Changing the email address'), findsOneWidget);
       expect(
         tester
-            .widget<FilledButton>(
-              find.widgetWithText(FilledButton, 'Save changes'),
-            )
+            .widget<FilledButton>(find.widgetWithText(FilledButton, 'Save'))
             .onPressed,
         isNotNull,
         reason: 'not stuck busy',
@@ -311,16 +309,16 @@ void main() {
 
       expect(find.text("Confirm it's you"), findsNothing);
       expect(find.byType(EditContactScreen), findsOneWidget);
-      expect(fieldError(tester, 'Their email'), isNotNull);
+      expect(fieldError(tester, 'Email'), isNotNull);
       expect(fakes.contacts.contacts.first.email, 'mom@example.com');
     });
 
     testWidgets('a name or a phone number alone never asks', (tester) async {
       final fakes = _active();
       await openApp(tester, fakes: fakes, route: AppRoutes.contactEdit('c1'));
-      await typeInto(tester, 'Their name', 'Mum');
-      await typeInto(tester, 'Their phone (optional)', '+14155550123');
-      await tapText(tester, 'Save changes');
+      await typeInto(tester, 'Name', 'Mum');
+      await typeInto(tester, 'Phone (optional)', '+14155550123');
+      await tapText(tester, 'Save');
       await tester.pumpAndSettle();
 
       expect(find.text("Confirm it's you"), findsNothing);

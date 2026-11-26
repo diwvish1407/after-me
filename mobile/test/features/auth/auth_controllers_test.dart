@@ -30,7 +30,7 @@ ProviderContainer _container(TestFakes fakes, {InMemorySecureStore? store}) {
 
 Future<SignupController> _startedSignup(
   ProviderContainer container, {
-  String password = 'a long unique phrase',
+  String password = 'A long unique phrase 1!',
 }) async {
   final signup = container.read(signupControllerProvider.notifier);
   expect(
@@ -88,7 +88,7 @@ void main() {
         final started = await signup.start(
           displayName: 'D',
           email: 'x@example.com',
-          password: 'a long unique phrase',
+          password: 'A long unique phrase 1!',
           timezone: 'UTC',
         );
         expect(started, isFalse);
@@ -111,13 +111,13 @@ void main() {
       final first = signup.start(
         displayName: 'D',
         email: 'x@example.com',
-        password: 'a long unique phrase',
+        password: 'A long unique phrase 1!',
         timezone: 'UTC',
       );
       final second = await signup.start(
         displayName: 'D',
         email: 'x@example.com',
-        password: 'a long unique phrase',
+        password: 'A long unique phrase 1!',
         timezone: 'UTC',
       );
       expect(second, isFalse);
@@ -154,7 +154,7 @@ void main() {
         ]) {
           final value = await prefs.getString(key) ?? '';
           expect(value, isNot(contains('482913')));
-          expect(value, isNot(contains('a long unique phrase')));
+          expect(value, isNot(contains('A long unique phrase 1!')));
         }
         expect(await prefs.getString(PreferenceKey.onboardingUserId), 'user-1');
         expect(await prefs.getString(PreferenceKey.onboardingStep), 'contact');

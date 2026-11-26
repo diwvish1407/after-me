@@ -2,6 +2,7 @@ import 'package:afterme/app/app.dart';
 import 'package:afterme/app/router.dart';
 import 'package:afterme/core/auth/auth_controller.dart';
 import 'package:afterme/core/config/app_config.dart';
+import 'package:afterme/features/contacts/data/contacts_repository.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
@@ -73,10 +74,10 @@ Future<void> fillContactForm(
   String email = 'mom@example.com',
   String? phone,
 }) async {
-  await typeInto(tester, 'Their name', name);
-  await tapText(tester, relationship);
-  await typeInto(tester, 'Their email', email);
+  await typeInto(tester, 'Name', name);
+  await pickDropdown<ContactRelationship>(tester, relationship);
+  await typeInto(tester, 'Email', email);
   if (phone != null) {
-    await typeInto(tester, 'Their phone (optional)', phone);
+    await typeInto(tester, 'Phone (optional)', phone);
   }
 }

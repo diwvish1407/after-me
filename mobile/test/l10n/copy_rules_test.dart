@@ -30,6 +30,10 @@ const _allowedPhrases = <String, String>{
   'in danger':
       'The emergency line every alert carries: "If you believe someone is in danger, '
       'contact your local emergency services." It is the only place the word appears.',
+  'in immediate danger': 'The same emergency-number advice, in the confirmation of the Danger button.',
+  'DANGER':
+      'The red Danger button on Home (homeDangerLabel), named the way the person asked '
+      'for it: it alerts trusted contacts at once.',
 };
 
 /// Purchase vocabulary (PRD D5, decided 2026-10-15: no Play Billing in 1.0; Premium is
@@ -85,6 +89,8 @@ const _capsAllowed = <String>{
   // about what to type exactly, not a raised voice.
   'DELETE',
   'PIN',
+  // The red Danger button on Home, a name like I'M OK (homeDangerLabel).
+  'DANGER',
   // Abbreviations (not shouting): file formats, protocols and standards.
   'AM',
   'PM',

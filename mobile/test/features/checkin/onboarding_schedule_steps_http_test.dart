@@ -163,7 +163,7 @@ void main() {
       });
       expect(find.text('Check in every day by 8:00 PM.'), findsOneWidget);
       await tapText(tester, 'Every week');
-      await tapText(tester, 'Save schedule');
+      await tapText(tester, 'Continue');
       await tester.pumpAndSettle();
 
       final put = _to(adapter, 'PUT', '/v1/checkin/schedule').single;
@@ -209,7 +209,7 @@ void main() {
         },
       });
       await tapText(tester, 'Every week');
-      await tapText(tester, 'Save schedule');
+      await tapText(tester, 'Continue');
       await tester.pumpAndSettle();
 
       expect(
@@ -225,7 +225,7 @@ void main() {
         3,
       );
 
-      await tapText(tester, 'Save schedule');
+      await tapText(tester, 'Continue');
       await tester.pumpAndSettle();
       final sent = _to(adapter, 'PUT', '/v1/checkin/schedule');
       expect(sent.map((r) => r.header('If-Match')), ['"sched-1"', '"sched-2"']);
@@ -237,7 +237,7 @@ void main() {
         'PUT /v1/checkin/schedule': (r) =>
             FakeReply.problem(409, 'incident_open'),
       });
-      await tapText(tester, 'Save schedule');
+      await tapText(tester, 'Continue');
       await tester.pumpAndSettle();
       expect(
         find.text(
@@ -260,7 +260,7 @@ void main() {
           },
         ),
       });
-      await tapText(tester, 'Save schedule');
+      await tapText(tester, 'Continue');
       await tester.pumpAndSettle();
       expect(find.text('Some details need another look.'), findsOneWidget);
     });
@@ -278,11 +278,11 @@ void main() {
                 });
         },
       });
-      await tapText(tester, 'Save schedule');
+      await tapText(tester, 'Continue');
       await tester.pumpAndSettle();
       expect(find.textContaining("You're offline"), findsOneWidget);
       expect(_to(adapter, 'PUT', '/v1/checkin/schedule'), hasLength(1));
-      await tapText(tester, 'Save schedule');
+      await tapText(tester, 'Continue');
       await tester.pumpAndSettle();
       expect(find.text('Your plan'), findsOneWidget);
     });
@@ -296,7 +296,10 @@ void main() {
         ),
       });
       expect(find.text('Check in every 2 days by 9:15 AM.'), findsOneWidget);
-      expect(find.text("We'll remind you 30 minutes before."), findsOneWidget);
+      expect(
+        find.textContaining("We'll remind you 30 minutes before."),
+        findsOneWidget,
+      );
     });
 
     testWidgets('a reminder that is off is said so', (tester) async {
@@ -307,7 +310,7 @@ void main() {
           const {'ETag': '"sched-1"'},
         ),
       });
-      expect(find.text("We won't send a reminder."), findsOneWidget);
+      expect(find.textContaining("We won't send a reminder."), findsOneWidget);
     });
   });
 
@@ -323,7 +326,7 @@ void main() {
       final post = _to(adapter, 'POST', '/v1/checkin/activate').single;
       expect(post.data, isNull);
       expect(post.bearer, isNotNull);
-      expect(find.text("You're set"), findsOneWidget);
+      expect(find.text('You are set'), findsOneWidget);
       expect(
         find.text(
           "Your plan is active. Mom has been invited, and we'll let you know when they accept.",
@@ -371,7 +374,6 @@ void main() {
       await tapText(tester, 'Go to Home');
       await tester.pumpAndSettle();
       expect(find.byType(HomeScreen), findsOneWidget);
-      expect(find.text("Let's finish your plan"), findsOneWidget);
       expect(find.text('Add a trusted contact'), findsOneWidget);
     });
 
@@ -411,11 +413,11 @@ void main() {
         },
       });
       expect(find.textContaining("You're offline"), findsOneWidget);
-      expect(find.text("You're set"), findsNothing);
+      expect(find.text('You are set'), findsNothing);
       expect(_to(adapter, 'POST', '/v1/checkin/activate'), hasLength(1));
       await tapText(tester, 'Try again');
       await tester.pumpAndSettle();
-      expect(find.text("You're set"), findsOneWidget);
+      expect(find.text('You are set'), findsOneWidget);
     });
 
     testWidgets('an open incident while activating is said calmly', (

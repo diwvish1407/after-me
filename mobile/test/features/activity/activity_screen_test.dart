@@ -1,6 +1,5 @@
 import 'package:afterme/app/router.dart';
 import 'package:afterme/core/api/failures/app_failure.dart';
-import 'package:afterme/features/home/data/models/home_models.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -27,7 +26,6 @@ void main() {
     fakes.activity.items = [activityItem('checkin.recorded')];
     await openApp(tester, fakes: fakes, route: AppRoutes.settings);
     expect(find.text('Activity'), findsOneWidget);
-    expect(find.text('What happened on your account'), findsOneWidget);
     await tapText(tester, 'Activity');
     await tester.pumpAndSettle();
     expect(find.text('You checked in'), findsOneWidget);
@@ -310,61 +308,18 @@ void main() {
       fakes.server.activateNow();
     }
 
-    testWidgets('shows the newest three as short lines and the way to all '
-        'of it', (tester) async {
+    testWidgets('Home keeps activity off the page; the notifications section '
+        'links to all of it', (tester) async {
       final fakes = _world();
       activeHome(fakes);
-      fakes.server.recentActivity = [
-        RecentActivity(
-          action: 'checkin.recorded',
-          occurredAt: DateTime.utc(2026, 10, 8, 9),
-        ),
-        RecentActivity(
-          action: 'release.viewed',
-          occurredAt: DateTime.utc(2026, 10, 8, 8),
-        ),
-        RecentActivity(
-          action: 'plan.updated',
-          occurredAt: DateTime.utc(2026, 10, 7, 12),
-        ),
-        RecentActivity(
-          action: 'schedule.activated',
-          occurredAt: DateTime.utc(2026, 10, 7, 11),
-        ),
-        RecentActivity(
-          action: 'contact.created',
-          occurredAt: DateTime.utc(2026, 10, 7, 10),
-        ),
-      ];
-      await openApp(tester, fakes: fakes, route: AppRoutes.home);
-      await tester.scrollUntilVisible(
-        find.text('See all activity'),
-        300,
-        scrollable: find.byType(Scrollable).first,
-      );
-      expect(find.text('Recent activity'), findsOneWidget);
-      expect(find.text('You checked in'), findsOneWidget);
-      // The aggregate carries an action and a time only: no name, no title.
-      expect(
-        find.text('A trusted contact viewed what you shared'),
-        findsOneWidget,
-      );
-      expect(find.text('Your plan was updated'), findsOneWidget);
-      expect(find.text('Check-ins were turned on'), findsNothing);
-      expect(find.text('Today · 2:30 PM'), findsWidgets);
       fakes.activity.items = [activityItem('checkin.recorded')];
+      await openApp(tester, fakes: fakes, route: AppRoutes.home);
+      expect(find.text('Recent activity'), findsNothing);
+      await openNotifications(tester);
       await tester.tap(find.text('See all activity'));
       await tester.pumpAndSettle();
       expect(find.text('Activity'), findsWidgets);
-      expect(find.text('Today'), findsOneWidget);
-    });
-
-    testWidgets('says nothing while there is nothing to say', (tester) async {
-      final fakes = _world();
-      activeHome(fakes);
-      await openApp(tester, fakes: fakes, route: AppRoutes.home);
-      expect(find.text('Recent activity'), findsNothing);
-      expect(find.text('See all activity'), findsNothing);
+      expect(find.text('You checked in'), findsOneWidget);
     });
   });
 }

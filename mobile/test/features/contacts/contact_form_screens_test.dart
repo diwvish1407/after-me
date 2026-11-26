@@ -28,42 +28,40 @@ void main() {
     ) async {
       final fakes = TestFakes();
       await openApp(tester, fakes: fakes, route: AppRoutes.peopleAdd);
-      await tapText(tester, 'Save and send invitation');
-      expect(fieldError(tester, 'Their name'), 'Please fill this in.');
-      expect(fieldError(tester, 'Their email'), 'Please fill this in.');
+      await tapText(tester, 'Invite');
+      expect(fieldError(tester, 'Name'), 'Please fill this in.');
+      expect(fieldError(tester, 'Email'), 'Please fill this in.');
       expect(find.text('Choose how you know them.'), findsOneWidget);
 
-      await typeInto(tester, 'Their name', 'Mom');
-      await typeInto(tester, 'Their email', 'not-an-email');
-      await typeInto(tester, 'Their phone (optional)', '12');
-      await tapText(tester, 'Mother');
-      await tapText(tester, 'Save and send invitation');
-      expect(fieldError(tester, 'Their email'), 'Enter a valid email address.');
-      expect(fieldError(tester, 'Their phone (optional)'), isNotNull);
+      await typeInto(tester, 'Name', 'Mom');
+      await typeInto(tester, 'Email', 'not-an-email');
+      await typeInto(tester, 'Phone (optional)', '12');
+      await pickDropdown<ContactRelationship>(tester, 'Mother');
+      await tapText(tester, 'Invite');
+      expect(fieldError(tester, 'Email'), 'Enter a valid email address.');
+      expect(fieldError(tester, 'Phone (optional)'), isNotNull);
       expect(fakes.contacts.calls, isNot(contains('create')));
 
-      await typeInto(tester, 'Their name', 'see example.com');
-      await tapText(tester, 'Save and send invitation');
-      expect(fieldError(tester, 'Their name'), isNotNull);
-      await typeInto(tester, 'Their name', 'AfterMe');
-      await tapText(tester, 'Save and send invitation');
-      expect(fieldError(tester, 'Their name'), isNotNull);
+      await typeInto(tester, 'Name', 'see example.com');
+      await tapText(tester, 'Invite');
+      expect(fieldError(tester, 'Name'), isNotNull);
+      await typeInto(tester, 'Name', 'AfterMe');
+      await tapText(tester, 'Invite');
+      expect(fieldError(tester, 'Name'), isNotNull);
     });
 
     testWidgets('typing clears the error of that field', (tester) async {
       await openApp(tester, route: AppRoutes.peopleAdd);
-      await tapText(tester, 'Save and send invitation');
-      expect(fieldError(tester, 'Their name'), isNotNull);
-      await typeInto(tester, 'Their name', 'M');
-      expect(fieldError(tester, 'Their name'), isNull);
+      await tapText(tester, 'Invite');
+      expect(fieldError(tester, 'Name'), isNotNull);
+      await typeInto(tester, 'Name', 'M');
+      expect(fieldError(tester, 'Name'), isNull);
     });
 
     testWidgets('explains the invitation before saving', (tester) async {
       await openApp(tester, route: AppRoutes.peopleAdd);
       expect(
-        find.textContaining(
-          'We will email them an invitation they must accept.',
-        ),
+        find.text("We'll email them an invite to accept."),
         findsOneWidget,
       );
     });
@@ -78,7 +76,7 @@ void main() {
         email: ' Mom@Example.COM ',
         phone: '+1 (415) 555-0123',
       );
-      await tapText(tester, 'Save and send invitation');
+      await tapText(tester, 'Invite');
       await tester.pumpAndSettle();
       expect(find.byType(ContactDetailScreen), findsOneWidget);
       expect(find.text('Pending'), findsOneWidget);
@@ -95,18 +93,18 @@ void main() {
       final fakes = TestFakes();
       await openApp(tester, fakes: fakes, route: AppRoutes.peopleAdd);
       expect(find.text('How do you know them?'), findsNothing);
-      await tapText(tester, 'Other');
+      await pickDropdown<ContactRelationship>(tester, 'Other');
       expect(find.text('How do you know them?'), findsOneWidget);
       await typeInto(tester, 'How do you know them?', 'x' * 41);
-      await typeInto(tester, 'Their name', 'Sam');
-      await typeInto(tester, 'Their email', 'sam@example.com');
-      await tapText(tester, 'Save and send invitation');
+      await typeInto(tester, 'Name', 'Sam');
+      await typeInto(tester, 'Email', 'sam@example.com');
+      await tapText(tester, 'Invite');
       expect(
         fieldError(tester, 'How do you know them?'),
         'Use 40 characters or fewer.',
       );
       await typeInto(tester, 'How do you know them?', 'Neighbour upstairs');
-      await tapText(tester, 'Save and send invitation');
+      await tapText(tester, 'Invite');
       await tester.pumpAndSettle();
       expect(
         fakes.contacts.contacts.single.relationshipLabel,
@@ -120,13 +118,13 @@ void main() {
     ) async {
       final fakes = TestFakes();
       await openApp(tester, fakes: fakes, route: AppRoutes.peopleAdd);
-      await tapText(tester, 'Other');
+      await pickDropdown<ContactRelationship>(tester, 'Other');
       await typeInto(tester, 'How do you know them?', 'Neighbour');
-      await tapText(tester, 'Friend');
+      await pickDropdown<ContactRelationship>(tester, 'Friend');
       expect(find.text('How do you know them?'), findsNothing);
-      await typeInto(tester, 'Their name', 'Sam');
-      await typeInto(tester, 'Their email', 'sam@example.com');
-      await tapText(tester, 'Save and send invitation');
+      await typeInto(tester, 'Name', 'Sam');
+      await typeInto(tester, 'Email', 'sam@example.com');
+      await tapText(tester, 'Invite');
       await tester.pumpAndSettle();
       expect(fakes.contacts.contacts.single.relationshipLabel, isNull);
     });
@@ -137,25 +135,25 @@ void main() {
       final fakes = TestFakes();
       await openApp(tester, fakes: fakes, route: AppRoutes.peopleAdd);
       await fillContactForm(tester, email: 'Diwakar@example.com');
-      await tapText(tester, 'Save and send invitation');
+      await tapText(tester, 'Invite');
       await tester.pumpAndSettle();
       expect(
-        fieldError(tester, 'Their email'),
+        fieldError(tester, 'Email'),
         "That's your own email address. Choose someone else.",
       );
       expect(find.byType(ContactDetailScreen), findsNothing);
-      await typeInto(tester, 'Their email', 'mom@example.com');
-      expect(fieldError(tester, 'Their email'), isNull);
+      await typeInto(tester, 'Email', 'mom@example.com');
+      expect(fieldError(tester, 'Email'), isNull);
     });
 
     testWidgets('a duplicate is explained on the email field', (tester) async {
       final fakes = _fakes([testContact()]);
       await openApp(tester, fakes: fakes, route: AppRoutes.peopleAdd);
       await fillContactForm(tester, name: 'Mum', email: 'MOM@example.com');
-      await tapText(tester, 'Save and send invitation');
+      await tapText(tester, 'Invite');
       await tester.pumpAndSettle();
       expect(
-        fieldError(tester, 'Their email'),
+        fieldError(tester, 'Email'),
         "You've already added someone with this email address.",
       );
     });
@@ -169,7 +167,7 @@ void main() {
       fakes.contacts.limit = 0;
       fakes.contacts.tier = 'free';
       await fillContactForm(tester);
-      await tapText(tester, 'Save and send invitation');
+      await tapText(tester, 'Invite');
       await tester.pumpAndSettle();
       expect(
         find.text("More trusted contacts aren't available yet"),
@@ -179,7 +177,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(
         tester
-            .widget<TextField>(find.widgetWithText(TextField, 'Their name'))
+            .widget<TextField>(find.widgetWithText(TextField, 'Name'))
             .controller!
             .text,
         'Mom',
@@ -203,11 +201,11 @@ void main() {
       ];
       await openApp(tester, fakes: fakes, route: AppRoutes.peopleAdd);
       await fillContactForm(tester, phone: '+14155550123');
-      await tapText(tester, 'Save and send invitation');
+      await tapText(tester, 'Invite');
       await tester.pumpAndSettle();
-      expect(fieldError(tester, 'Their name'), isNotNull);
-      expect(fieldError(tester, 'Their email'), 'Enter a valid email address.');
-      expect(fieldError(tester, 'Their phone (optional)'), isNotNull);
+      expect(fieldError(tester, 'Name'), isNotNull);
+      expect(fieldError(tester, 'Email'), 'Enter a valid email address.');
+      expect(fieldError(tester, 'Phone (optional)'), isNotNull);
     });
 
     testWidgets('label and relationship errors from the server', (
@@ -230,16 +228,16 @@ void main() {
         ),
       ];
       await openApp(tester, fakes: fakes, route: AppRoutes.peopleAdd);
-      await tapText(tester, 'Other');
+      await pickDropdown<ContactRelationship>(tester, 'Other');
       await fillContactForm(tester, relationship: 'Other');
       await typeInto(tester, 'How do you know them?', 'Pal');
-      await tapText(tester, 'Save and send invitation');
+      await tapText(tester, 'Invite');
       await tester.pumpAndSettle();
       expect(
         fieldError(tester, 'How do you know them?'),
         'Use 40 characters or fewer.',
       );
-      await tapText(tester, 'Save and send invitation');
+      await tapText(tester, 'Invite');
       await tester.pumpAndSettle();
       expect(
         fieldError(tester, 'How do you know them?'),
@@ -261,29 +259,29 @@ void main() {
       ];
       await openApp(tester, fakes: fakes, route: AppRoutes.peopleAdd);
       await fillContactForm(tester);
-      await tapText(tester, 'Save and send invitation');
+      await tapText(tester, 'Invite');
       await tester.pumpAndSettle();
       expect(
         find.textContaining("Some details need another look"),
         findsOneWidget,
       );
-      await tapText(tester, 'Save and send invitation');
+      await tapText(tester, 'Invite');
       await tester.pumpAndSettle();
       expect(
         find.textContaining("Some details need another look"),
         findsOneWidget,
       );
-      await tapText(tester, 'Save and send invitation');
+      await tapText(tester, 'Invite');
       await tester.pumpAndSettle();
       expect(find.textContaining("You're offline"), findsOneWidget);
       expect(
         tester
-            .widget<TextField>(find.widgetWithText(TextField, 'Their email'))
+            .widget<TextField>(find.widgetWithText(TextField, 'Email'))
             .controller!
             .text,
         'mom@example.com',
       );
-      await tapText(tester, 'Save and send invitation');
+      await tapText(tester, 'Invite');
       await tester.pumpAndSettle();
       expect(find.byType(ContactDetailScreen), findsOneWidget);
     });
@@ -297,18 +295,19 @@ void main() {
         email: 'bro@example.com',
       );
       await openApp(tester, fakes: fakes, route: AppRoutes.peopleAdd);
-      await tapText(tester, 'Pick from my contacts');
+      await tester.tap(find.byTooltip('Choose from my contacts'));
+      await tester.pump();
       await tester.pumpAndSettle();
       expect(
         tester
-            .widget<TextField>(find.widgetWithText(TextField, 'Their name'))
+            .widget<TextField>(find.widgetWithText(TextField, 'Name'))
             .controller!
             .text,
         'Brother',
       );
       expect(
         tester
-            .widget<TextField>(find.widgetWithText(TextField, 'Their email'))
+            .widget<TextField>(find.widgetWithText(TextField, 'Email'))
             .controller!
             .text,
         'bro@example.com',
@@ -317,18 +316,20 @@ void main() {
         name: '',
         email: 'x@example.com',
       );
-      await tapText(tester, 'Pick from my contacts');
+      await tester.tap(find.byTooltip('Choose from my contacts'));
+      await tester.pump();
       await tester.pumpAndSettle();
       expect(
         tester
-            .widget<TextField>(find.widgetWithText(TextField, 'Their name'))
+            .widget<TextField>(find.widgetWithText(TextField, 'Name'))
             .controller!
             .text,
         'Brother',
         reason: 'an empty picked name keeps what was typed',
       );
       fakes.picker.unavailable = true;
-      await tapText(tester, 'Pick from my contacts');
+      await tester.tap(find.byTooltip('Choose from my contacts'));
+      await tester.pump();
       await tester.pumpAndSettle();
       expect(
         find.textContaining("couldn't open your contacts"),
@@ -358,7 +359,8 @@ void main() {
       await tester.pumpAndSettle();
       container.read(routerProvider).go(AppRoutes.peopleAdd);
       await tester.pumpAndSettle();
-      await tapText(tester, 'Pick from my contacts');
+      await tester.tap(find.byTooltip('Choose from my contacts'));
+      await tester.pump();
       await tester.pumpAndSettle();
       expect(container.read(appLockControllerProvider).locked, isFalse);
     });
@@ -373,7 +375,7 @@ void main() {
       expect(find.byType(EditContactScreen), findsOneWidget);
       expect(
         tester
-            .widget<TextField>(find.widgetWithText(TextField, 'Their name'))
+            .widget<TextField>(find.widgetWithText(TextField, 'Name'))
             .controller!
             .text,
         'Mom',
@@ -383,8 +385,8 @@ void main() {
         findsNothing,
       );
       expect(find.textContaining('Changing the email address'), findsNothing);
-      await typeInto(tester, 'Their name', 'Mum');
-      await tapText(tester, 'Save changes');
+      await typeInto(tester, 'Name', 'Mum');
+      await tapText(tester, 'Save');
       await tester.pumpAndSettle();
       expect(fakes.contacts.contacts.single.displayName, 'Mum');
       expect(fakes.contacts.contacts.single.email, 'mom@example.com');
@@ -398,14 +400,14 @@ void main() {
     ) async {
       final fakes = _fakes([testContact()]);
       await openApp(tester, fakes: fakes, route: AppRoutes.contactEdit('c1'));
-      await typeInto(tester, 'Their email', 'mum@example.com');
+      await typeInto(tester, 'Email', 'mum@example.com');
       expect(
         find.textContaining(
           'sends a new invitation to the new address. They will need to accept again',
         ),
         findsOneWidget,
       );
-      await tapText(tester, 'Save changes');
+      await tapText(tester, 'Save');
       await tester.pumpAndSettle();
       final saved = fakes.contacts.contacts.single;
       expect(saved.email, 'mum@example.com');
@@ -419,9 +421,9 @@ void main() {
     ) async {
       final fakes = _fakes([testContact()]);
       await openApp(tester, fakes: fakes, route: AppRoutes.contactEdit('c1'));
-      await typeInto(tester, 'Their email', ' MOM@example.com ');
+      await typeInto(tester, 'Email', ' MOM@example.com ');
       expect(find.textContaining('Changing the email address'), findsNothing);
-      await tapText(tester, 'Save changes');
+      await tapText(tester, 'Save');
       await tester.pumpAndSettle();
       expect(fakes.contacts.calls, isNot(contains('update')));
       expect(find.byType(EditContactScreen), findsNothing);
@@ -447,9 +449,9 @@ void main() {
               .text,
           'Neighbour',
         );
-        await typeInto(tester, 'Their phone (optional)', '');
+        await typeInto(tester, 'Phone (optional)', '');
         await typeInto(tester, 'How do you know them?', 'Upstairs neighbour');
-        await tapText(tester, 'Save changes');
+        await tapText(tester, 'Save');
         await tester.pumpAndSettle();
         final saved = fakes.contacts.contacts.single;
         expect(saved.phoneE164, isNull);
@@ -467,8 +469,8 @@ void main() {
         ),
       ]);
       await openApp(tester, fakes: fakes, route: AppRoutes.contactEdit('c1'));
-      await tapText(tester, 'Friend');
-      await tapText(tester, 'Save changes');
+      await pickDropdown<ContactRelationship>(tester, 'Friend');
+      await tapText(tester, 'Save');
       await tester.pumpAndSettle();
       final saved = fakes.contacts.contacts.single;
       expect(saved.relationship, ContactRelationship.friend);
@@ -488,11 +490,11 @@ void main() {
         ),
       ]);
       await openApp(tester, fakes: fakes, route: AppRoutes.contactEdit('c2'));
-      await typeInto(tester, 'Their email', 'mom@example.com');
-      await tapText(tester, 'Save changes');
+      await typeInto(tester, 'Email', 'mom@example.com');
+      await tapText(tester, 'Save');
       await tester.pumpAndSettle();
       expect(
-        fieldError(tester, 'Their email'),
+        fieldError(tester, 'Email'),
         "You've already added someone with this email address.",
       );
     });

@@ -13,6 +13,7 @@ import '../../helpers/contacts_harness.dart';
 import '../../helpers/home_fixtures.dart';
 import '../../helpers/in_memory_contacts_repository.dart';
 import '../../helpers/incident_fixtures.dart';
+import '../../helpers/pump_app.dart';
 import '../../helpers/real_fonts.dart';
 import '../../helpers/semantics_audit.dart';
 import '../../helpers/test_app.dart';
@@ -159,7 +160,11 @@ void main() {
       );
       expect(find.textContaining('!'), findsNothing);
       // Everything else on Home is as it was.
-      expect(find.text("You're checked in"), findsOneWidget);
+      await expectNotice(
+        tester,
+        find.text("You're checked in"),
+        findsOneWidget,
+      );
       expect(_button(tester), CheckInButtonState.idle);
       expect(find.text("I'M OK"), findsOneWidget);
       // No new control, no dialog.
@@ -204,7 +209,6 @@ void main() {
       final fakes = TestFakes();
       fakes.server.serviceInterruption = true;
       await _open(tester, fakes);
-      expect(find.text("Let's finish your plan"), findsOneWidget);
       expect(find.text(_title), findsNothing);
     });
 
@@ -304,8 +308,8 @@ void main() {
 
       await tester.pump(const Duration(seconds: 30));
       await tester.pumpAndSettle();
-      expect(find.textContaining('check-in is due'), findsOneWidget);
       expect(_banner, findsOneWidget, reason: 'read when the deadline passed');
+      await expectNotice(tester, find.textContaining('check-in is due'));
 
       final before = _homeReads(fakes);
       fakes.server.serviceInterruption = false;

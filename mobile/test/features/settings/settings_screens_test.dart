@@ -102,7 +102,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(fakes.auth.calls, contains('logout'));
       expect(container.read(authControllerProvider), AuthStatus.signedOut);
-      expect(find.text('Get started'), findsOneWidget);
+      expect(find.text('Next'), findsOneWidget, reason: 'the welcome screen');
     });
   });
 
@@ -448,8 +448,8 @@ void main() {
       expect(_error(tester, 'Current password'), 'Please fill this in.');
       expect(_error(tester, 'New password'), 'Please fill this in.');
 
-      await typeInto(tester, 'Current password', 'correct horse battery');
-      await typeInto(tester, 'New password', 'correct horse battery');
+      await typeInto(tester, 'Current password', 'Correct horse battery 1!');
+      await typeInto(tester, 'New password', 'Correct horse battery 1!');
       await typeInto(tester, 'Confirm new password', 'something else');
       await tapText(tester, 'Change password');
       expect(
@@ -473,11 +473,11 @@ void main() {
           fakes: fakes,
         );
         await typeInto(tester, 'Current password', 'not the password');
-        await typeInto(tester, 'New password', 'a brand new passphrase');
+        await typeInto(tester, 'New password', 'A brand new passphrase 1!');
         await typeInto(
           tester,
           'Confirm new password',
-          'a brand new passphrase',
+          'A brand new passphrase 1!',
         );
         await tapText(tester, 'Change password');
         await tester.pumpAndSettle();
@@ -495,11 +495,15 @@ void main() {
       await tapText(tester, 'Change password');
       await tester.pumpAndSettle();
       await typeInto(tester, 'Current password', 'correct horse battery');
-      await typeInto(tester, 'New password', 'a brand new passphrase');
-      await typeInto(tester, 'Confirm new password', 'a brand new passphrase');
+      await typeInto(tester, 'New password', 'A brand new passphrase 1!');
+      await typeInto(
+        tester,
+        'Confirm new password',
+        'A brand new passphrase 1!',
+      );
       await tapText(tester, 'Change password');
       await tester.pumpAndSettle();
-      expect(fakes.auth.password, 'a brand new passphrase');
+      expect(fakes.auth.password, 'A brand new passphrase 1!');
       expect(
         find.text('Password changed. Your other devices were signed out.'),
         findsOneWidget,
@@ -526,8 +530,8 @@ void main() {
       );
       await _open(tester, AppRoutes.settingsChangePassword, fakes: fakes);
       await typeInto(tester, 'Current password', 'correct horse battery');
-      await typeInto(tester, 'New password', 'password123456');
-      await typeInto(tester, 'Confirm new password', 'password123456');
+      await typeInto(tester, 'New password', 'Password123456!');
+      await typeInto(tester, 'Confirm new password', 'Password123456!');
       await tapText(tester, 'Change password');
       await tester.pumpAndSettle();
       expect(_error(tester, 'New password'), contains('too common'));
@@ -541,8 +545,12 @@ void main() {
       );
       await _open(tester, AppRoutes.settingsChangePassword, fakes: fakes);
       await typeInto(tester, 'Current password', 'correct horse battery');
-      await typeInto(tester, 'New password', 'a brand new passphrase');
-      await typeInto(tester, 'Confirm new password', 'a brand new passphrase');
+      await typeInto(tester, 'New password', 'A brand new passphrase 1!');
+      await typeInto(
+        tester,
+        'Confirm new password',
+        'A brand new passphrase 1!',
+      );
       await tapText(tester, 'Change password');
       await tester.pumpAndSettle();
       expect(

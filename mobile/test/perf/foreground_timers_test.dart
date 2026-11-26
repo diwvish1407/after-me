@@ -306,13 +306,14 @@ void main() {
         await tester.pumpAndSettle();
         await typeInto(tester, 'Your name', 'Diwakar');
         await typeInto(tester, 'Email', 'new@example.com');
-        await typeInto(tester, 'Password', 'a long unique phrase');
+        await typeInto(tester, 'Password', 'A long unique phrase 1!');
+        await typeInto(tester, 'Confirm password', 'A long unique phrase 1!');
         await tapText(tester, 'I am 18 or older.');
         await tapText(
           tester,
           'I agree to the Terms of Service and the Privacy Policy.',
         );
-        await tapText(tester, 'Send my code');
+        await tapText(tester, 'Continue');
         await tester.pumpAndSettle();
         expect(
           find.textContaining('You can ask for a new code in'),

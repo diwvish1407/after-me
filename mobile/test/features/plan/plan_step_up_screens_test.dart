@@ -21,10 +21,13 @@ import '../../helpers/test_app.dart';
 const _reason =
     'Changing your plan needs your password because it decides who is told.';
 
-/// Check-ins are on and Mom is told after 3 hours.
+/// Check-ins are on and Mom is told after 3 hours. Premium, so 1 hour can be chosen.
 TestFakes _active() {
   final fakes = TestFakes();
-  fakes.contacts = InMemoryContactsRepository(initial: [testContact()]);
+  fakes.contacts = InMemoryContactsRepository(
+    initial: [testContact()],
+    tier: 'premium',
+  );
   fakes.plan.seedStandard(['c1']);
   fakes.server.activateNow();
   return fakes;
@@ -48,10 +51,10 @@ int _puts(TestFakes fakes) => fakes.plan.calls.where((c) => c == 'save').length;
 int _reauths(TestFakes fakes) =>
     fakes.auth.calls.where((c) => c == 'reauth').length;
 
-/// Chooses 6 hours (a real change) and taps "Use this plan".
+/// Chooses 1 hour (a real change) and taps "Use this plan".
 Future<void> _changeAndSave(WidgetTester tester) async {
-  await tapText(tester, '6 hours');
-  await tapText(tester, 'Use this plan');
+  await tapText(tester, '1 hour');
+  await tapText(tester, 'Continue');
   await _frames(tester);
 }
 
@@ -85,7 +88,7 @@ void main() {
         '"plan-2"',
       ], reason: 'the same If-Match');
       expect(fakes.plan.saved[0], fakes.plan.saved[1], reason: 'the same body');
-      expect(fakes.plan.graceMinutes, 360);
+      expect(fakes.plan.graceMinutes, 60);
       expect(_reauths(fakes), 1);
       expect(find.byType(HomeScreen), findsOneWidget);
     });
@@ -108,30 +111,28 @@ void main() {
       expect(find.text('Your plan'), findsOneWidget, reason: 'still here');
       expect(
         tester
-            .widget<ChoiceChip>(find.widgetWithText(ChoiceChip, '6 hours'))
+            .widget<ChoiceChip>(find.widgetWithText(ChoiceChip, '1 hour'))
             .selected,
         isTrue,
         reason: 'the choice is still there',
       );
       expect(
         tester
-            .widget<FilledButton>(
-              find.widgetWithText(FilledButton, 'Use this plan'),
-            )
+            .widget<FilledButton>(find.widgetWithText(FilledButton, 'Continue'))
             .onPressed,
         isNotNull,
         reason: 'not stuck busy',
       );
 
       // Trying again deliberately asks again, and then goes through.
-      await tapText(tester, 'Use this plan');
+      await tapText(tester, 'Continue');
       await _frames(tester);
       expect(find.text("Confirm it's you"), findsOneWidget);
       await typeInto(tester, 'Password', fakes.auth.password);
       await tapText(tester, 'Confirm');
       await _frames(tester);
       await tester.pumpAndSettle();
-      expect(fakes.plan.graceMinutes, 360);
+      expect(fakes.plan.graceMinutes, 60);
       expect(_puts(fakes), 3);
     });
 
@@ -158,7 +159,7 @@ void main() {
       await _frames(tester);
       await tester.pumpAndSettle();
       expect(_puts(fakes), 2);
-      expect(fakes.plan.graceMinutes, 360);
+      expect(fakes.plan.graceMinutes, 60);
     });
 
     testWidgets('with a recent password no sheet is needed', (tester) async {
@@ -169,7 +170,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text("Confirm it's you"), findsNothing);
       expect(_puts(fakes), 1);
-      expect(fakes.plan.graceMinutes, 360);
+      expect(fakes.plan.graceMinutes, 60);
       expect(_reauths(fakes), 0);
     });
 
@@ -178,7 +179,7 @@ void main() {
     ) async {
       final fakes = _active();
       await _openPlanStep(tester, fakes);
-      await tapText(tester, 'Use this plan');
+      await tapText(tester, 'Continue');
       await tester.pumpAndSettle();
       expect(find.text("Confirm it's you"), findsNothing);
       expect(_puts(fakes), 1);
@@ -216,7 +217,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Your plan'), findsOneWidget);
 
-      await tapText(tester, 'Use this plan');
+      await tapText(tester, 'Continue');
       await _frames(tester);
       expect(find.text(_reason), findsOneWidget);
       await typeInto(tester, 'Password', fakes.auth.password);
@@ -235,7 +236,10 @@ void main() {
       bool saved = false,
     }) async {
       final fakes = TestFakes();
-      fakes.contacts = InMemoryContactsRepository(initial: [testContact()]);
+      fakes.contacts = InMemoryContactsRepository(
+        initial: [testContact()],
+        tier: 'premium',
+      );
       if (saved) {
         fakes.plan.seedStandard(['c1']);
       }
@@ -252,26 +256,26 @@ void main() {
       final fakes = await atPlanStep(tester);
       expect(fakes.server.status, CheckInStatus.inactive);
 
-      await tapText(tester, '6 hours');
-      await tapText(tester, 'Use this plan');
+      await tapText(tester, '1 hour');
+      await tapText(tester, 'Continue');
       await tester.pumpAndSettle();
 
       expect(find.text("Confirm it's you"), findsNothing);
       expect(_reauths(fakes), 0);
       expect(_puts(fakes), 1);
-      expect(fakes.plan.graceMinutes, 360);
+      expect(fakes.plan.graceMinutes, 60);
       expect(find.text('Add a first instruction'), findsOneWidget);
     });
 
     testWidgets('changing a plan that was saved earlier in onboarding never '
         'asks either', (tester) async {
       final fakes = await atPlanStep(tester, saved: true);
-      await tapText(tester, '12 hours');
-      await tapText(tester, 'Use this plan');
+      await tapText(tester, '1 hour');
+      await tapText(tester, 'Continue');
       await tester.pumpAndSettle();
       expect(find.text("Confirm it's you"), findsNothing);
       expect(_reauths(fakes), 0);
-      expect(fakes.plan.graceMinutes, 720);
+      expect(fakes.plan.graceMinutes, 60);
     });
   });
 }

@@ -503,14 +503,7 @@ void main() {
       }
       expect(
         InstructionStarter.featured.map((s) => starterText(l10n, s).title),
-        [
-          'Who to call first',
-          'Home and keys',
-          'Pets',
-          'Work handover',
-          'Where my documents are',
-          'Insurance',
-        ],
+        ['Who to call first', 'Home and keys', 'Pets'],
       );
     });
 

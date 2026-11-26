@@ -94,10 +94,13 @@ class _DoneStepScreenState extends ConsumerState<DoneStepScreen> {
               ),
               child: Icon(Icons.verified_rounded, size: 44, color: t.ok),
             ),
-            title: Text(
-              l10n.doneDialogMessage,
-              textAlign: TextAlign.center,
-              style: text.headlineSmall,
+            title: Semantics(
+              header: true,
+              child: Text(
+                l10n.doneDialogMessage,
+                textAlign: TextAlign.center,
+                style: text.headlineSmall,
+              ),
             ),
             content: Text(
               first == null
@@ -147,6 +150,12 @@ class _DoneStepScreenState extends ConsumerState<DoneStepScreen> {
         title: '',
         showArt: false,
         children: [
+          // Nothing to see, but a screen reader still learns where it is.
+          Semantics(
+            header: true,
+            label: _activated ? l10n.doneDialogMessage : l10n.doneTitle,
+            child: const SizedBox(height: 1, width: double.infinity),
+          ),
           if (_activating) ...[
             const SizedBox(height: AppSpacing.xl),
             const Center(child: LoadingView()),

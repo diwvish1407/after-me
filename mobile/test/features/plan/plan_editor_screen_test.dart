@@ -647,7 +647,7 @@ void main() {
         find.widgetWithText(FilledButton, 'Add a trusted contact'),
       );
       await tester.pumpAndSettle();
-      expect(find.text('Their name'), findsOneWidget);
+      expect(find.text('Name'), findsOneWidget);
     });
 
     testWidgets('add a stage: pick its time; it tells nobody until chosen', (

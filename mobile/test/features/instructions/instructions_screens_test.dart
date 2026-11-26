@@ -87,19 +87,28 @@ Finder _field(String label) => find.widgetWithText(TextField, label);
 
 Future<void> _tap(WidgetTester tester, Finder finder) async {
   await tester.ensureVisible(finder.first);
-  await tester.pump();
+  await tester.pumpAndSettle();
   await tester.tap(finder.first);
   await tester.pump();
 }
 
-Future<void> _chip(WidgetTester tester, String label) =>
-    _tap(tester, find.widgetWithText(ChoiceChip, label));
+/// The category: the form's dropdown, or the list's filter chips.
+Future<void> _chip(WidgetTester tester, String label) async {
+  if (find
+      .byType(DropdownButtonFormField<InstructionCategory>)
+      .evaluate()
+      .isEmpty) {
+    await _tap(tester, find.widgetWithText(ChoiceChip, label));
+    return;
+  }
+  await pickDropdown<InstructionCategory>(tester, label);
+}
 
 Future<void> _tick(WidgetTester tester, String name) =>
     _tap(tester, find.widgetWithText(CheckboxListTile, name));
 
 Future<void> _stagePick(WidgetTester tester, String label) =>
-    _tap(tester, find.widgetWithText(RadioListTile<String>, label));
+    pickDropdown<String>(tester, label);
 
 const _afterOneDay = "If you haven't checked in for 1 day";
 const _afterTwoDays = "If you haven't checked in for 2 days";
@@ -135,14 +144,7 @@ void main() {
         findsOneWidget,
       );
       expect(find.text('Write your own'), findsOneWidget);
-      for (final title in [
-        'Who to call first',
-        'Home and keys',
-        'Pets',
-        'Work handover',
-        'Where my documents are',
-        'Insurance',
-      ]) {
+      for (final title in ['Who to call first', 'Home and keys', 'Pets']) {
         expect(find.text(title), findsOneWidget, reason: title);
       }
       expect(find.byTooltip('Add instruction'), findsNothing);
@@ -161,11 +163,11 @@ void main() {
         startsWith("My pet's name is…"),
       );
       expect(
-        tester
-            .widget<ChoiceChip>(find.widgetWithText(ChoiceChip, 'Pets'))
-            .selected,
-        isTrue,
-        reason: 'the example chooses its category',
+        find.descendant(
+          of: find.byType(DropdownButtonFormField<InstructionCategory>),
+          matching: find.text('Pets'),
+        ),
+        findsOneWidget,
       );
     });
 
@@ -348,7 +350,7 @@ void main() {
       expect(find.byType(AddInstructionScreen), findsOneWidget);
       await _chip(tester, 'Home');
       await _fill(tester);
-      await tapText(tester, 'Save instruction');
+      await tapText(tester, 'Save');
       await tester.pumpAndSettle();
       expect(
         find.text("More instructions aren't available yet"),
@@ -380,7 +382,7 @@ void main() {
       expect(find.text('34 of 20,000 characters'), findsOneWidget);
       await _tick(tester, 'Mom');
       await _stagePick(tester, _afterOneDay);
-      await tapText(tester, 'Save instruction');
+      await tapText(tester, 'Save');
       await tester.pumpAndSettle();
 
       expect(fakes.instructions.created.single, {
@@ -400,7 +402,7 @@ void main() {
     testWidgets('the category, the title and the text are required, and '
         'nothing is sent', (tester) async {
       final fakes = await open(tester);
-      await tapText(tester, 'Save instruction');
+      await tapText(tester, 'Save');
       await tester.pump();
       expect(find.text('Choose a category.'), findsOneWidget);
       expect(_error(tester, 'Title'), 'Please fill this in.');
@@ -421,7 +423,7 @@ void main() {
         'a\u202Eb', // a text-direction override
       );
       await tester.pump();
-      await tapText(tester, 'Save instruction');
+      await tapText(tester, 'Save');
       await tester.pump();
       expect(
         _error(tester, 'Title'),
@@ -436,7 +438,7 @@ void main() {
       await tester.enterText(_field('What should they know?'), 'y' * 20001);
       await tester.pump();
       expect(find.text('20,001 of 20,000 characters'), findsOneWidget);
-      await tapText(tester, 'Save instruction');
+      await tapText(tester, 'Save');
       await tester.pump();
       expect(
         _error(tester, 'What should they know?'),
@@ -451,23 +453,21 @@ void main() {
         '${'y' * 19990}\n\tdone.',
       );
       await tester.pump();
-      await tapText(tester, 'Save instruction');
+      await tapText(tester, 'Save');
       await tester.pumpAndSettle();
       expect(fakes.instructions.created, hasLength(1));
     });
 
-    testWidgets('Digital accounts says to say where a password is, never to '
-        'paste it', (tester) async {
+    testWidgets('no password notes, whatever the category', (tester) async {
       await open(tester);
       const guidance =
           "Don't paste passwords. Say where they can be found (for example, your password manager's emergency access).";
       expect(find.text(guidance), findsNothing);
       await _chip(tester, 'Home');
       expect(find.text(guidance), findsNothing);
-      expect(find.textContaining("Don't write passwords here"), findsOneWidget);
       await _chip(tester, 'Digital accounts');
-      expect(find.text(guidance), findsOneWidget);
-      expect(find.textContaining("Don't write passwords here"), findsNothing);
+      // The form is kept short: no password notes under the fields.
+      expect(find.text(guidance), findsNothing);
     });
 
     testWidgets('somebody who has not accepted yet may be chosen, with a '
@@ -482,7 +482,7 @@ void main() {
       await _fill(tester, title: 'For Sam');
       await _tick(tester, 'Sam');
       await _stagePick(tester, _afterTwoDays);
-      await tapText(tester, 'Save instruction');
+      await tapText(tester, 'Save');
       await tester.pumpAndSettle();
       expect(fakes.instructions.created.single['recipients'], [
         {'contact_id': 'c2', 'release_stage_id': _stage(fakes, 3)},
@@ -495,7 +495,7 @@ void main() {
       await _chip(tester, 'Home');
       await _fill(tester);
       await _tick(tester, 'Mom');
-      await tapText(tester, 'Save instruction');
+      await tapText(tester, 'Save');
       await tester.pump();
       expect(find.text('Choose when this is shared.'), findsOneWidget);
       expect(fakes.instructions.calls, isNot(contains('create')));
@@ -513,7 +513,7 @@ void main() {
       await _chip(tester, 'Home');
       await _fill(tester);
       await _tick(tester, 'Mom');
-      await tapText(tester, 'Save instruction');
+      await tapText(tester, 'Save');
       await tester.pumpAndSettle();
       expect(fakes.instructions.created.single['recipients'], [
         {'contact_id': 'c1', 'release_stage_id': _stage(fakes, 2)},
@@ -530,15 +530,9 @@ void main() {
       expect(find.text('When should Mom receive it?'), findsOneWidget);
       expect(find.text('When should Sam receive it?'), findsOneWidget);
       // Each person has their own choices: the first radio of each group.
-      await _tap(
-        tester,
-        find.widgetWithText(RadioListTile<String>, _afterOneDay).first,
-      );
-      await _tap(
-        tester,
-        find.widgetWithText(RadioListTile<String>, _afterTwoDays).last,
-      );
-      await tapText(tester, 'Save instruction');
+      await pickDropdown<String>(tester, _afterOneDay);
+      await pickDropdown<String>(tester, _afterTwoDays, index: 1);
+      await tapText(tester, 'Save');
       await tester.pumpAndSettle();
       expect(fakes.instructions.created.single['recipients'], [
         {'contact_id': 'c1', 'release_stage_id': _stage(fakes, 2)},
@@ -562,7 +556,7 @@ void main() {
       expect(find.byType(CheckboxListTile), findsNothing);
       await _chip(tester, 'Pets');
       await _fill(tester, title: 'Goldfish');
-      await tapText(tester, 'Save instruction');
+      await tapText(tester, 'Save');
       await tester.pumpAndSettle();
       expect(fakes.instructions.created.single['recipients'], isEmpty);
       expect(fakes.plan.calls, isNot(contains('save')));
@@ -576,7 +570,7 @@ void main() {
       await tapText(tester, 'Review your plan');
       await tester.pumpAndSettle();
       expect(find.text('Your plan'), findsOneWidget);
-      expect(find.text('Step 6 of 9'), findsOneWidget);
+      expect(find.bySemanticsLabel('Step 6 of 9'), findsOneWidget);
     });
 
     testWidgets('without a contact it offers to add one', (tester) async {
@@ -587,7 +581,7 @@ void main() {
       );
       await tapText(tester, 'Add a trusted contact');
       await tester.pumpAndSettle();
-      expect(find.text('Save and send invitation'), findsOneWidget);
+      expect(find.text('Invite'), findsOneWidget);
     });
 
     testWidgets('"Start from an example" lists the examples of the category '
@@ -598,7 +592,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(
         find.text(
-          'These are only examples to get you started. Change anything you like, and never add passwords.',
+          'These are only examples to get you started. Change anything you like.',
         ),
         findsOneWidget,
       );
@@ -630,14 +624,12 @@ void main() {
       await _tap(tester, find.text('Password manager and emergency access'));
       await tester.pumpAndSettle();
       expect(
-        tester
-            .widget<ChoiceChip>(
-              find.widgetWithText(ChoiceChip, 'Digital accounts'),
-            )
-            .selected,
-        isTrue,
+        find.descendant(
+          of: find.byType(DropdownButtonFormField<InstructionCategory>),
+          matching: find.text('Digital accounts'),
+        ),
+        findsOneWidget,
       );
-      expect(find.textContaining("Don't paste passwords."), findsOneWidget);
     });
 
     group('what the server says', () {
@@ -654,7 +646,7 @@ void main() {
         await _fill(tester);
         await _tick(tester, 'Mom');
         await _stagePick(tester, _afterOneDay);
-        await tapText(tester, 'Save instruction');
+        await tapText(tester, 'Save');
         await tester.pumpAndSettle();
         return f;
       }
@@ -745,7 +737,7 @@ void main() {
           greaterThan(1),
           reason: 'the contacts were read again',
         );
-        await tapText(tester, 'Save instruction');
+        await tapText(tester, 'Save');
         await tester.pumpAndSettle();
         expect(fakes.instructions.created, hasLength(1));
         expect(fakes.instructions.liveCount, 1);
@@ -759,7 +751,7 @@ void main() {
           findsOneWidget,
         );
         expect(_text(tester, 'Title'), 'House emergency');
-        await tapText(tester, 'Save instruction');
+        await tapText(tester, 'Save');
         await tester.pumpAndSettle();
         expect(fakes.instructions.liveCount, 1);
       });
@@ -880,7 +872,7 @@ void main() {
       await _fill(tester, title: 'Goldfish');
       await _tick(tester, 'Mom');
       await _stagePick(tester, _afterOneDay);
-      await tapText(tester, 'Save instruction');
+      await tapText(tester, 'Save');
       await tester.pumpAndSettle();
       expect(container.read(instructionAutosaveProvider), isNull);
     });
@@ -1063,7 +1055,7 @@ void main() {
         'The spare key is with a neighbour.\nCall her first.',
       );
       await typeInto(tester, 'Title', 'House emergency (updated)');
-      await tapText(tester, 'Save changes');
+      await tapText(tester, 'Save');
       await tester.pumpAndSettle();
 
       expect(fakes.instructions.updated.single, {
@@ -1080,7 +1072,7 @@ void main() {
         fakes: fakes,
         route: AppRoutes.instructionEdit('instruction-1'),
       );
-      await tapText(tester, 'Save changes');
+      await tapText(tester, 'Save');
       await tester.pumpAndSettle();
       expect(fakes.instructions.updated, isEmpty);
     });
@@ -1098,7 +1090,7 @@ void main() {
       expect(find.text('When should Mom receive it?'), findsOneWidget);
       expect(find.text('When should Sam receive it?'), findsOneWidget);
       await _tick(tester, 'Sam');
-      await tapText(tester, 'Save changes');
+      await tapText(tester, 'Save');
       await tester.pumpAndSettle();
       expect(fakes.instructions.updated.single, {
         'recipients': [
@@ -1123,7 +1115,7 @@ void main() {
         route: AppRoutes.instructionEdit('instruction-1'),
       );
       await typeInto(tester, 'Title', 'Changed');
-      await tapText(tester, 'Save changes');
+      await tapText(tester, 'Save');
       await tester.pumpAndSettle();
       expect(
         _error(tester, 'What should they know?'),
@@ -1156,7 +1148,7 @@ void main() {
       await _fill(tester, title: 'Goldfish');
       await _tick(tester, 'Mom');
       await _stagePick(tester, _afterOneDay);
-      await tapText(tester, 'Save instruction');
+      await tapText(tester, 'Save');
       await tester.pumpAndSettle();
 
       final plan = fakes.plan.stages.firstWhere((s) => s.position == 2);

@@ -244,7 +244,7 @@ void main() {
         clientInfo: testClientInfo,
         deviceInfo: FakeDeviceInfoSourceForGate(),
         sessionStore: c.read(sessionStoreProvider),
-      ).login(email: 'a@example.com', password: 'a long unique phrase'),
+      ).login(email: 'a@example.com', password: 'A long unique phrase 1!'),
     };
 
     for (final entry in calls.entries) {
@@ -338,7 +338,11 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Update AfterMe'), findsNothing);
       expect(world.container.read(upgradeGateProvider), isFalse);
-      expect(find.text("You're checked in"), findsOneWidget);
+      await expectNotice(
+        tester,
+        find.text("You're checked in"),
+        findsOneWidget,
+      );
     });
 
     testWidgets('it does not appear for other failures', (tester) async {

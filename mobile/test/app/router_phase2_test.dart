@@ -256,7 +256,7 @@ void main() {
   group('routing with the real controllers', () {
     testWidgets('welcome leads to create account and back', (tester) async {
       await pumpAfterMe(tester, status: AuthStatus.signedOut);
-      await tapText(tester, 'Get started');
+      await tapText(tester, 'Skip');
       await tester.pumpAndSettle();
       expect(find.byType(CreateAccountScreen), findsOneWidget);
       await tester.pageBack();

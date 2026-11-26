@@ -216,6 +216,7 @@ void main() {
         fakes: fakes,
         route: AppRoutes.home,
       );
+      await openNotifications(tester);
       expect(
         find.textContaining('Notifications are off, so you won'),
         findsOneWidget,

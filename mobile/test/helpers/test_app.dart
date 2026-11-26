@@ -1,6 +1,7 @@
 import 'package:afterme/app/repository_providers.dart';
 import 'package:afterme/app/theme/app_theme.dart';
 import 'package:afterme/core/alarm/deadline_alarm.dart';
+import 'package:afterme/core/alarm/pending_contact_reminder.dart';
 import 'package:afterme/core/api/client_info.dart';
 import 'package:afterme/core/auth/auth_controller.dart';
 import 'package:afterme/core/auth/session_store.dart';
@@ -306,6 +307,9 @@ class TestFakes {
     pushGatewayProvider.overrideWithValue(push),
     localNotificationGatewayProvider.overrideWithValue(localNotifications),
     deadlineAlarmProvider.overrideWithValue(FakeDeadlineAlarm()),
+    pendingContactReminderProvider.overrideWithValue(
+      FakePendingContactReminder(),
+    ),
     if (!realDevicesRepository)
       devicesRepositoryProvider.overrideWithValue(devices),
     pushTimerProvider.overrideWithValue(pushTimers.create),

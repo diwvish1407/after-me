@@ -1,6 +1,7 @@
 import 'package:afterme/core/auth/auth_controller.dart';
 import 'package:afterme/core/auth/session_store.dart';
 import 'package:afterme/core/storage/secure_store.dart';
+import 'package:afterme/features/contacts/data/contacts_repository.dart';
 import 'package:afterme/features/home/presentation/home_screen.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -19,17 +20,18 @@ void main() {
       secureStore: store,
     );
 
-    await tapText(tester, 'Get started');
+    await tapText(tester, 'Skip');
     await tester.pumpAndSettle();
     await typeInto(tester, 'Your name', 'Diwakar');
     await typeInto(tester, 'Email', 'new@example.com');
-    await typeInto(tester, 'Password', 'a long unique phrase');
+    await typeInto(tester, 'Password', 'A long unique phrase 1!');
+    await typeInto(tester, 'Confirm password', 'A long unique phrase 1!');
     await tapText(tester, 'I am 18 or older.');
     await tapText(
       tester,
       'I agree to the Terms of Service and the Privacy Policy.',
     );
-    await tapText(tester, 'Send my code');
+    await tapText(tester, 'Continue');
     await tester.pumpAndSettle();
 
     expect(fakes.auth.calls, contains('registerStart'));
@@ -54,7 +56,7 @@ void main() {
     final fakes = TestFakes();
     final container = await pumpAfterMe(tester, fakes: fakes);
     // Sign in through the real controller, as sign-up does.
-    await tapText(tester, 'I already have an account');
+    await tapText(tester, 'Sign in');
     await tester.pumpAndSettle();
     await typeInto(tester, 'Email', 'diwakar@example.com');
     await typeInto(tester, 'Password', 'correct horse battery');
@@ -68,15 +70,14 @@ void main() {
       ),
       findsOneWidget,
     );
-    expect(find.text("Let's finish your plan"), findsOneWidget);
 
     // The checklist opens the same steps.
     await tapText(tester, 'Add');
     await tester.pumpAndSettle();
-    await typeInto(tester, 'Their name', 'Mom');
-    await tapText(tester, 'Parent');
-    await typeInto(tester, 'Their email', 'mom@example.com');
-    await tapText(tester, 'Save and continue');
+    await typeInto(tester, 'Name', 'Mom');
+    await pickDropdown<ContactRelationship>(tester, 'Mother');
+    await typeInto(tester, 'Email', 'mom@example.com');
+    await tapText(tester, 'Continue');
     await tester.pumpAndSettle();
     // Opened from Home, a finished step returns to Home.
     expect(find.byType(HomeScreen), findsOneWidget);

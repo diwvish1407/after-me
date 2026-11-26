@@ -73,7 +73,7 @@ void main() {
       );
       // Read-only: no editor is offered here.
       expect(find.text('Set up your plan'), findsNothing);
-      expect(find.text('Use this plan'), findsNothing);
+      expect(find.text('Continue'), findsNothing);
     });
 
     testWidgets('the way into the editor and the past incidents, and what '
@@ -136,7 +136,7 @@ void main() {
       await tapText(tester, 'Set up your plan');
       await tester.pumpAndSettle();
       expect(find.text('Your plan'), findsOneWidget);
-      expect(find.text('Use this plan'), findsOneWidget);
+      expect(find.text('Continue'), findsOneWidget);
     });
 
     testWidgets('loading shows a progress indicator', (tester) async {

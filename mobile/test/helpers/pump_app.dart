@@ -75,3 +75,62 @@ Future<void> tapText(WidgetTester tester, String text) async {
 /// The fake repository of [container] (when it was created with [TestFakes]).
 FakeAuthRepository authOf(ProviderContainer container) =>
     container.read(authRepositoryProvider) as FakeAuthRepository;
+
+/// Opens the notifications screen from the bell on Home (where the status, gap and
+/// contact alerts are listed).
+Future<void> openNotifications(WidgetTester tester) async {
+  await tester.tap(find.byTooltip('Notifications'));
+  await tester.pumpAndSettle();
+}
+
+/// Goes back from the notifications screen to Home.
+Future<void> closeNotifications(WidgetTester tester) async {
+  await tester.pageBack();
+  await tester.pumpAndSettle();
+}
+
+/// Checks [finder] against [matcher] on the notifications screen, then returns to Home.
+Future<void> expectNotice(
+  WidgetTester tester,
+  Finder finder, [
+  Matcher matcher = findsOneWidget,
+]) async {
+  await openNotifications(tester);
+  expect(finder, matcher);
+  await closeNotifications(tester);
+}
+
+/// Opens the [index]th dropdown of type `DropdownButtonFormField<T>` and picks [item].
+Future<void> pickDropdown<T>(
+  WidgetTester tester,
+  String item, {
+  int index = 0,
+}) async {
+  final field = find.byType(DropdownButtonFormField<T>).at(index);
+  await tester.ensureVisible(field);
+  await tester.pump();
+  await tester.tap(field);
+  await tester.pumpAndSettle();
+  // The row of the open menu (not the field, nor a tab with the same name).
+  final menu = find.byWidgetPredicate(
+    (w) => w.runtimeType.toString().startsWith('_DropdownMenu<'),
+  );
+  await tester.tap(find.descendant(of: menu, matching: find.text(item)).last);
+  await tester.pumpAndSettle();
+}
+
+/// Opens the [index]th dropdown of type `DropdownButtonFormField<T>` (its menu stays
+/// open).
+Future<void> openDropdown<T>(WidgetTester tester, {int index = 0}) async {
+  final field = find.byType(DropdownButtonFormField<T>).at(index);
+  await tester.ensureVisible(field);
+  await tester.pump();
+  await tester.tap(field);
+  await tester.pumpAndSettle();
+}
+
+/// Closes an open dropdown menu without choosing anything.
+Future<void> closeDropdown(WidgetTester tester) async {
+  await tester.tapAt(const Offset(4, 4));
+  await tester.pumpAndSettle();
+}

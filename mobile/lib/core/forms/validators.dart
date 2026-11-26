@@ -190,9 +190,7 @@ abstract final class Validators {
     if (length > passwordMax) {
       return FieldIssue.passwordTooLong;
     }
-    if (!PasswordRules.of(value).allMet) {
-      return FieldIssue.passwordWeak;
-    }
+    // The same order as the server: the email first, then the character rules.
     if (email != null && email.trim().isNotEmpty) {
       final folded = value.toLowerCase();
       final address = email.trim().toLowerCase();
@@ -200,6 +198,9 @@ abstract final class Validators {
       if (folded == address || folded == local) {
         return FieldIssue.passwordMatchesEmail;
       }
+    }
+    if (!PasswordRules.of(value).allMet) {
+      return FieldIssue.passwordWeak;
     }
     return null;
   }

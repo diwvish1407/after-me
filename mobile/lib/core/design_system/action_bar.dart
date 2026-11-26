@@ -100,29 +100,55 @@ Widget pinnedFormLayout({
       ],
     );
   }
-  return Column(
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    children: [
-      Expanded(
-        child: SingleChildScrollView(
+  return LayoutBuilder(
+    builder: (context, constraints) {
+      // Very large text on a short screen: a fixed footer would leave the fields no
+      // room, so the buttons scroll with them instead.
+      final large = MediaQuery.textScalerOf(context).scale(16) > 21;
+      if (large && constraints.maxHeight < 500) {
+        return SingleChildScrollView(
           physics: const ClampingScrollPhysics(),
           padding: const EdgeInsets.fromLTRB(
             AppSpacing.page,
             AppSpacing.xs,
             AppSpacing.page,
-            AppSpacing.md,
+            0,
           ),
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(
-                maxWidth: AppSizes.maxContentWidth,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              fields,
+              const SizedBox(height: AppSpacing.md),
+              actions,
+            ],
+          ),
+        );
+      }
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(
+            child: SingleChildScrollView(
+              physics: const ClampingScrollPhysics(),
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.page,
+                AppSpacing.xs,
+                AppSpacing.page,
+                AppSpacing.md,
               ),
-              child: fields,
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(
+                    maxWidth: AppSizes.maxContentWidth,
+                  ),
+                  child: fields,
+                ),
+              ),
             ),
           ),
-        ),
-      ),
-      actions,
-    ],
+          actions,
+        ],
+      );
+    },
   );
 }

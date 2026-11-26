@@ -166,7 +166,7 @@ void main() {
       await tapText(tester, 'Done');
       await tester.pumpAndSettle();
       // Home is the active state again, with no incident.
-      expect(find.text("You're checked in"), findsOneWidget);
+      await expectNotice(tester, find.text("You're checked in"));
       expect(find.text("I'M SAFE"), findsNothing);
       expect(find.text('Your contacts have been notified'), findsNothing);
       expect(find.byType(CheckInButton), findsOneWidget);
@@ -520,7 +520,7 @@ void main() {
       await tapText(tester, 'Done');
       await tester.pumpAndSettle();
       expect(find.text("I'M SAFE"), findsNothing);
-      expect(find.text("You're checked in"), findsOneWidget);
+      await expectNotice(tester, find.text("You're checked in"));
     });
 
     testWidgets('closed already when the confirmation opens', (tester) async {

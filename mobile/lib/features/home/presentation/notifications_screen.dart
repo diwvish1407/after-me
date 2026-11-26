@@ -11,6 +11,7 @@ import '../../../core/design_system/design_system.dart';
 import '../../../core/time/clock.dart';
 import '../../../core/time/time_format.dart';
 import '../../../l10n/gen/app_localizations.dart';
+import '../../checkin/application/checkin_controller.dart';
 import '../../contacts/application/contacts_controller.dart';
 import '../../onboarding/application/onboarding_controller.dart';
 import '../application/client_checks.dart';
@@ -46,12 +47,15 @@ class HomeNotice {
 /// Every alert Home has for the person, most important first: the check-in status, a
 /// hole in the safety net, contacts who have not accepted (or cannot be reached), and the
 /// phone's own checks. [names] maps contact ids to names when they are known.
+/// [tapUnconfirmed]: the last I'M OK has not been confirmed (still sending, not received,
+/// refused or too old), so nothing may read as if it had counted.
 List<HomeNotice> homeNotices(
   BuildContext context,
   HomeData data, {
   required DateTime deviceNow,
   required ClientChecks checks,
   Map<String, String> names = const {},
+  bool tapUnconfirmed = false,
 }) {
   final l10n = AppLocalizations.of(context);
   final snapshot = data.snapshot;
@@ -62,6 +66,9 @@ List<HomeNotice> homeNotices(
   final notices = <HomeNotice>[];
 
   switch (status) {
+    // Home says what the tap came to; "checked in" would contradict it.
+    case HomeStatus.active when tapUnconfirmed:
+      break;
     case HomeStatus.active:
       notices.add(
         HomeNotice(
@@ -232,6 +239,13 @@ int homeAlertCount(
   checks: checks,
 ).where((n) => n.counts).length;
 
+/// Whether the last I'M OK tap is not (or no longer) confirmed by the server.
+bool tapIsUnconfirmed(CheckInState tap) =>
+    tap.isUnconfirmed ||
+    tap.phase == CheckInPhase.failed ||
+    tap.phase == CheckInPhase.expired ||
+    tap.phase == CheckInPhase.safeRequired;
+
 /// The notifications section: every alert in one list, each with the action that fixes
 /// it, and a link to the full activity.
 class NotificationsScreen extends ConsumerStatefulWidget {
@@ -270,6 +284,9 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
             deviceNow: ref.read(clockProvider)(),
             checks: checks,
             names: names,
+            tapUnconfirmed: tapIsUnconfirmed(
+              ref.watch(checkInControllerProvider),
+            ),
           );
     return Scaffold(
       appBar: AppBar(title: Text(l10n.notificationsTitle)),

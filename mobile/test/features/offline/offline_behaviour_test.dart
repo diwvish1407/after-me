@@ -9,6 +9,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../../helpers/contacts_harness.dart';
 import '../../helpers/in_memory_contacts_repository.dart';
+import '../../helpers/pump_app.dart';
 import '../../helpers/test_app.dart';
 
 /// What every screen that reads from the server shows when a refresh fails while it has
@@ -126,11 +127,11 @@ void main() {
       final fakes = _world();
       fakes.server.activateNow();
       await openApp(tester, fakes: fakes, route: AppRoutes.home);
-      expect(find.text("You're checked in"), findsOneWidget);
+      await expectNotice(tester, find.text("You're checked in"));
       fakes.server.failures['home'] = [const NetworkFailure()];
       await _pull(tester);
-      expect(find.text("You're checked in"), findsOneWidget);
       expect(find.text('Offline — showing last known status'), findsOneWidget);
+      await expectNotice(tester, find.text("You're checked in"));
     });
   });
 

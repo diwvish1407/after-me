@@ -100,7 +100,7 @@ Future<void> _writeAndSave(
   bool withRecipient = true,
 }) async {
   await openApp(tester, fakes: fakes, route: AppRoutes.instructionNew);
-  await _tap(tester, find.widgetWithText(ChoiceChip, 'Home'));
+  await pickDropdown<InstructionCategory>(tester, 'Home');
   await typeInto(tester, 'Title', 'House emergency');
   await tester.enterText(
     find.widgetWithText(TextField, 'What should they know?'),
@@ -111,16 +111,10 @@ Future<void> _writeAndSave(
     await _tap(tester, find.widgetWithText(CheckboxListTile, 'Mom'));
     await tester.pumpAndSettle();
     // The plan's own stage a day out: no stage has to be added.
-    await _tap(
-      tester,
-      find.widgetWithText(
-        RadioListTile<String>,
-        "If you haven't checked in for 1 day",
-      ),
-    );
+    await pickDropdown<String>(tester, "If you haven't checked in for 1 day");
     await tester.pumpAndSettle();
   }
-  await tapText(tester, 'Save instruction');
+  await tapText(tester, 'Save');
   await _frames(tester);
 }
 
@@ -172,7 +166,7 @@ void main() {
         'House emergency',
       );
       final save = tester.widget<FilledButton>(
-        find.widgetWithText(FilledButton, 'Save instruction'),
+        find.widgetWithText(FilledButton, 'Save'),
       );
       expect(save.onPressed, isNotNull, reason: 'not stuck busy');
     });
@@ -188,7 +182,7 @@ void main() {
       await _frames(tester);
       expect(container.read(instructionAutosaveProvider), isNotNull);
 
-      await tapText(tester, 'Save instruction');
+      await tapText(tester, 'Save');
       await _frames(tester);
       await _confirmPassword(tester, fakes.auth.password);
       await tester.pumpAndSettle();
@@ -278,14 +272,8 @@ void main() {
       await pumpAfterMe(tester, fakes: fakes, status: AuthStatus.signedIn);
       await tapText(tester, 'Pets');
       await tester.pumpAndSettle();
-      await _tap(
-        tester,
-        find.widgetWithText(
-          RadioListTile<String>,
-          "If you haven't checked in for 1 day",
-        ),
-      );
-      await tapText(tester, 'Save instruction');
+      await pickDropdown<String>(tester, "If you haven't checked in for 1 day");
+      await tapText(tester, 'Save');
       await tester.pumpAndSettle();
       expect(find.text("Confirm it's you"), findsNothing);
       expect(fakes.instructions.liveCount, 1);
@@ -322,7 +310,7 @@ void main() {
       await openEdit(tester, fakes);
       await _tap(tester, find.widgetWithText(CheckboxListTile, 'Bro'));
       await tester.pumpAndSettle();
-      await tapText(tester, 'Save changes');
+      await tapText(tester, 'Save');
       await _frames(tester);
 
       expect(find.text("Confirm it's you"), findsOneWidget);
@@ -335,7 +323,7 @@ void main() {
       expect(_calls(fakes, 'update'), 2);
       expect(fakes.instructions.updated.first, fakes.instructions.updated.last);
       expect(_reauths(fakes), 1);
-      expect(find.text('Save changes'), findsNothing, reason: 'left the form');
+      expect(find.text('Save'), findsNothing, reason: 'left the form');
       final item = await fakes.instructions.get('instruction-1');
       expect(item.recipients.map((r) => r.contactId).toSet(), {'c1', 'c2'});
     });
@@ -347,7 +335,7 @@ void main() {
       await openEdit(tester, fakes);
       await _tap(tester, find.widgetWithText(CheckboxListTile, 'Mom'));
       await tester.pumpAndSettle();
-      await tapText(tester, 'Save changes');
+      await tapText(tester, 'Save');
       await _frames(tester);
       expect(find.text("Confirm it's you"), findsOneWidget);
 
@@ -380,7 +368,7 @@ void main() {
       await openEdit(tester, fakes);
       await _tap(tester, find.widgetWithText(CheckboxListTile, 'Mom'));
       await tester.pumpAndSettle();
-      await tapText(tester, 'Save changes');
+      await tapText(tester, 'Save');
       await _frames(tester);
       await _confirmPassword(tester, 'not the password');
       expect(
@@ -399,7 +387,7 @@ void main() {
         'The spare key is with a neighbour.\nCall her first.',
       );
       await tester.pumpAndSettle();
-      await tapText(tester, 'Save changes');
+      await tapText(tester, 'Save');
       await tester.pumpAndSettle();
 
       expect(find.text("Confirm it's you"), findsNothing);
@@ -416,7 +404,7 @@ void main() {
       await _tap(tester, find.widgetWithText(CheckboxListTile, 'Mom'));
       await _tap(tester, find.widgetWithText(CheckboxListTile, 'Mom'));
       await tester.pumpAndSettle();
-      await tapText(tester, 'Save changes');
+      await tapText(tester, 'Save');
       await tester.pumpAndSettle();
       expect(find.text("Confirm it's you"), findsNothing);
       expect(fakes.instructions.updated, isEmpty, reason: 'nothing changed');
@@ -428,7 +416,7 @@ void main() {
       await openEdit(tester, fakes);
       await _tap(tester, find.widgetWithText(CheckboxListTile, 'Bro'));
       await tester.pumpAndSettle();
-      await tapText(tester, 'Save changes');
+      await tapText(tester, 'Save');
       await tester.pumpAndSettle();
       expect(find.text("Confirm it's you"), findsNothing);
       expect(_calls(fakes, 'update'), 1);
@@ -685,8 +673,8 @@ void main() {
     testWidgets('changing their email asks, in its own words', (tester) async {
       final fakes = withRecipientOnly();
       await openApp(tester, fakes: fakes, route: AppRoutes.contactEdit('c2'));
-      await typeInto(tester, 'Their email', 'brother@example.com');
-      await tapText(tester, 'Save changes');
+      await typeInto(tester, 'Email', 'brother@example.com');
+      await tapText(tester, 'Save');
       await _frames(tester);
       expect(find.text("Confirm it's you"), findsOneWidget);
       expect(

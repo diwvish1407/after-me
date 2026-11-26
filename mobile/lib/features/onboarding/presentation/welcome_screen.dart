@@ -169,7 +169,10 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                             onTap: _goTo,
                           ),
                           const SizedBox(height: AppSpacing.xs),
+                          // Back on the left, the main action on the right; on a
+                          // narrow screen or with large text they share the row.
                           Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               AppButton.text(
                                 label: l10n.back,
@@ -177,21 +180,23 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                                     ? () => _goTo(_index - 1)
                                     : null,
                               ),
-                              const Spacer(),
+                              const SizedBox(width: AppSpacing.xs),
                               // Get started only on the last card; Next before it.
-                              if (last)
-                                AppButton.primary(
-                                  label: l10n.welcomeGetStarted,
-                                  icon: Icons.arrow_forward_rounded,
-                                  onPressed: () =>
-                                      context.push(AppRoutes.createAccount),
-                                )
-                              else
-                                AppButton.primary(
-                                  label: l10n.welcomeNext,
-                                  icon: Icons.arrow_forward_rounded,
-                                  onPressed: () => _goTo(_index + 1),
-                                ),
+                              Flexible(
+                                child: last
+                                    ? AppButton.primary(
+                                        label: l10n.welcomeGetStarted,
+                                        icon: Icons.arrow_forward_rounded,
+                                        onPressed: () => context.push(
+                                          AppRoutes.createAccount,
+                                        ),
+                                      )
+                                    : AppButton.primary(
+                                        label: l10n.welcomeNext,
+                                        icon: Icons.arrow_forward_rounded,
+                                        onPressed: () => _goTo(_index + 1),
+                                      ),
+                              ),
                             ],
                           ),
                           if (widget.showDevGallery)

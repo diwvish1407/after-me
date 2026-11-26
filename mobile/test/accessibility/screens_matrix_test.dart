@@ -81,7 +81,8 @@ class _Screen {
 Future<void> _fillSignUp(WidgetTester tester) async {
   await typeInto(tester, 'Your name', 'Diwakar');
   await typeInto(tester, 'Email', 'new@example.com');
-  await typeInto(tester, 'Password', 'a long unique phrase');
+  await typeInto(tester, 'Password', 'A long unique phrase 1!');
+  await typeInto(tester, 'Confirm password', 'A long unique phrase 1!');
   await tapText(tester, 'I am 18 or older.');
   await tapText(
     tester,
@@ -194,13 +195,8 @@ void _planOf(TestFakes fakes, List<int> offsets, {String tier = 'premium'}) {
 }
 
 /// Chooses the radio with [label] (the [index]th with that text).
-Future<void> _time(WidgetTester tester, String label, {int index = 0}) async {
-  final finder = find.widgetWithText(RadioListTile<String>, label).at(index);
-  await tester.ensureVisible(finder);
-  await tester.pump();
-  await tester.tap(finder);
-  await tester.pumpAndSettle();
-}
+Future<void> _time(WidgetTester tester, String label, {int index = 0}) =>
+    pickDropdown<String>(tester, label, index: index);
 
 /// Instructions in three categories: one shared with two people at different times, one
 /// that is switched off, one nobody receives.
@@ -222,12 +218,20 @@ void _someInstructions(TestFakes fakes) {
     ..seed(title: 'Goldfish', category: InstructionCategory.pets);
 }
 
+/// The category: the form's dropdown, or the list's filter chips.
 Future<void> _chip(WidgetTester tester, String label) async {
-  final finder = find.widgetWithText(ChoiceChip, label);
-  await tester.ensureVisible(finder.first);
-  await tester.pump();
-  await tester.tap(finder.first);
-  await tester.pump();
+  if (find
+      .byType(DropdownButtonFormField<InstructionCategory>)
+      .evaluate()
+      .isEmpty) {
+    final chip = find.widgetWithText(ChoiceChip, label).first;
+    await tester.ensureVisible(chip);
+    await tester.pump();
+    await tester.tap(chip);
+    await tester.pump();
+    return;
+  }
+  await pickDropdown<InstructionCategory>(tester, label);
 }
 
 Future<void> _tick(WidgetTester tester, String name) async {
@@ -315,6 +319,8 @@ Future<void> _toTop(WidgetTester tester) async {
     tester.state<ScrollableState>(scrollable.first).position.jumpTo(0);
     await tester.pump();
   }
+  // Let error texts finish fading in: a half-faded one would read as low contrast.
+  await tester.pump(const Duration(milliseconds: 300));
 }
 
 /// Home with an accepted contact, a plan that tells them and check-ins turned on at the
@@ -421,8 +427,8 @@ const _gapStageEmpty =
     "A stage in your plan has nobody to tell, so it wouldn't reach anyone.";
 
 /// The screen really is in the state it is named for (the gap banner is there).
-void _expectGap(String message) =>
-    expect(find.text(message), findsOneWidget, reason: 'the gap banner');
+Future<void> _expectGap(WidgetTester tester, String message) =>
+    expectNotice(tester, find.text(message));
 
 /// The screen really is in the state it is named for (the seeded tap was restored).
 void _expectExpiredNotice() =>
@@ -481,15 +487,15 @@ final _screens = <_Screen>[
     route: AppRoutes.createAccount,
     prepare: (tester, _) async {
       await typeInto(tester, 'Email', 'bad');
-      await tapText(tester, 'Send my code');
+      await tapText(tester, 'Continue');
       // Tapping scrolled the page; the guidelines measure the visible slices of targets.
       // A little below the top edge: the contrast check samples 4 dp around the text, and
       // the header above the page is the brand blue.
       await Scrollable.ensureVisible(
-        tester.element(find.text("Let's set you up")),
+        tester.element(find.text('Your name')),
         alignment: 0.05,
       );
-      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
     },
   ),
   _Screen(
@@ -497,7 +503,7 @@ final _screens = <_Screen>[
     route: AppRoutes.createAccount,
     prepare: (tester, _) async {
       await _fillSignUp(tester);
-      await tapText(tester, 'Send my code');
+      await tapText(tester, 'Continue');
       await tester.pumpAndSettle();
       await typeInto(tester, '6-digit code', '000000');
       await tapText(tester, 'Confirm');
@@ -538,7 +544,7 @@ final _screens = <_Screen>[
     signedIn: true,
     step: OnboardingStep.contact,
     prepare: (tester, _) async {
-      await tapText(tester, 'Save and continue');
+      await tapText(tester, 'Continue');
     },
   ),
   const _Screen(
@@ -577,7 +583,7 @@ final _screens = <_Screen>[
       ];
     },
     prepare: (tester, _) async {
-      await tapText(tester, 'Use this plan');
+      await tapText(tester, 'Continue');
       await tester.pumpAndSettle();
       await _toTop(tester);
     },
@@ -598,7 +604,7 @@ final _screens = <_Screen>[
       ];
     },
     prepare: (tester, _) async {
-      await tapText(tester, 'Use this plan');
+      await tapText(tester, 'Continue');
       await tester.pumpAndSettle();
       await _toTop(tester);
     },
@@ -615,7 +621,7 @@ final _screens = <_Screen>[
     prepare: (tester, container) async {
       await _addContact(tester, container);
       await tester.pumpAndSettle();
-      await tapText(tester, 'Where my documents are');
+      await tapText(tester, 'Home and keys');
       await tester.pumpAndSettle();
     },
   ),
@@ -682,7 +688,7 @@ final _screens = <_Screen>[
     signedIn: true,
     route: AppRoutes.peopleAdd,
     prepare: (tester, _) async {
-      await tapText(tester, 'Save and send invitation');
+      await tapText(tester, 'Invite');
       await _toTop(tester);
     },
   ),
@@ -693,15 +699,11 @@ final _screens = <_Screen>[
     configure: (fakes) =>
         fakes.contacts.failures['create'] = [const CannotBeOwnEmailFailure()],
     prepare: (tester, _) async {
-      await tapText(tester, 'Other');
+      await pickDropdown<ContactRelationship>(tester, 'Other');
       await typeInto(tester, 'How do you know them?', 'Neighbour upstairs');
-      await typeInto(tester, 'Their name', 'Samantha Rao-Whitfield');
-      await typeInto(
-        tester,
-        'Their email',
-        'samantha.rao.whitfield@example.com',
-      );
-      await tapText(tester, 'Save and send invitation');
+      await typeInto(tester, 'Name', 'Samantha Rao-Whitfield');
+      await typeInto(tester, 'Email', 'samantha.rao.whitfield@example.com');
+      await tapText(tester, 'Invite');
       await tester.pumpAndSettle();
       await _toTop(tester);
     },
@@ -712,7 +714,7 @@ final _screens = <_Screen>[
     route: AppRoutes.contactEdit('c2'),
     configure: (fakes) => _withContacts(fakes, _everyone()),
     prepare: (tester, _) async {
-      await typeInto(tester, 'Their email', 'samantha.new@example.com');
+      await typeInto(tester, 'Email', 'samantha.new@example.com');
       await _toTop(tester);
     },
   ),
@@ -777,7 +779,7 @@ final _screens = <_Screen>[
     signedIn: true,
     step: OnboardingStep.contact,
     prepare: (tester, _) async {
-      await tapText(tester, 'Other');
+      await pickDropdown<ContactRelationship>(tester, 'Other');
       await _toTop(tester);
     },
   ),
@@ -871,7 +873,7 @@ final _screens = <_Screen>[
     route: AppRoutes.instructionNew,
     configure: _instructionWorld,
     prepare: (tester, _) async {
-      await tapText(tester, 'Save instruction');
+      await tapText(tester, 'Save');
       await tester.pumpAndSettle();
       await _toTop(tester);
     },
@@ -889,7 +891,7 @@ final _screens = <_Screen>[
         'y' * 20001,
       );
       await tester.pumpAndSettle();
-      await tapText(tester, 'Save instruction');
+      await tapText(tester, 'Save');
       await _typed(tester);
     },
   ),
@@ -901,7 +903,8 @@ final _screens = <_Screen>[
     prepare: (tester, _) async {
       await _chip(tester, 'Digital accounts');
       await _typed(tester);
-      expect(find.textContaining("Don't paste passwords."), findsOneWidget);
+      // The form is kept short: no password notes under the fields.
+      expect(find.textContaining("Don't paste passwords."), findsNothing);
     },
   ),
   _Screen(
@@ -970,12 +973,10 @@ final _screens = <_Screen>[
       await tester.pumpAndSettle();
       await _tick(tester, 'Mom');
       await tester.pumpAndSettle();
-      final radio = find.byType(RadioListTile<String>).first;
-      await tester.ensureVisible(radio);
-      await tester.pump();
-      await tester.tap(radio);
-      await tester.pump();
-      await tapText(tester, 'Save instruction');
+      await openDropdown<String>(tester);
+      await tester.tap(find.byType(DropdownMenuItem<String>).last);
+      await tester.pumpAndSettle();
+      await tapText(tester, 'Save');
       await tester.pumpAndSettle();
       await _toTop(tester);
     },
@@ -1104,12 +1105,10 @@ final _screens = <_Screen>[
       await tester.pumpAndSettle();
       await _tick(tester, 'Mom');
       await tester.pumpAndSettle();
-      final radio = find.byType(RadioListTile<String>).first;
-      await tester.ensureVisible(radio);
-      await tester.pump();
-      await tester.tap(radio);
-      await tester.pump();
-      await tapText(tester, 'Save instruction');
+      await openDropdown<String>(tester);
+      await tester.tap(find.byType(DropdownMenuItem<String>).last);
+      await tester.pumpAndSettle();
+      await tapText(tester, 'Save');
       await _frames(tester);
       expect(find.text("Confirm it's you"), findsOneWidget);
     },
@@ -1134,7 +1133,7 @@ final _screens = <_Screen>[
     },
     prepare: (tester, _) async {
       await typeInto(tester, 'Title', 'House emergency (updated)');
-      await tapText(tester, 'Save changes');
+      await tapText(tester, 'Save');
       await tester.pumpAndSettle();
       await _toTop(tester);
     },
@@ -1200,7 +1199,7 @@ final _screens = <_Screen>[
       await tester.pumpAndSettle();
       await _time(tester, "If you haven't checked in for 1 day", index: 0);
       await _time(tester, "If you haven't checked in for 2 days", index: 1);
-      await tapText(tester, 'Save instruction');
+      await tapText(tester, 'Save');
       await tester.pumpAndSettle();
       await _toTop(tester);
       expect(
@@ -1227,10 +1226,14 @@ final _screens = <_Screen>[
       await tester.pumpAndSettle();
       await _tick(tester, 'Mom');
       await _time(tester, "If you haven't checked in for 1 day");
-      await tapText(tester, 'Save instruction');
+      await tapText(tester, 'Save');
       await tester.pumpAndSettle();
       await _toTop(tester);
       expect(find.textContaining('Your plan now has the new time'), findsOne);
+      // With the footer pinned, the character count would sit cut in half at the
+      // bottom edge of the scroll area: show all of it, as a person scrolling would.
+      await tester.ensureVisible(find.textContaining('of 20,000 characters'));
+      await tester.pump(const Duration(milliseconds: 300));
     },
   ),
   _Screen(
@@ -1251,7 +1254,7 @@ final _screens = <_Screen>[
       await tester.pumpAndSettle();
       await _tick(tester, 'Mom');
       await _time(tester, "If you haven't checked in for 1 day");
-      await tapText(tester, 'Save instruction');
+      await tapText(tester, 'Save');
       await _frames(tester);
       expect(find.text("Confirm it's you"), findsOneWidget);
       expect(find.textContaining('Adding this time to your plan'), findsOne);
@@ -1340,14 +1343,14 @@ final _screens = <_Screen>[
     signedIn: true,
     route: AppRoutes.home,
     configure: (fakes) => _gapHome(fakes, emptyStage: true),
-    prepare: (tester, _) async => _expectGap(_gapNoContacts),
+    prepare: (tester, _) async => _expectGap(tester, _gapNoContacts),
   ),
   _Screen(
     'home (plan has no stage)',
     signedIn: true,
     route: AppRoutes.home,
     configure: (fakes) => _gapHome(fakes, contacts: [testContact()]),
-    prepare: (tester, _) async => _expectGap(_gapNoStages),
+    prepare: (tester, _) async => _expectGap(tester, _gapNoStages),
   ),
   _Screen(
     'home (a stage tells nobody)',
@@ -1355,7 +1358,7 @@ final _screens = <_Screen>[
     route: AppRoutes.home,
     configure: (fakes) =>
         _gapHome(fakes, contacts: [testContact()], emptyStage: true),
-    prepare: (tester, _) async => _expectGap(_gapStageEmpty),
+    prepare: (tester, _) async => _expectGap(tester, _gapStageEmpty),
   ),
   _Screen(
     'home (gap, contact pending, due soon)',
@@ -1385,13 +1388,13 @@ final _screens = <_Screen>[
     prepare: (tester, container) async {
       // A tap that is not received, then a refresh that fails: every banner at once.
       await _tapCheckIn(tester);
+      await _expectGap(tester, _gapNoStages);
       final server =
           container.read(checkInRepositoryProvider) as FakeCheckInServer;
       server.failures['home'] = [const NetworkFailure()];
       await container.read(homeControllerProvider.notifier).refresh();
       await tester.pumpAndSettle();
       await _toTop(tester);
-      _expectGap(_gapNoStages);
       expect(find.text('Offline — showing last known status'), findsOneWidget);
       expect(find.text("Not received yet — we'll keep trying"), findsOneWidget);
     },
@@ -1407,7 +1410,8 @@ final _screens = <_Screen>[
     },
     prepare: (tester, _) async {
       _expectExpiredNotice();
-      _expectGap(_gapNoStages);
+      await _expectGap(tester, _gapNoStages);
+      _expectExpiredNotice();
     },
   ),
   _Screen(
@@ -1625,7 +1629,7 @@ final _screens = <_Screen>[
     prepare: (tester, _) async {
       await _tapCheckIn(tester);
       expect(find.text("We're having a service interruption"), findsOneWidget);
-      expect(find.text("You're checked in"), findsOneWidget);
+      await expectNotice(tester, find.text("You're checked in"));
     },
   ),
   _Screen(
@@ -2066,8 +2070,8 @@ final _screens = <_Screen>[
     route: OnboardingStep.plan.path,
     configure: _activeHome,
     prepare: (tester, _) async {
-      await tapText(tester, '6 hours');
-      await tapText(tester, 'Use this plan');
+      await tapText(tester, '1 hour');
+      await tapText(tester, 'Continue');
       await _frames(tester);
       expect(find.text("Confirm it's you"), findsOneWidget);
     },
@@ -2091,8 +2095,8 @@ final _screens = <_Screen>[
     route: AppRoutes.contactEdit('c1'),
     configure: _activeHome,
     prepare: (tester, _) async {
-      await typeInto(tester, 'Their email', 'mum@example.com');
-      await tapText(tester, 'Save changes');
+      await typeInto(tester, 'Email', 'mum@example.com');
+      await tapText(tester, 'Save');
       await _frames(tester);
       expect(find.text("Confirm it's you"), findsOneWidget);
     },
@@ -3006,10 +3010,7 @@ void main() {
   group('status changes are announced by a live region', () {
     // screen name -> what its live regions say, in part.
     const announced = <String, List<String>>{
-      'home (checked in)': [
-        "You're checked in",
-        'Checked in. Next check-in tomorrow at 8:00 PM.',
-      ],
+      'home (checked in)': ['Checked in. Next check-in tomorrow at 8:00 PM.'],
       'home (not received yet)': [
         "Not received yet — we'll keep trying",
         'Not received yet',
@@ -3031,7 +3032,6 @@ void main() {
       'home (service interruption, checked in)': [
         "We're having a service interruption",
         'Nothing is sent to your contacts',
-        "You're checked in",
       ],
       'home (service interruption, grace: no time, I\'M OK)': [
         "We're having a service interruption",

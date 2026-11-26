@@ -400,12 +400,19 @@ void main() {
           expect(config.firebase, isNull);
         }
         expect(config.playStoreUrl.scheme, 'https');
-        expect(config.playStoreUrl.host, 'play.google.com');
+        // The Play Store, or (while the app is installed from an APK) the server's
+        // own download of the latest build.
+        if (config.playStoreUrl.host != 'play.google.com') {
+          expect(config.playStoreUrl.path, '/download/afterme.apk');
+        }
         if (env != AppEnv.dev) {
           expect(config.apiBaseUrl.scheme, 'https');
           expect(config.publicBaseUrl.scheme, 'https');
-          // Placeholder domain until product decision D1.
-          expect(config.apiBaseUrl.host, endsWith('.invalid'));
+          // A placeholder domain until product decision D1, or the prototype server.
+          expect(
+            config.apiBaseUrl.host,
+            anyOf(endsWith('.invalid'), endsWith('.ngrok-free.dev')),
+          );
         }
       });
     }

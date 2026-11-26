@@ -559,8 +559,8 @@ void main() {
     testWidgets('keeps the neutral placeholder and I\'M OK', (tester) async {
       final fakes = _world()..incidents.open({'id': 'i-1'});
       await _open(tester, fakes);
-      expect(find.text('Your check-in is overdue'), findsOneWidget);
-      expect(find.text("Tap I'M OK if you're all right."), findsOneWidget);
+      await expectNotice(tester, find.text('Your check-in is overdue'));
+      await expectNotice(tester, find.text("Tap I'M OK if you're all right."));
       expect(_button(tester), CheckInButtonState.idle);
       expect(find.text("I'M SAFE"), findsNothing);
     });

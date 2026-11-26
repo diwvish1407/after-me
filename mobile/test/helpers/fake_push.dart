@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:afterme/core/alarm/deadline_alarm.dart';
+import 'package:afterme/core/alarm/pending_contact_reminder.dart';
 import 'package:afterme/core/device/device_info_source.dart';
 import 'package:afterme/core/push/local_notification_gateway.dart';
 import 'package:afterme/core/push/push_gateway.dart';
@@ -232,4 +233,17 @@ class FakeDeadlineAlarm implements DeadlineAlarm {
 
   @override
   Future<void> askToRingOnTime() async => asks++;
+}
+
+/// Records whether the pending-contact reminder is on, without the plugin.
+class FakePendingContactReminder implements PendingContactReminder {
+  bool? pending;
+
+  @override
+  Future<void> sync({
+    required bool pending,
+    required PendingReminderText text,
+  }) async {
+    this.pending = pending;
+  }
 }

@@ -33,12 +33,13 @@ String? _error(WidgetTester tester, String label) =>
 
 Future<void> _fillCreateAccount(
   WidgetTester tester, {
-  String password = 'a long unique phrase',
+  String password = 'A long unique phrase 1!',
   bool consent = true,
 }) async {
   await typeInto(tester, 'Your name', 'Diwakar');
   await typeInto(tester, 'Email', 'new@example.com');
   await typeInto(tester, 'Password', password);
+  await typeInto(tester, 'Confirm password', password);
   if (consent) {
     await tapText(tester, 'I am 18 or older.');
     await tapText(
@@ -55,7 +56,7 @@ void main() {
       (tester) async {
         final fakes = TestFakes();
         await _open(tester, AppRoutes.createAccount, fakes: fakes);
-        await tapText(tester, 'Send my code');
+        await tapText(tester, 'Continue');
         expect(_error(tester, 'Your name'), 'Please fill this in.');
         expect(_error(tester, 'Email'), 'Please fill this in.');
         expect(_error(tester, 'Password'), 'Please fill this in.');
@@ -70,25 +71,33 @@ void main() {
       await _open(tester, AppRoutes.createAccount);
       await typeInto(tester, 'Email', 'not-an-email');
       await typeInto(tester, 'Password', 'short');
-      await tapText(tester, 'Send my code');
+      await tapText(tester, 'Continue');
       expect(_error(tester, 'Email'), 'Enter a valid email address.');
-      expect(_error(tester, 'Password'), 'Use at least 10 characters.');
+      expect(_error(tester, 'Password'), 'Use at least 8 characters.');
       await typeInto(tester, 'Email', 'ok@example.com');
       expect(_error(tester, 'Email'), isNull);
     });
 
-    testWidgets('the password hint is calm and follows what is typed', (
+    testWidgets('the password rules are ticked as they are met', (
       tester,
     ) async {
       await _open(tester, AppRoutes.createAccount);
-      expect(
-        find.textContaining('A few unrelated words work well'),
-        findsOneWidget,
-      );
+      for (final rule in [
+        '8+ characters',
+        'Capital letter',
+        'Number',
+        'Special character',
+      ]) {
+        expect(find.text(rule), findsOneWidget, reason: rule);
+      }
+      Finder met() => find.byIcon(Icons.check_circle_rounded);
+      expect(met(), findsNothing);
       await typeInto(tester, 'Password', 'short');
-      expect(find.textContaining('Keep going'), findsOneWidget);
-      await typeInto(tester, 'Password', 'correct horse battery staple');
-      expect(find.textContaining('Strong'), findsOneWidget);
+      expect(met(), findsNothing);
+      await typeInto(tester, 'Password', 'Shorter1');
+      expect(met(), findsNWidgets(3));
+      await typeInto(tester, 'Password', 'Correct horse 1!');
+      expect(met(), findsNWidgets(4));
     });
 
     testWidgets('show/hide toggles the password', (tester) async {
@@ -105,7 +114,7 @@ void main() {
             .obscureText,
         isTrue,
       );
-      await tester.tap(find.byTooltip('Show password'));
+      await tester.tap(find.byTooltip('Show password').first);
       await tester.pump();
       expect(
         tester
@@ -144,7 +153,7 @@ void main() {
       expect(find.text('America/New_York'), findsOneWidget);
 
       await _fillCreateAccount(tester);
-      await tapText(tester, 'Send my code');
+      await tapText(tester, 'Continue');
       await tester.pumpAndSettle();
       expect(
         fakes.auth.lastArgs['registerStart']!['timezone'],
@@ -196,8 +205,8 @@ void main() {
         ),
       );
       await _open(tester, AppRoutes.createAccount, fakes: fakes);
-      await _fillCreateAccount(tester, password: 'password123456');
-      await tapText(tester, 'Send my code');
+      await _fillCreateAccount(tester, password: 'Password123456!');
+      await tapText(tester, 'Continue');
       await tester.pumpAndSettle();
       expect(_error(tester, 'Password'), contains('too common'));
       expect(find.text('Enter your code'), findsNothing);
@@ -208,7 +217,7 @@ void main() {
       fakes.auth.fail('registerStart', const NetworkFailure());
       await _open(tester, AppRoutes.createAccount, fakes: fakes);
       await _fillCreateAccount(tester);
-      await tapText(tester, 'Send my code');
+      await tapText(tester, 'Continue');
       await tester.pumpAndSettle();
       expect(find.textContaining("You're offline"), findsOneWidget);
     });
@@ -231,8 +240,8 @@ void main() {
         AppRoutes.createAccount,
         fakes: fakes,
       );
-      await _fillCreateAccount(tester, password: 'password123456');
-      await tapText(tester, 'Send my code');
+      await _fillCreateAccount(tester, password: 'Password123456!');
+      await tapText(tester, 'Continue');
       await tester.pumpAndSettle();
       expect(_error(tester, 'Password'), contains('too common'));
 
@@ -246,7 +255,7 @@ void main() {
 
     testWidgets('the sign-in link leads to sign-in', (tester) async {
       await _open(tester, AppRoutes.createAccount);
-      await tapText(tester, 'I already have an account');
+      await tapText(tester, 'Sign in');
       await tester.pumpAndSettle();
       expect(find.text('Welcome back'), findsOneWidget);
     });
@@ -261,7 +270,7 @@ void main() {
         fakes: fakes,
       );
       await _fillCreateAccount(tester);
-      await tapText(tester, 'Send my code');
+      await tapText(tester, 'Continue');
       await tester.pumpAndSettle();
       expect(find.text('Enter your code'), findsOneWidget);
       return (container, fakes);
@@ -374,7 +383,7 @@ void main() {
       final (container, _) = await toCode(tester);
       await tapText(tester, 'Wrong email address?');
       await tester.pumpAndSettle();
-      expect(find.text("Let's set you up"), findsOneWidget);
+      expect(find.text('Create account'), findsOneWidget);
       expect(container.read(signupControllerProvider).stage, SignupStage.form);
     });
 
@@ -383,7 +392,7 @@ void main() {
       (tester) async {
         await _open(tester, AppRoutes.verifyCode);
         expect(find.text('Enter your code'), findsNothing);
-        expect(find.text('Get started'), findsOneWidget);
+        expect(find.text('Next'), findsOneWidget, reason: 'the welcome screen');
       },
     );
 
@@ -496,7 +505,7 @@ void main() {
         await tester.pumpAndSettle();
         await tapText(tester, 'Create an account');
         await tester.pumpAndSettle();
-        expect(find.text("Let's set you up"), findsOneWidget);
+        expect(find.text('Create account'), findsOneWidget);
       },
     );
   });

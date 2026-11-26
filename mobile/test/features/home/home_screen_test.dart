@@ -84,14 +84,12 @@ void main() {
       final fakes = _fakes();
       await openApp(tester, fakes: fakes, route: AppRoutes.home);
 
-      expect(find.text("Let's finish your plan"), findsOneWidget);
       expect(
         find.textContaining(
           RegExp(r'^Good (morning|afternoon|evening), Diwakar$'),
         ),
         findsOneWidget,
       );
-      expect(find.text('Add a trusted contact'), findsOneWidget);
       expect(find.text('Check in every day by 8:00 PM.'), findsOneWidget);
       expect(find.text('Review your plan'), findsOneWidget);
       expect(_buttonState(tester), CheckInButtonState.disabled);
@@ -129,12 +127,15 @@ void main() {
           .savePlan(PlanPresets.standard([testContact()]));
       await tester.pumpAndSettle();
 
-      expect(find.text('Ready to turn on check-ins'), findsOneWidget);
       await tapText(tester, 'Turn on check-ins');
       await tester.pumpAndSettle();
 
       expect(fakes.server.calls.where((c) => c == 'activate'), hasLength(1));
-      expect(find.text("You're checked in"), findsOneWidget);
+      await expectNotice(
+        tester,
+        find.text("You're checked in"),
+        findsOneWidget,
+      );
       expect(find.text('Tomorrow · 8:00 PM'), findsOneWidget);
       expect(find.text('No check-in yet'), findsOneWidget);
       expect(_buttonState(tester), CheckInButtonState.idle);
@@ -144,24 +145,24 @@ void main() {
         'and Home is ready to turn on', (tester) async {
       final fakes = _fakes(contacts: [testContact()]);
       await openApp(tester, fakes: fakes, route: AppRoutes.home);
-      expect(find.text("Let's finish your plan"), findsOneWidget);
-      expect(find.text('No plan stages yet'), findsNothing);
 
       await tapText(tester, 'Set up');
       await tester.pumpAndSettle();
       expect(find.text('Your plan'), findsOneWidget);
-      await tapText(tester, 'Use this plan');
+      await tapText(tester, 'Continue');
       await tester.pumpAndSettle();
 
       // A re-opened step returns Home, which read the aggregate again.
       expect(find.byType(HomeScreen), findsOneWidget);
       expect(fakes.plan.stages, hasLength(1));
       expect(fakes.plan.stages.single.contactIds, ['c1']);
-      expect(find.text('Ready to turn on check-ins'), findsOneWidget);
       await tapText(tester, 'Turn on check-ins');
       await tester.pumpAndSettle();
-      expect(find.text("You're checked in"), findsOneWidget);
-      expect(find.text('1 plan stage'), findsOneWidget);
+      await expectNotice(
+        tester,
+        find.text("You're checked in"),
+        findsOneWidget,
+      );
     });
 
     testWidgets('the server says what is missing; unknown codes are said '
@@ -195,7 +196,11 @@ void main() {
       expect(find.textContaining("You're offline"), findsOneWidget);
       await tapText(tester, 'Turn on check-ins');
       await tester.pumpAndSettle();
-      expect(find.text("You're checked in"), findsOneWidget);
+      await expectNotice(
+        tester,
+        find.text("You're checked in"),
+        findsOneWidget,
+      );
     });
 
     testWidgets('a contact that is a stand-in for the plan checklist opens '
@@ -214,12 +219,13 @@ void main() {
       fakes.server.lastCheckinAt = DateTime.utc(2026, 10, 8, 11, 30);
       await openApp(tester, fakes: fakes, route: AppRoutes.home);
 
-      expect(find.text("You're checked in"), findsOneWidget);
+      await expectNotice(
+        tester,
+        find.text("You're checked in"),
+        findsOneWidget,
+      );
       expect(find.text('Tomorrow · 8:00 PM'), findsOneWidget);
       expect(find.text('Today · 5:00 PM'), findsOneWidget);
-      expect(find.text('Trusted contacts: 1 of 1 accepted'), findsOneWidget);
-      expect(find.text('1 plan stage'), findsOneWidget);
-      expect(find.text('No instructions shared yet'), findsOneWidget);
       expect(_buttonState(tester), CheckInButtonState.idle);
       expect(
         find.text('Turn on check-ins'),
@@ -255,7 +261,8 @@ void main() {
         const Duration(minutes: 45),
       );
       await openApp(tester, fakes: fakes, route: AppRoutes.home);
-      expect(
+      await expectNotice(
+        tester,
         find.text('Check-in due at 6:15 PM — in 45 minutes'),
         findsOneWidget,
       );
@@ -271,11 +278,16 @@ void main() {
         const Duration(minutes: 100),
       );
       await openApp(tester, fakes: fakes, route: AppRoutes.home);
-      expect(find.text("You're checked in"), findsOneWidget);
+      await expectNotice(
+        tester,
+        find.text("You're checked in"),
+        findsOneWidget,
+      );
 
       fakes.clock.advance(const Duration(minutes: 41));
       await tester.pump(const Duration(seconds: 31));
-      expect(
+      await expectNotice(
+        tester,
         find.text('Check-in due at 7:20 PM — in 59 minutes'),
         findsOneWidget,
       );
@@ -289,9 +301,13 @@ void main() {
         const Duration(minutes: 5),
       );
       await openApp(tester, fakes: fakes, route: AppRoutes.home);
-      expect(find.text("You're checked in"), findsNothing);
-      expect(find.text('Your 5:25 PM check-in is due'), findsOneWidget);
-      expect(find.text("Tap I'M OK to check in."), findsOneWidget);
+      await expectNotice(tester, find.text("You're checked in"), findsNothing);
+      await expectNotice(
+        tester,
+        find.text('Your 5:25 PM check-in is due'),
+        findsOneWidget,
+      );
+      await expectNotice(tester, find.text("Tap I'M OK to check in."));
     });
 
     testWidgets('an overdue deadline makes Home read the aggregate again', (
@@ -380,7 +396,7 @@ void main() {
         findsOneWidget,
       );
       expect(_buttonState(tester), CheckInButtonState.pending);
-      expect(find.text("You're checked in"), findsNothing);
+      await expectNotice(tester, find.text("You're checked in"), findsNothing);
 
       await tapText(tester, 'Try again');
       await tester.pumpAndSettle();
@@ -405,7 +421,6 @@ void main() {
       await tester.pump();
       expect(_buttonState(tester), CheckInButtonState.sending);
       expect(find.text("Not received yet — we'll keep trying"), findsOneWidget);
-      expect(find.text("You're checked in"), findsNothing);
 
       gate.complete();
       await tester.pumpAndSettle();
@@ -516,7 +531,7 @@ void main() {
         ..contactsMessaged = true;
       await openApp(tester, fakes: fakes, route: AppRoutes.home);
       // An incident this app version cannot read: the neutral placeholder first.
-      expect(find.text('Your check-in is overdue'), findsOneWidget);
+      await expectNotice(tester, find.text('Your check-in is overdue'));
       await _tapCheckIn(tester);
       await tester.pumpAndSettle();
       expect(find.text("Please confirm you're safe"), findsOneWidget);
@@ -541,8 +556,8 @@ void main() {
       final fakes = _fakes(contacts: [testContact()], active: true);
       fakes.server.openIncident(details: {'id': 'i-1'});
       await openApp(tester, fakes: fakes, route: AppRoutes.home);
-      expect(find.text('Your check-in is overdue'), findsOneWidget);
-      expect(find.text("Tap I'M OK if you're all right."), findsOneWidget);
+      await expectNotice(tester, find.text('Your check-in is overdue'));
+      await expectNotice(tester, find.text("Tap I'M OK if you're all right."));
       expect(_buttonState(tester), CheckInButtonState.idle);
 
       await _tapCheckIn(tester);
@@ -572,7 +587,7 @@ void main() {
         ),
         findsOneWidget,
       );
-      expect(find.text("You're checked in"), findsNothing);
+      await expectNotice(tester, find.text("You're checked in"), findsNothing);
       expect(find.text("Not received yet — we'll keep trying"), findsNothing);
       expect(find.text('Try again'), findsNothing);
       expect(_buttonState(tester), CheckInButtonState.idle);
@@ -627,7 +642,11 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text(_expiredTitle), findsNothing);
       expect(find.text('Got it'), findsNothing);
-      expect(find.text("You're checked in"), findsOneWidget);
+      await expectNotice(
+        tester,
+        find.text("You're checked in"),
+        findsOneWidget,
+      );
       expect(_buttonState(tester), CheckInButtonState.idle);
       expect(fakes.server.calls.where((c) => c == 'checkIn'), isEmpty);
     });
@@ -724,7 +743,11 @@ void main() {
       await _keepTap(fakes, age: age, userId: 'someone-else');
       await openApp(tester, fakes: fakes, route: AppRoutes.home);
       expect(find.text(_expiredTitle), findsNothing);
-      expect(find.text("You're checked in"), findsOneWidget);
+      await expectNotice(
+        tester,
+        find.text("You're checked in"),
+        findsOneWidget,
+      );
       expect(fakes.server.calls.where((c) => c == 'checkIn'), isEmpty);
     });
 
@@ -756,7 +779,11 @@ void main() {
       await container.read(homeControllerProvider.notifier).refresh();
       await tester.pumpAndSettle();
       expect(find.text('Offline — showing last known status'), findsOneWidget);
-      expect(find.text("You're checked in"), findsOneWidget);
+      await expectNotice(
+        tester,
+        find.text("You're checked in"),
+        findsOneWidget,
+      );
       expect(find.text('Tomorrow · 8:00 PM'), findsOneWidget);
 
       // I'M OK still queues as pending while offline.
@@ -874,8 +901,12 @@ void main() {
       final fakes = _fakes(contacts: [testContact()], active: true);
       fakes.server.status = CheckInStatus.unknown;
       await openApp(tester, fakes: fakes, route: AppRoutes.home);
-      expect(find.text("You're checked in"), findsNothing);
-      expect(find.text("Your check-in status can't be shown"), findsOneWidget);
+      await expectNotice(tester, find.text("You're checked in"), findsNothing);
+      await expectNotice(
+        tester,
+        find.text("Your check-in status can't be shown"),
+        findsOneWidget,
+      );
       expect(_buttonState(tester), CheckInButtonState.idle);
     });
   });
@@ -901,11 +932,13 @@ void main() {
         notificationsOn: false,
       );
       await openWith(tester, fakes);
+      await openNotifications(tester);
       expect(
         find.textContaining("One trusted contact can't be reached or said no."),
         findsOneWidget,
       );
-      expect(find.textContaining("hasn't accepted"), findsNothing);
+      // Every alert is listed, the declined contact first.
+      expect(find.textContaining("hasn't accepted"), findsOneWidget);
       await tapText(tester, 'Open contact');
       await tester.pumpAndSettle();
       expect(find.byType(ContactDetailScreen), findsOneWidget);
@@ -919,14 +952,15 @@ void main() {
         notificationsOn: false,
       );
       await openWith(tester, fakes);
+      await openNotifications(tester);
       expect(
-        find.text("One trusted contact hasn't accepted your invitation yet."),
+        find.text("Mom hasn't accepted your invitation yet."),
         findsOneWidget,
       );
       expect(
         find.textContaining('Notifications are off'),
-        findsNothing,
-        reason: 'one at a time',
+        findsOneWidget,
+        reason: 'every alert is listed',
       );
     });
 
@@ -939,6 +973,7 @@ void main() {
         notificationsOn: false,
       );
       await openWith(tester, fakes);
+      await openNotifications(tester);
       expect(
         find.text(
           "Notifications are off, so you won't get a reminder before a check-in is due.",
@@ -954,6 +989,7 @@ void main() {
       final fakes = _fakes(contacts: [testContact()], active: true);
       fakes.device.deviceTimezone = 'America/New_York';
       await openWith(tester, fakes);
+      await openNotifications(tester);
       expect(
         find.textContaining("Your phone's timezone is different"),
         findsOneWidget,
@@ -976,7 +1012,6 @@ void main() {
       );
       await openWith(tester, off);
       expect(find.textContaining('can\'t be reached'), findsNothing);
-      expect(find.text("Let's finish your plan"), findsOneWidget);
     });
   });
 
@@ -1020,19 +1055,22 @@ void main() {
       );
       await openHome(tester, fakes);
 
-      expect(find.text(noContacts), findsOneWidget);
-      expect(find.text('Add a trusted contact'), findsOneWidget);
+      await expectNotice(tester, find.text(noContacts), findsOneWidget);
       expect(
         find.text(noStages),
         findsNothing,
         reason: 'contact first, one thing to do',
       );
-      expect(find.text(stageEmpty), findsNothing);
+      await expectNotice(tester, find.text(stageEmpty), findsNothing);
       // Not dismissible: nothing but the action.
       expect(find.byIcon(Icons.close), findsNothing);
       expect(find.text('Got it'), findsNothing);
       // Home itself is untouched.
-      expect(find.text("You're checked in"), findsOneWidget);
+      await expectNotice(
+        tester,
+        find.text("You're checked in"),
+        findsOneWidget,
+      );
       expect(find.text('Tomorrow · 8:00 PM'), findsOneWidget);
       expect(_buttonState(tester), CheckInButtonState.idle);
       expect(
@@ -1056,7 +1094,7 @@ void main() {
 
       // The gap alone: the whole button is above the navigation bar.
       await open(withoutPlan([testContact()]));
-      expect(find.text(noStages), findsOneWidget);
+      await expectNotice(tester, find.text(noStages), findsOneWidget);
       expect(
         tester.getRect(find.byType(CheckInButton)).bottom,
         lessThan(navTop()),
@@ -1067,8 +1105,8 @@ void main() {
       await open(
         withoutPlan([testContact(status: VerificationStatus.pending)]),
       );
-      expect(find.text(noStages), findsOneWidget);
-      expect(find.textContaining("hasn't accepted"), findsOneWidget);
+      await expectNotice(tester, find.text(noStages), findsOneWidget);
+      await expectNotice(tester, find.textContaining("hasn't accepted"));
       expect(
         tester.getTopLeft(find.byType(CheckInButton)).dy,
         lessThan(navTop()),
@@ -1077,6 +1115,7 @@ void main() {
 
     testWidgets('a plan with no stage: review the plan', (tester) async {
       await openHome(tester, withoutPlan([testContact()]));
+      await openNotifications(tester);
       expect(find.text(noStages), findsOneWidget);
       expect(find.text('Review your plan'), findsOneWidget);
       expect(find.text(noContacts), findsNothing);
@@ -1085,7 +1124,7 @@ void main() {
       await tester.pumpAndSettle();
       // Check-ins are on: the plan editor, not the set-up step of onboarding.
       expect(find.text('Edit your plan'), findsWidgets);
-      expect(find.text('Use this plan'), findsNothing);
+      expect(find.text('Continue'), findsNothing);
     });
 
     testWidgets('a stage that tells nobody: review the plan', (tester) async {
@@ -1097,16 +1136,22 @@ void main() {
         ),
       );
       await openHome(tester, fakes);
+      await openNotifications(tester);
       expect(find.text(stageEmpty), findsOneWidget);
       expect(find.text('Review your plan'), findsOneWidget);
       expect(find.text(noStages), findsNothing);
+      await closeNotifications(tester);
       expect(_buttonState(tester), CheckInButtonState.idle);
     });
 
     testWidgets('a plan that tells someone has no banner', (tester) async {
       await openHome(tester, _fakes(contacts: [testContact()], active: true));
       expectNoGap();
-      expect(find.text("You're checked in"), findsOneWidget);
+      await expectNotice(
+        tester,
+        find.text("You're checked in"),
+        findsOneWidget,
+      );
     });
 
     testWidgets('per-contact problems alone are not a gap: they keep their own '
@@ -1119,9 +1164,9 @@ void main() {
         ),
       );
       expectNoGap();
-      expect(
+      await expectNotice(
+        tester,
         find.textContaining("One trusted contact can't be reached"),
-        findsOneWidget,
       );
 
       await openHome(
@@ -1132,15 +1177,13 @@ void main() {
         ),
       );
       expectNoGap();
-      expect(find.textContaining("hasn't accepted"), findsOneWidget);
+      await expectNotice(tester, find.textContaining("hasn't accepted"));
     });
 
     testWidgets('not while check-ins are off: the checklist already says '
         'so', (tester) async {
       await openHome(tester, _fakes());
       expectNoGap();
-      expect(find.text("Let's finish your plan"), findsOneWidget);
-      expect(find.text('Add a trusted contact'), findsOneWidget);
     });
 
     testWidgets('a status this version does not know claims nothing, so '
@@ -1149,7 +1192,11 @@ void main() {
       fakes.server.status = CheckInStatus.unknown;
       await openHome(tester, fakes);
       expectNoGap();
-      expect(find.text("Your check-in status can't be shown"), findsOneWidget);
+      await expectNotice(
+        tester,
+        find.text("Your check-in status can't be shown"),
+        findsOneWidget,
+      );
     });
 
     testWidgets('also when the deadline has just passed and the server has not '
@@ -1159,8 +1206,12 @@ void main() {
         const Duration(minutes: 5),
       );
       await openHome(tester, fakes);
-      expect(find.text('Your 5:25 PM check-in is due'), findsOneWidget);
-      expect(find.text(noStages), findsOneWidget);
+      await expectNotice(
+        tester,
+        find.text('Your 5:25 PM check-in is due'),
+        findsOneWidget,
+      );
+      await expectNotice(tester, find.text(noStages), findsOneWidget);
       expect(_buttonState(tester), CheckInButtonState.idle);
     });
 
@@ -1171,24 +1222,26 @@ void main() {
       fakes.server.openIncident(details: {'id': 'i-1'});
       await openHome(tester, fakes);
       expectNoGap();
-      expect(find.text('Your check-in is overdue'), findsOneWidget);
+      await expectNotice(tester, find.text('Your check-in is overdue'));
     });
 
     testWidgets('it is still there after leaving and coming back, and after '
         'Home reads again', (tester) async {
       final fakes = withoutPlan([testContact()]);
       final container = await openHome(tester, fakes);
+      await openNotifications(tester);
       await tapText(tester, 'Review your plan');
       await tester.pumpAndSettle();
       await tester.pageBack();
       await tester.pumpAndSettle();
-      expect(find.text(noStages), findsOneWidget);
+      await closeNotifications(tester);
+      await expectNotice(tester, find.text(noStages), findsOneWidget);
 
       final before = fakes.server.calls.where((c) => c == 'home').length;
       await container.read(homeControllerProvider.notifier).refresh();
       await tester.pumpAndSettle();
       expect(fakes.server.calls.where((c) => c == 'home').length, before + 1);
-      expect(find.text(noStages), findsOneWidget);
+      await expectNotice(tester, find.text(noStages), findsOneWidget);
     });
 
     testWidgets('sits with the other banners without hiding any of them or '
@@ -1210,17 +1263,13 @@ void main() {
       final greeting = find.textContaining(
         RegExp(r'^Good (morning|afternoon|evening), Diwakar$'),
       );
-      final gap = find.text(noStages);
-      final readiness = find.text(
-        "One trusted contact hasn't accepted your invitation yet.",
-      );
       final pending = find.text("Not received yet — we'll keep trying");
-      final all = [offline, greeting, gap, readiness, pending];
+      final all = [offline, greeting, pending];
       for (final finder in all) {
         expect(finder, findsOneWidget);
       }
-      // Top to bottom: what is offline, who it is, the gap, the readiness hint, the
-      // status of the tap, then the button.
+      // Top to bottom: what is offline, who it is, the status of the tap, then the
+      // button. The gap and the readiness hint are in the notifications section.
       final tops = [for (final f in all) tester.getTopLeft(f).dy];
       expect(tops, [...tops]..sort(), reason: 'in this order');
       expect(
@@ -1233,22 +1282,19 @@ void main() {
       await tapText(tester, 'Try again');
       await tester.pumpAndSettle();
       expect(_buttonState(tester), CheckInButtonState.success);
-      expect(find.text(noStages), findsOneWidget);
+      await expectNotice(tester, find.text(noStages), findsOneWidget);
     });
 
     testWidgets('also with a tap that was too old to count', (tester) async {
       final fakes = withoutPlan([testContact()]);
       await _keepTap(fakes, age: const Duration(hours: 30));
       await openHome(tester, fakes);
-      expect(find.text(noStages), findsOneWidget);
+      await expectNotice(tester, find.text(noStages), findsOneWidget);
       expect(find.text(_expiredTitle), findsOneWidget);
-      expect(
-        tester.getTopLeft(find.text(noStages)).dy,
-        lessThan(tester.getTopLeft(find.text(_expiredTitle)).dy),
-      );
       expect(_buttonState(tester), CheckInButtonState.idle);
       await tapText(tester, 'Got it');
       await tester.pumpAndSettle();
+      await openNotifications(tester);
       expect(
         find.text(noStages),
         findsOneWidget,
@@ -1260,21 +1306,23 @@ void main() {
         'plan', (tester) async {
       final fakes = withoutPlan();
       await openHome(tester, fakes);
+      await openNotifications(tester);
       expect(find.text(noContacts), findsOneWidget);
 
-      // Add the contact through the step the banner opens.
+      // Add the contact through the step the notice opens.
       await tapText(tester, 'Add a trusted contact');
       await tester.pumpAndSettle();
       await fillContactForm(tester);
-      await tapText(tester, 'Save and continue');
+      await tapText(tester, 'Continue');
       await tester.pumpAndSettle();
       // Back on Home, which read the aggregate again: the contact is there, the plan
       // is the next thing.
       expect(find.byType(HomeScreen), findsOneWidget);
-      expect(find.text(noContacts), findsNothing);
-      expect(find.text(noStages), findsOneWidget);
+      await expectNotice(tester, find.text(noContacts), findsNothing);
+      await expectNotice(tester, find.text(noStages), findsOneWidget);
 
-      // Save the plan through the editor the banner opens (check-ins are on: password).
+      // Save the plan through the editor the notice opens (check-ins are on: password).
+      await openNotifications(tester);
       await tapText(tester, 'Review your plan');
       await tester.pumpAndSettle();
       expect(find.text('Edit your plan'), findsWidgets);
@@ -1308,13 +1356,20 @@ void main() {
       }
       await tester.pumpAndSettle();
 
+      // The editor was opened from the notifications section: back to Home.
+      if (find.byType(HomeScreen).evaluate().isEmpty) {
+        await closeNotifications(tester);
+      }
       expect(find.byType(HomeScreen), findsOneWidget);
       expectNoGap();
       expect(fakes.plan.stages.single.contactIds, [
         fakes.contacts.contacts.single.id,
       ]);
-      expect(find.text('1 plan stage'), findsOneWidget);
-      expect(find.text("You're checked in"), findsOneWidget);
+      await expectNotice(
+        tester,
+        find.text("You're checked in"),
+        findsOneWidget,
+      );
     });
 
     testWidgets('removing the last contact who is told leaves Home saying so', (
@@ -1346,9 +1401,12 @@ void main() {
 
       await tapText(tester, 'Home');
       await tester.pumpAndSettle();
-      expect(find.text("You're checked in"), findsOneWidget);
-      expect(find.text(noContacts), findsOneWidget);
-      expect(find.text('Add a trusted contact'), findsOneWidget);
+      await expectNotice(
+        tester,
+        find.text("You're checked in"),
+        findsOneWidget,
+      );
+      await expectNotice(tester, find.text(noContacts), findsOneWidget);
     });
   });
 

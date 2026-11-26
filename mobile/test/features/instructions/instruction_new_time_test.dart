@@ -525,7 +525,7 @@ void main() {
     }
 
     Future<void> fill(WidgetTester tester) async {
-      await tap(tester, find.widgetWithText(ChoiceChip, 'Home'));
+      await pickDropdown<InstructionCategory>(tester, 'Home');
       await typeInto(tester, 'Title', 'House emergency');
       await tester.enterText(
         find.widgetWithText(TextField, 'What should they know?'),
@@ -544,20 +544,18 @@ void main() {
       String label, {
       int index = 0,
     }) async {
-      await tap(
-        tester,
-        find.widgetWithText(RadioListTile<String>, label).at(index),
-      );
-      await tester.pumpAndSettle();
+      await pickDropdown<String>(tester, label, index: index);
     }
 
     testWidgets('a plan with only an early stage offers 1, 2 and 3 days, and '
         'a hint that choosing one adds it', (tester) async {
       await open(tester);
       await tick(tester, 'Mom');
+      await openDropdown<String>(tester);
       for (final label in [_day1, _day2, _day3]) {
-        expect(find.text(label), findsOneWidget, reason: label);
+        expect(find.text(label), findsWidgets, reason: label);
       }
+      await closeDropdown(tester);
       expect(
         find.text(
           'Your plan has no stage that far out yet. Choosing a time adds it to your plan, and the people you choose for it are told then too.',
@@ -578,10 +576,12 @@ void main() {
         'alike', (tester) async {
       await open(tester, fakes: _fakes(offsets: [180, 1440]));
       await tick(tester, 'Mom');
-      expect(find.byType(RadioListTile<String>), findsNWidgets(3));
-      expect(find.text(_day1), findsOneWidget);
-      expect(find.text(_day2), findsOneWidget);
-      expect(find.text(_day3), findsOneWidget);
+      await openDropdown<String>(tester);
+      expect(find.byType(DropdownMenuItem<String>), findsNWidgets(3));
+      expect(find.text(_day1), findsWidgets);
+      expect(find.text(_day2), findsWidgets);
+      expect(find.text(_day3), findsWidgets);
+      await closeDropdown(tester);
     });
 
     testWidgets('a time is saved: the plan first, then the instruction, and '
@@ -590,7 +590,7 @@ void main() {
       await fill(tester);
       await tick(tester, 'Mom');
       await time(tester, _day1);
-      await tapText(tester, 'Save instruction');
+      await tapText(tester, 'Save');
       await tester.pumpAndSettle();
 
       expect(_writes(fakes), ['plan.save', 'instructions.create']);
@@ -608,7 +608,7 @@ void main() {
       await tick(tester, 'Mom');
       await tick(tester, 'Bro');
       await time(tester, _day2);
-      await tapText(tester, 'Save instruction');
+      await tapText(tester, 'Save');
       await tester.pumpAndSettle();
       expect(fakes.plan.calls.where((c) => c == 'save'), hasLength(1));
       expect(fakes.plan.stages.map((s) => s.offsetMinutes), [180, 2880]);
@@ -626,7 +626,7 @@ void main() {
       await tester.pumpAndSettle();
       await time(tester, _day1, index: 0);
       await time(tester, _day2, index: 1);
-      await tapText(tester, 'Save instruction');
+      await tapText(tester, 'Save');
       await tester.pumpAndSettle();
       expect(fakes.plan.calls.where((c) => c == 'save'), hasLength(1));
       expect(fakes.plan.stages.map((s) => s.offsetMinutes), [180, 1440, 2880]);
@@ -646,7 +646,7 @@ void main() {
       await tester.pumpAndSettle();
       await time(tester, _day1, index: 0);
       await time(tester, _day2, index: 1);
-      await tapText(tester, 'Save instruction');
+      await tapText(tester, 'Save');
       await tester.pumpAndSettle();
 
       expect(
@@ -668,7 +668,7 @@ void main() {
       // The same time for everyone fits, and saves.
       await tap(tester, find.text('Use the same time for everyone'));
       await tester.pumpAndSettle();
-      await tapText(tester, 'Save instruction');
+      await tapText(tester, 'Save');
       await tester.pumpAndSettle();
       expect(fakes.plan.stages.map((s) => s.offsetMinutes), [180, 1440]);
       expect(fakes.instructions.liveCount, 1);
@@ -681,7 +681,7 @@ void main() {
       await fill(tester);
       await tick(tester, 'Mom');
       await time(tester, _day1);
-      await tapText(tester, 'Save instruction');
+      await tapText(tester, 'Save');
       await tester.pumpAndSettle();
       expect(
         find.textContaining("We couldn't confirm that this was saved"),
@@ -690,7 +690,7 @@ void main() {
       expect(fakes.instructions.calls, isNot(contains('create')));
       expect(fakes.plan.stages, hasLength(1));
       // Trying again works.
-      await tapText(tester, 'Save instruction');
+      await tapText(tester, 'Save');
       await tester.pumpAndSettle();
       expect(fakes.instructions.liveCount, 1);
     });
@@ -704,7 +704,7 @@ void main() {
       await fill(tester);
       await tick(tester, 'Mom');
       await time(tester, _day1);
-      await tapText(tester, 'Save instruction');
+      await tapText(tester, 'Save');
       await tester.pumpAndSettle();
 
       expect(
@@ -726,12 +726,14 @@ void main() {
       // The time is now one of the plan's own stages, and still the one chosen.
       expect(
         tester
-            .widget<RadioGroup<String>>(find.byType(RadioGroup<String>).first)
-            .groupValue,
+            .widget<DropdownButtonFormField<String>>(
+              find.byType(DropdownButtonFormField<String>).first,
+            )
+            .initialValue,
         fakes.plan.stages.last.id,
       );
 
-      await tapText(tester, 'Save instruction');
+      await tapText(tester, 'Save');
       await tester.pumpAndSettle();
       expect(fakes.plan.calls.where((c) => c == 'save'), hasLength(1));
       expect(fakes.instructions.liveCount, 1);
@@ -748,7 +750,7 @@ void main() {
         await fill(tester);
         await tick(tester, 'Mom');
         await time(tester, _day1);
-        await tapText(tester, 'Save instruction');
+        await tapText(tester, 'Save');
         for (var i = 0; i < 10; i++) {
           await tester.pump(const Duration(milliseconds: 100));
         }
@@ -799,7 +801,7 @@ void main() {
         await fill(tester);
         await tick(tester, 'Mom');
         await time(tester, _day1);
-        await tapText(tester, 'Save instruction');
+        await tapText(tester, 'Save');
         for (var i = 0; i < 10; i++) {
           await tester.pump(const Duration(milliseconds: 100));
         }
@@ -831,7 +833,7 @@ void main() {
         await fill(tester);
         await tick(tester, 'Mom');
         await time(tester, _day1);
-        await tapText(tester, 'Save instruction');
+        await tapText(tester, 'Save');
         for (var i = 0; i < 10; i++) {
           await tester.pump(const Duration(milliseconds: 100));
         }
@@ -856,7 +858,7 @@ void main() {
       await tapText(tester, 'Pets');
       await tester.pumpAndSettle();
       await time(tester, _day1);
-      await tapText(tester, 'Save instruction');
+      await tapText(tester, 'Save');
       await tester.pumpAndSettle();
       expect(find.text("Confirm it's you"), findsNothing);
       expect(fakes.auth.calls, isNot(contains('reauth')));
@@ -880,7 +882,7 @@ void main() {
       await tap(tester, find.text('Choose a time for each person'));
       await tester.pumpAndSettle();
       await time(tester, _day2, index: 1);
-      await tapText(tester, 'Save changes');
+      await tapText(tester, 'Save');
       await tester.pumpAndSettle();
       expect(_writes(fakes), ['plan.save', 'instructions.update']);
       expect(fakes.plan.stages.map((s) => s.offsetMinutes), [180, 1440, 2880]);
