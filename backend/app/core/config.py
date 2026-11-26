@@ -184,6 +184,9 @@ class Settings(BaseSettings):
 
     trusted_proxy_hops: Annotated[int, Field(ge=0, le=10)] = 0
     min_client_version: str = "0.0.0"
+    # The Android app file served at /download/afterme.apk for testers who install outside
+    # Play (the "Update AfterMe" screen points there). Empty: the route answers 404.
+    apk_download_path: str = ""
 
     argon2_time_cost: Annotated[int, Field(ge=1, le=20)] = 3
     argon2_memory_cost_kib: Annotated[int, Field(ge=8, le=4_194_304)] = 65_536

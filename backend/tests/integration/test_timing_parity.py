@@ -65,14 +65,15 @@ async def test_register_start_hashes_exactly_once_in_every_branch(
     argon2.reset()
 
     h.clock.advance(seconds=5)
-    again = await h.register("branch@example.com", password="another long passphrase")
+    again = await h.register("branch@example.com", password="Another long passphrase 1!")
     assert again.status_code == 202
     observed["pending"] = argon2.counts
     argon2.reset()
 
     await h.signup("verified@example.com")
     argon2.reset()
-    assert (await h.register("verified@example.com")).status_code == 202
+    # A taken address is refused with email_taken (409), after the same single hash.
+    assert (await h.register("verified@example.com")).status_code == 409
     observed["verified"] = argon2.counts
 
     assert observed == {"new": (1, 0), "pending": (1, 0), "verified": (1, 0)}

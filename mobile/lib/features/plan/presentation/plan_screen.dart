@@ -16,6 +16,7 @@ import '../../contacts/application/contacts_controller.dart';
 import '../../contacts/data/contacts_repository.dart';
 import '../../onboarding/application/onboarding_controller.dart';
 import '../../settings/presentation/settings_widgets.dart';
+import '../../shell/presentation/home_back_button.dart';
 import '../application/plan_controller.dart';
 import '../data/plan_repository.dart';
 import 'plan_preview.dart';
@@ -58,7 +59,10 @@ class PlanScreen extends ConsumerWidget {
       content = const LoadingView();
     }
     return Scaffold(
-      appBar: AppBar(title: Text(l10n.navPlan)),
+      appBar: AppBar(
+        leading: const HomeBackButton(),
+        title: Text(l10n.navPlan),
+      ),
       body: SafeArea(
         child: RefreshIndicator(
           onRefresh: () => ref.read(planControllerProvider.notifier).reload(),

@@ -40,16 +40,17 @@ class AddContactScreen extends ConsumerWidget {
     return SecureScreen(
       child: FormPage(
         title: l10n.contactAddTitle,
-        children: [
-          PageHeading(l10n.contactStepTitle),
-          Gap.xs,
-          BodyText(l10n.contactStepBody),
-          Gap.lg,
-          ContactForm(
-            submitLabel: l10n.contactFormSendInvite,
-            onSubmit: (values) => _save(context, ref, values),
-          ),
-        ],
+        body: ContactForm(
+          pinActions: true,
+          intro: [
+            PageHeading(l10n.contactStepTitle),
+            Gap.xs,
+            BodyText(l10n.contactStepBody),
+            Gap.lg,
+          ],
+          submitLabel: l10n.contactFormSendInvite,
+          onSubmit: (values) => _save(context, ref, values),
+        ),
       ),
     );
   }

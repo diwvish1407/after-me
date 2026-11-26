@@ -8,8 +8,8 @@ import '../application/onboarding_controller.dart';
 import 'notification_prompt.dart';
 import 'onboarding_scaffold.dart';
 
-/// Step 8: stay protected. App lock, notification permission (with a pre-prompt) and a
-/// battery tip. Everything here is optional.
+/// Step 8: stay protected. App lock and notification permission (with a pre-prompt).
+/// Everything here is optional; Submit finishes the setup.
 class ProtectStepScreen extends ConsumerStatefulWidget {
   const ProtectStepScreen({super.key});
 
@@ -56,7 +56,7 @@ class _ProtectStepScreenState extends ConsumerState<ProtectStepScreen> {
       step: OnboardingStep.protect,
       title: l10n.protectStepTitle,
       subtitle: l10n.protectStepBody,
-      primaryLabel: l10n.actionContinue,
+      primaryLabel: l10n.actionSubmit,
       onPrimary: () => advanceFrom(context, ref, OnboardingStep.protect),
       children: [
         SectionCard(
@@ -78,11 +78,6 @@ class _ProtectStepScreenState extends ConsumerState<ProtectStepScreen> {
         ),
         Gap.md,
         const NotificationPrompt(),
-        Gap.md,
-        SectionCard(
-          title: l10n.batteryTipTitle,
-          child: Text(l10n.batteryTipBody),
-        ),
       ],
     );
   }

@@ -71,16 +71,15 @@ class AddInstructionScreen extends ConsumerWidget {
     return SecureScreen(
       child: FormPage(
         title: l10n.instructionAddTitle,
-        children: [
-          InstructionForm(
-            starter: starter,
-            submitLabel: l10n.instructionSave,
-            onSubmit: (values) => _save(context, ref, values),
-            // The Instructions branch keeps this page: coming back finds it as it was.
-            onAddContact: () => context.go(AppRoutes.peopleAdd),
-            onReviewPlan: () => context.push(OnboardingStep.plan.path),
-          ),
-        ],
+        body: InstructionForm(
+          pinActions: true,
+          starter: starter,
+          submitLabel: l10n.instructionSave,
+          onSubmit: (values) => _save(context, ref, values),
+          // The Instructions branch keeps this page: coming back finds it as it was.
+          onAddContact: () => context.go(AppRoutes.peopleAdd),
+          onReviewPlan: () => context.push(OnboardingStep.plan.path),
+        ),
       ),
     );
   }

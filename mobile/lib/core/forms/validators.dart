@@ -1,4 +1,5 @@
 import 'package:characters/characters.dart';
+import 'package:flutter/foundation.dart';
 
 import '../../l10n/gen/app_localizations.dart';
 import '../api/models/api_problem.dart';
@@ -13,6 +14,8 @@ enum FieldIssue {
   passwordTooLong,
   passwordMatchesEmail,
   passwordTooCommon,
+  passwordWeak,
+  emailTaken,
   nameTooLong,
   nameInvalid,
   nameHasLink,
@@ -42,6 +45,8 @@ String issueMessage(AppLocalizations l10n, FieldIssue issue) => switch (issue) {
   FieldIssue.passwordTooLong => l10n.fieldPasswordTooLong,
   FieldIssue.passwordMatchesEmail => l10n.fieldPasswordMatchesEmail,
   FieldIssue.passwordTooCommon => l10n.fieldPasswordTooCommon,
+  FieldIssue.passwordWeak => l10n.fieldPasswordWeak,
+  FieldIssue.emailTaken => l10n.fieldEmailTaken,
   FieldIssue.nameTooLong => l10n.fieldNameTooLong,
   FieldIssue.nameInvalid => l10n.fieldNameInvalid,
   FieldIssue.nameHasLink => l10n.fieldNameHasLink,
@@ -87,6 +92,7 @@ FieldIssue? issueFromFieldError(ApiFieldError error) {
     'too_long' when field.contains('name') => FieldIssue.nameTooLong,
     'password_matches_email' => FieldIssue.passwordMatchesEmail,
     'password_too_common' => FieldIssue.passwordTooCommon,
+    'password_too_weak' => FieldIssue.passwordWeak,
     'invalid_display_name' || 'invalid_characters' => FieldIssue.nameInvalid,
     'display_name_link' => FieldIssue.nameHasLink,
     'display_name_reserved' => FieldIssue.nameReserved,
@@ -116,7 +122,7 @@ FieldIssue? issueForField(List<ApiFieldError> errors, String field) {
 
 /// Pure client-side validators. They return null when the value is acceptable.
 abstract final class Validators {
-  static const int passwordMin = 10;
+  static const int passwordMin = 8;
   static const int passwordMax = 128;
   static const int displayNameMax = 80;
   static const int emailMax = 254;
@@ -183,6 +189,9 @@ abstract final class Validators {
     }
     if (length > passwordMax) {
       return FieldIssue.passwordTooLong;
+    }
+    if (!PasswordRules.of(value).allMet) {
+      return FieldIssue.passwordWeak;
     }
     if (email != null && email.trim().isNotEmpty) {
       final folded = value.toLowerCase();
@@ -328,3 +337,32 @@ String passwordStrengthHint(AppLocalizations l10n, PasswordStrength strength) =>
       PasswordStrength.fine => l10n.passwordHintFine,
       PasswordStrength.strong => l10n.passwordHintStrong,
     };
+
+/// The four rules a new password must meet (the server checks the same): shown as a
+/// live checklist under the field.
+@immutable
+class PasswordRules {
+  const PasswordRules({
+    required this.length,
+    required this.upper,
+    required this.number,
+    required this.special,
+  });
+
+  factory PasswordRules.of(String value) => PasswordRules(
+    length: value.characters.length >= Validators.passwordMin,
+    upper: RegExp(r'\p{Lu}', unicode: true).hasMatch(value),
+    number: RegExp(r'\p{Nd}', unicode: true).hasMatch(value),
+    special: RegExp(r'[^\p{L}\p{N}\s]', unicode: true).hasMatch(value),
+  );
+
+  final bool length;
+  final bool upper;
+  final bool number;
+  final bool special;
+
+  bool get allMet => length && upper && number && special;
+
+  /// 0-4: how many rules are met.
+  int get score => [length, upper, number, special].where((r) => r).length;
+}

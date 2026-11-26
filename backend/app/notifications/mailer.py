@@ -65,6 +65,8 @@ class EmailTemplate(StrEnum):
     ACCOUNT_DELETION_LINK = "account_deletion_link"
     ACCOUNT_DELETION_REQUESTED = "account_deletion_requested"
     WEB_LOGIN_NOTICE = "web_login_notice"
+    # The Danger button: the person asks for help now.
+    DANGER_ALERT = "danger_alert"
 
 
 _SUBJECTS: Final[dict[EmailTemplate, str]] = {
@@ -104,6 +106,7 @@ _SUBJECTS: Final[dict[EmailTemplate, str]] = {
     EmailTemplate.ACCOUNT_DELETION_LINK: "Confirm the deletion of your AfterMe account",
     EmailTemplate.ACCOUNT_DELETION_REQUESTED: "Your AfterMe account is scheduled for deletion",
     EmailTemplate.WEB_LOGIN_NOTICE: "Your AfterMe account was signed in on the web",
+    EmailTemplate.DANGER_ALERT: "{user_name} is asking for your help",
 }
 
 

@@ -71,10 +71,14 @@ class CenteredScrollView extends StatelessWidget {
       vertical: AppSpacing.lg,
     ),
     this.physics,
+    this.alignTop = false,
     super.key,
   });
 
   final Widget child;
+
+  /// Keep the content at the top instead of centring it vertically.
+  final bool alignTop;
 
   /// Scroll physics; pass [AlwaysScrollableScrollPhysics] for pull-to-refresh.
   final ScrollPhysics? physics;
@@ -92,7 +96,8 @@ class CenteredScrollView extends StatelessWidget {
                 ? math.max(0.0, constraints.maxHeight - padding.vertical)
                 : 0.0,
           ),
-          child: Center(
+          child: Align(
+            alignment: alignTop ? Alignment.topCenter : Alignment.center,
             child: ConstrainedBox(
               constraints: const BoxConstraints(
                 maxWidth: AppSizes.maxContentWidth,

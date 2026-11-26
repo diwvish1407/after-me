@@ -131,7 +131,7 @@ ROUTE_POLICY: dict[tuple[str, str], Policy] = {
     ("POST", "/v1/auth/reauth"): Authenticated(body={"password": "x"}),
     ("POST", "/v1/auth/password/forgot"): Public(rate_limited=True),
     ("POST", "/v1/auth/password/change"): Authenticated(
-        body={"current_password": "x", "new_password": "a long enough new passphrase"}
+        body={"current_password": "x", "new_password": "A long enough new passphrase 1!"}
     ),
     ("POST", "/v1/auth/email/change/start"): Reauth(body={"new_email": "other@example.com"}),
     ("POST", "/v1/auth/email/change/verify"): Authenticated(body={"code": "123456"}),
@@ -165,6 +165,8 @@ ROUTE_POLICY: dict[tuple[str, str], Policy] = {
             "email": "matrix.contact@example.com",
         }
     ),
+    # The Danger button: only the caller's own accepted contacts are emailed.
+    ("POST", "/v1/contacts/alert"): Authenticated(),
     ("GET", "/v1/contacts/{contact_id}"): Owned(
         "contact_id", factory="contact", tables=CONTACT_TABLES
     ),
@@ -277,13 +279,15 @@ ROUTE_POLICY: dict[tuple[str, str], Policy] = {
         factory="instruction",
         tables=("instructions", "instruction_recipients", "release_events"),
     ),
+    # The tester build of the Android app (no person involved; 404 unless configured).
+    ("GET", "/download/afterme.apk"): Public(),
     ("GET", "/legal"): PublicPage(),
     ("GET", "/legal/privacy"): PublicPage(),
     ("GET", "/legal/terms"): PublicPage(),
     ("GET", "/support"): PublicPage(),
     ("GET", "/a/reset"): Web(),
     ("POST", "/a/reset"): Web(
-        form={"token": "pr_" + "A" * 43, "new_password": "a new passphrase 42"}, ip_limit=10
+        form={"token": "pr_" + "A" * 43, "new_password": "A new passphrase 42!"}, ip_limit=10
     ),
     ("GET", "/a/assets/web.css"): Web(),
     # Phase 7: account deletion without the app, and the lost-phone pages. Every page that needs

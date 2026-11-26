@@ -582,20 +582,20 @@ async def test_nothing_personal_is_left_in_tokens_and_old_links_die_with_a_passw
     await world.login(person)
     changed = await client.post(
         "/v1/auth/password/change",
-        json={"current_password": PASSWORD, "new_password": "a brand new passphrase 77"},
+        json={"current_password": PASSWORD, "new_password": "A brand new passphrase 77!"},
         headers=person.headers,
     )
     assert changed.status_code == 204, changed.text
     csrf = await _form_csrf(world, "/a/delete/confirm")
     dead = await client.post(
         "/a/delete/confirm",
-        data={"token": old_token, "password": "a brand new passphrase 77", "csrf": csrf},
+        data={"token": old_token, "password": "A brand new passphrase 77!", "csrf": csrf},
     )
     assert dead.status_code == 400
 
     # a pending email change carries the new address: deletion drops it
-    person.tokens = await world.h.relogin(person.email, "a brand new passphrase 77")
-    assert (await world.h.reauth(person.tokens, "a brand new passphrase 77")).status_code == 204
+    person.tokens = await world.h.relogin(person.email, "A brand new passphrase 77!")
+    assert (await world.h.reauth(person.tokens, "A brand new passphrase 77!")).status_code == 204
     started = await client.post(
         "/v1/auth/email/change/start",
         json={"new_email": "someone.new@example.com"},
@@ -607,7 +607,7 @@ async def test_nothing_personal_is_left_in_tokens_and_old_links_die_with_a_passw
         (person.user_id,),
     ).fetchall()
     assert any(p["payload"] for p in pending)
-    assert (await world.h.reauth(person.tokens, "a brand new passphrase 77")).status_code == 204
+    assert (await world.h.reauth(person.tokens, "A brand new passphrase 77!")).status_code == 204
     done = await client.request(
         "DELETE", "/v1/me", json={"confirm": "DELETE"}, headers=person.headers
     )

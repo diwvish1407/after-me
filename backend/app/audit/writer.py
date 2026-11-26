@@ -50,6 +50,7 @@ CONTACT_INVITATION_SENT: Final = "contact.invitation_sent"
 CONTACT_ACCEPTED: Final = "contact.accepted"
 CONTACT_DECLINED: Final = "contact.declined"
 CONTACT_OPTED_OUT: Final = "contact.opted_out"
+DANGER_ALERT_SENT: Final = "contact.danger_alert_sent"
 
 # --- Phase 4 actions ------------------------------------------------------------------------
 CHECKIN_RECORDED: Final = "checkin.recorded"
@@ -229,6 +230,7 @@ PHASE14_ACTIONS: Final = frozenset(
         CONTACT_ACKNOWLEDGED,
         ADMIN_VIEWED_USER,
         ADMIN_SET_ROLE,
+        DANGER_ALERT_SENT,
     }
 )
 KNOWN_ACTIONS: Final = (

@@ -10,6 +10,7 @@ import '../../../l10n/gen/app_localizations.dart';
 import '../../auth/presentation/reauth_sheet.dart';
 import '../../checkin/data/schedule_repository.dart';
 import '../../plan/data/plan_repository.dart';
+import '../../plan/presentation/hours_minutes_picker.dart';
 import '../../plan/presentation/plan_labels.dart';
 import '../../plan/presentation/plan_preview.dart';
 import '../application/onboarding_controller.dart';
@@ -67,6 +68,22 @@ class _PlanStepScreenState extends ConsumerState<PlanStepScreen> {
     }
   }
 
+  Future<void> _pickCustom(
+    int current, {
+    required int min,
+    required int max,
+  }) async {
+    final picked = await showHoursMinutesPicker(
+      context,
+      initialMinutes: current,
+      minMinutes: min,
+      maxMinutes: max,
+    );
+    if (picked != null && mounted) {
+      setState(() => _grace = picked);
+    }
+  }
+
   /// The preset with the chosen delay (a plan that already has more stages keeps them).
   PlanDraft _draft(SetupState setup, int grace) => PlanPresets.standard(
     setup.contacts,
@@ -85,6 +102,11 @@ class _PlanStepScreenState extends ConsumerState<PlanStepScreen> {
         : null;
     final grace = _grace ?? savedGrace ?? PlanPresets.standardGraceMinutes;
     final schedule = setup.schedule ?? const CheckInSchedule();
+    // Two quick choices and Custom, on one line.
+    final presets = [
+      for (final minutes in const [30, 60])
+        if (saved?.rules.allowsGrace(minutes) ?? true) minutes,
+    ];
     final preview = buildPlanPreview(
       context,
       dueMinutes: schedule.dueMinutes,
@@ -107,12 +129,6 @@ class _PlanStepScreenState extends ConsumerState<PlanStepScreen> {
           FailureNotice(message: planFailureMessage(l10n, _failure!)),
           Gap.md,
         ],
-        SectionCard(
-          title: l10n.planStandardName,
-          subtitle: l10n.planStandardDescription,
-          child: const SizedBox.shrink(),
-        ),
-        Gap.md,
         Semantics(
           header: true,
           child: Text(
@@ -125,10 +141,7 @@ class _PlanStepScreenState extends ConsumerState<PlanStepScreen> {
           spacing: AppSpacing.xs,
           children: [
             // Only what the server's rules allow for this account: it refuses the rest.
-            for (final minutes in PlanPresets.graceChoices(
-              saved?.rules,
-              current: savedGrace,
-            ))
+            for (final minutes in presets)
               ChoiceChip(
                 label: Text(formatDurationMinutes(l10n, minutes)),
                 selected: grace == minutes,
@@ -136,6 +149,23 @@ class _PlanStepScreenState extends ConsumerState<PlanStepScreen> {
                     ? null
                     : (_) => setState(() => _grace = minutes),
               ),
+            // Any wait in hours and minutes, within the server's range.
+            ChoiceChip(
+              avatar: const Icon(Icons.tune_rounded, size: 18),
+              label: Text(
+                presets.contains(grace)
+                    ? l10n.planGraceCustom
+                    : formatHoursMinutes(grace),
+              ),
+              selected: !presets.contains(grace),
+              onSelected: _busy
+                  ? null
+                  : (_) => _pickCustom(
+                      grace,
+                      min: saved?.rules.graceMin ?? 1,
+                      max: saved?.rules.graceMax ?? 72 * 60,
+                    ),
+            ),
           ],
         ),
         Gap.lg,

@@ -92,12 +92,11 @@ class _ChangePasswordScreenState extends ConsumerState<ChangePasswordScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final email = ref.watch(meControllerProvider).value?.email;
     final failure = _failure;
     final serverNew = failure is ValidationFailure
         ? issueForField(failure.fieldErrors, 'new_password')
         : null;
-    final strength = passwordStrength(_new.text, email: email);
+    final rules = PasswordRules.of(_new.text);
     String? msg(FieldIssue? issue) =>
         issue == null ? null : issueMessage(l10n, issue);
     return SecureScreen(
@@ -131,12 +130,13 @@ class _ChangePasswordScreenState extends ConsumerState<ChangePasswordScreen> {
             controller: _new,
             obscureText: true,
             errorText: msg(_newIssue ?? serverNew),
-            helperText: passwordStrengthHint(l10n, strength),
             textInputAction: TextInputAction.next,
             autofillHints: const [AutofillHints.newPassword],
             enabled: !_busy,
             onChanged: (_) => setState(() => _newIssue = null),
           ),
+          Gap.xs,
+          PasswordChecklist(rules: rules),
           Gap.md,
           AppTextField(
             label: l10n.fieldConfirmPassword,

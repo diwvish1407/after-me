@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
@@ -16,7 +17,7 @@ import '../../auth/data/auth_repository.dart';
 /// Check-in, Contacts, Profile) over six branches (the plan has no tab of its own), and
 /// the side menu (USER_FLOWS.md §2; design screens 14 and 20).
 /// Each tab keeps its own navigation stack (StatefulShellRoute.indexedStack).
-class AppShell extends StatelessWidget {
+class AppShell extends StatefulWidget {
   const AppShell({required this.navigationShell, super.key});
 
   final StatefulNavigationShell navigationShell;
@@ -54,25 +55,6 @@ class AppShell extends StatelessWidget {
   static const double _maxLabelScale = 1.3;
   static const double _minLabelScale = 0.85;
 
-  /// A tab was tapped. Another tab shows its own stack as it was. The current tab again
-  /// returns to its first page (the usual tab-bar behaviour), **unless the page on top
-  /// guards something**: a page that asks "Leave without saving?" (the plan editor) must
-  /// be asked the same question as when Back is pressed, instead of being thrown away
-  /// with its draft. Then the tap does exactly what Back does there.
-  void _onSelected(int index) {
-    if (index != navigationShell.currentIndex) {
-      navigationShell.goBranch(index);
-      return;
-    }
-    final navigator =
-        navigationShell.route.branches[index].navigatorKey.currentState;
-    if (navigator != null && navigator.canPop() && _topPageGuards(navigator)) {
-      unawaited(navigator.maybePop());
-      return;
-    }
-    navigationShell.goBranch(index, initialLocation: true);
-  }
-
   /// Whether the page on top of [navigator] refuses to be left without asking (it holds a
   /// `PopScope` that does not allow popping right now).
   static bool _topPageGuards(NavigatorState navigator) {
@@ -99,6 +81,61 @@ class AppShell extends StatelessWidget {
   }
 
   @override
+  State<AppShell> createState() => _AppShellState();
+}
+
+class _AppShellState extends State<AppShell> {
+  DateTime? _lastBack;
+
+  void _onBack(bool didPop) {
+    if (didPop) {
+      return;
+    }
+    final shell = widget.navigationShell;
+    if (shell.currentIndex != 0) {
+      shell.goBranch(0);
+      return;
+    }
+    final now = DateTime.now();
+    final last = _lastBack;
+    if (last != null && now.difference(last) < const Duration(seconds: 2)) {
+      unawaited(SystemNavigator.pop());
+      return;
+    }
+    _lastBack = now;
+    final l10n = AppLocalizations.of(context);
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(l10n.backAgainToExit),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+  }
+
+  /// A tab was tapped. Another tab shows its own stack as it was. The current tab again
+  /// returns to its first page (the usual tab-bar behaviour), **unless the page on top
+  /// guards something**: a page that asks "Leave without saving?" (the plan editor) must
+  /// be asked the same question as when Back is pressed, instead of being thrown away
+  /// with its draft. Then the tap does exactly what Back does there.
+  void _onSelected(int index) {
+    if (index != widget.navigationShell.currentIndex) {
+      widget.navigationShell.goBranch(index);
+      return;
+    }
+    final navigator =
+        widget.navigationShell.route.branches[index].navigatorKey.currentState;
+    if (navigator != null &&
+        navigator.canPop() &&
+        AppShell._topPageGuards(navigator)) {
+      unawaited(navigator.maybePop());
+      return;
+    }
+    widget.navigationShell.goBranch(index, initialLocation: true);
+  }
+
+  @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final labels = [
@@ -108,44 +145,56 @@ class AppShell extends StatelessWidget {
       l10n.navContacts,
       l10n.navProfile,
     ];
-    return Scaffold(
-      key: shellScaffoldKey,
-      drawer: AppDrawer(onSelectBranch: _onSelected),
-      body: navigationShell,
-      bottomNavigationBar: LayoutBuilder(
-        builder: (context, constraints) => MediaQuery.withClampedTextScaling(
-          maxScaleFactor: labelScaleCap(context, labels, constraints.maxWidth),
-          child: NavigationBar(
-            selectedIndex: destinationFor(navigationShell.currentIndex),
-            onDestinationSelected: (index) =>
-                _onSelected(destinationBranches[index]),
-            destinations: [
-              NavigationDestination(
-                icon: const Icon(Icons.home_outlined),
-                selectedIcon: const Icon(Icons.home_rounded),
-                label: labels[0],
+    // Back on a tab's first page goes to Home; on Home it asks for a second press before
+    // leaving the app (a page pushed on top is popped by the router before this).
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) => _onBack(didPop),
+      child: Scaffold(
+        key: shellScaffoldKey,
+        drawer: AppDrawer(onSelectBranch: _onSelected),
+        body: widget.navigationShell,
+        bottomNavigationBar: LayoutBuilder(
+          builder: (context, constraints) => MediaQuery.withClampedTextScaling(
+            maxScaleFactor: AppShell.labelScaleCap(
+              context,
+              labels,
+              constraints.maxWidth,
+            ),
+            child: NavigationBar(
+              selectedIndex: AppShell.destinationFor(
+                widget.navigationShell.currentIndex,
               ),
-              NavigationDestination(
-                icon: const Icon(Icons.description_outlined),
-                selectedIcon: const Icon(Icons.description_rounded),
-                label: labels[1],
-              ),
-              NavigationDestination(
-                icon: const Icon(Icons.event_available_outlined),
-                selectedIcon: const Icon(Icons.event_available_rounded),
-                label: labels[2],
-              ),
-              NavigationDestination(
-                icon: const Icon(Icons.people_outline_rounded),
-                selectedIcon: const Icon(Icons.people_rounded),
-                label: labels[3],
-              ),
-              NavigationDestination(
-                icon: const Icon(Icons.person_outline_rounded),
-                selectedIcon: const Icon(Icons.person_rounded),
-                label: labels[4],
-              ),
-            ],
+              onDestinationSelected: (index) =>
+                  _onSelected(AppShell.destinationBranches[index]),
+              destinations: [
+                NavigationDestination(
+                  icon: const Icon(Icons.home_outlined),
+                  selectedIcon: const Icon(Icons.home_rounded),
+                  label: labels[0],
+                ),
+                NavigationDestination(
+                  icon: const Icon(Icons.description_outlined),
+                  selectedIcon: const Icon(Icons.description_rounded),
+                  label: labels[1],
+                ),
+                NavigationDestination(
+                  icon: const Icon(Icons.event_available_outlined),
+                  selectedIcon: const Icon(Icons.event_available_rounded),
+                  label: labels[2],
+                ),
+                NavigationDestination(
+                  icon: const Icon(Icons.people_outline_rounded),
+                  selectedIcon: const Icon(Icons.people_rounded),
+                  label: labels[3],
+                ),
+                NavigationDestination(
+                  icon: const Icon(Icons.person_outline_rounded),
+                  selectedIcon: const Icon(Icons.person_rounded),
+                  label: labels[4],
+                ),
+              ],
+            ),
           ),
         ),
       ),

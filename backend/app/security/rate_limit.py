@@ -66,6 +66,8 @@ CONTACT_CREATE_PER_USER: Final = RateLimit("contact_create_user", 20, timedelta(
 INVITATION_PER_USER: Final = RateLimit("invitation_user", 10, timedelta(days=1))
 INVITATION_RESEND_PER_CONTACT: Final = RateLimit("invitation_resend_contact", 3, timedelta(days=7))
 WEB_CONTACT_PER_IP: Final = RateLimit("web_contact_ip", 20, timedelta(hours=1))
+# The Danger button: enough for a real emergency, not enough to flood contacts.
+DANGER_ALERT_PER_USER: Final = RateLimit("danger_alert_user", 5, timedelta(hours=1))
 
 # --- Phase 6 limits (API_SPEC §16): the recipient portal -------------------------------------
 # Every POST of the release pages, per client address (a visit is about six requests).

@@ -19,7 +19,7 @@ import pytest
 from app.core.logging import build_formatter
 from tests.support import Harness, bearer
 
-SECRET_PASSWORD = "Leaky Passphrase 42 xyzzy"
+SECRET_PASSWORD = "Leaky Passphrase 42 xyzzy!"
 EMAIL = "Leak.Test.Person@Example.com"
 
 
@@ -114,8 +114,8 @@ async def test_password_email_and_profile_flows_leak_nothing_to_logs(
 ) -> None:
     """Phase 2 flows: forgot, web reset, change password, change email, profile patch."""
     new_email = "Brand.New.Address@Example.com"
-    reset_password = "Reset Passphrase 31 quux"
-    changed_password = "Changed Passphrase 52 corge"
+    reset_password = "Reset Passphrase 31 quux!"
+    changed_password = "Changed Passphrase 52 corge!"
     rejected_password = "short"
     phone = "+14155550137"
     display_name = "Secret Display Name"

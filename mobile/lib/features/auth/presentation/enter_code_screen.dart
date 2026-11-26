@@ -84,6 +84,14 @@ class _EnterCodeScreenState extends ConsumerState<EnterCodeScreen> {
     final failure = state.failure;
     return FormPage(
       title: l10n.codeTitle,
+      footer: ActionBar(
+        primary: AppButton.primary(
+          label: l10n.codeVerify,
+          isLoading: state.busy,
+          onPressed: _verify,
+          expand: true,
+        ),
+      ),
       children: [
         PageHeading(l10n.codeHeading),
         Gap.xs,
@@ -113,13 +121,6 @@ class _EnterCodeScreenState extends ConsumerState<EnterCodeScreen> {
           inputFormatters: const [DigitsOnlyFormatter()],
           onChanged: (_) => setState(() => _issue = null),
           onSubmitted: (_) => _verify(),
-        ),
-        Gap.lg,
-        AppButton.primary(
-          label: l10n.codeVerify,
-          isLoading: state.busy,
-          onPressed: _verify,
-          expand: true,
         ),
         Gap.sm,
         ResendCountdown(

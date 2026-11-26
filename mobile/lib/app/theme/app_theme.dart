@@ -293,6 +293,8 @@ abstract final class AppTheme {
         iconColor: t.textMuted,
         textColor: t.text,
         minTileHeight: AppSizes.minTouchTarget,
+        // Subtitles are small and greyed out everywhere.
+        subtitleTextStyle: text.bodySmall?.copyWith(color: t.textMuted),
       ),
     );
   }

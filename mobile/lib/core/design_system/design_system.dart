@@ -1,6 +1,7 @@
 /// AfterMe design system: components built only from theme tokens.
 library;
 
+export 'action_bar.dart';
 export 'app_button.dart';
 export 'app_text_field.dart';
 export 'brand.dart';
@@ -9,7 +10,9 @@ export 'empty_state.dart';
 export 'error_view.dart';
 export 'fit_text.dart';
 export 'form_page.dart';
+export 'heart_border.dart';
 export 'loading_view.dart';
+export 'password_checklist.dart';
 export 'progress_spinner.dart';
 export 'section_card.dart';
 export 'status_banner.dart';

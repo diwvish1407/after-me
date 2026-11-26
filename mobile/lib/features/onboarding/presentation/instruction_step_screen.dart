@@ -107,14 +107,13 @@ class _InstructionStepScreenState extends ConsumerState<InstructionStepScreen> {
             ),
           AppButton.text(
             label: l10n.instructionsWriteOwn,
+            icon: Icons.edit_outlined,
             onPressed: () => setState(() {
               _starter = null;
               _writing = true;
             }),
             expand: true,
           ),
-          Gap.sm,
-          BodyText(l10n.instructionPasswordNote),
         ],
       );
     }
@@ -123,26 +122,27 @@ class _InstructionStepScreenState extends ConsumerState<InstructionStepScreen> {
         step: OnboardingStep.instruction,
         title: l10n.instructionStepTitle,
         subtitle: l10n.instructionWriteBody,
-        secondaryLabel: l10n.actionSkipForNow,
-        onSecondary: () =>
-            advanceFrom(context, ref, OnboardingStep.instruction),
-        children: [
-          InstructionForm(
-            starter: _starter,
-            submitLabel: l10n.instructionSave,
-            // The contact just added is the natural first recipient.
-            suggestedRecipientIds: {for (final c in setup.contacts) c.id},
-            onSubmit: (values) => _save(context, values),
-            onAddContact: () => context.go(OnboardingStep.contact.path),
-            onReviewPlan: () => context.go(OnboardingStep.plan.path),
+        showArt: false,
+        body: InstructionForm(
+          pinActions: true,
+          starter: _starter,
+          submitLabel: l10n.instructionSave,
+          // The contact just added is the natural first recipient.
+          suggestedRecipientIds: {for (final c in setup.contacts) c.id},
+          onSubmit: (values) => _save(context, values),
+          onAddContact: () => context.go(OnboardingStep.contact.path),
+          onReviewPlan: () => context.go(OnboardingStep.plan.path),
+          // Skip (left), another example (centre), Save (right).
+          secondaryAction: AppButton.text(
+            label: l10n.actionSkipForNow,
+            onPressed: () =>
+                advanceFrom(context, ref, OnboardingStep.instruction),
           ),
-          Gap.md,
-          AppButton.text(
-            label: l10n.instructionChooseAnother,
+          middleAction: AppButton.text(
+            label: l10n.instructionChooseAnotherShort,
             onPressed: () => setState(() => _writing = false),
-            expand: true,
           ),
-        ],
+        ),
       ),
     );
   }

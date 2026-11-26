@@ -108,13 +108,12 @@ class EditContactScreen extends ConsumerWidget {
         title: l10n.contactEditTitle,
         builder: (context, contact) => FormPage(
           title: l10n.contactEditTitle,
-          children: [
-            ContactForm(
-              initial: contact,
-              submitLabel: l10n.contactFormSaveChanges,
-              onSubmit: (values) => _save(context, ref, contact, values),
-            ),
-          ],
+          body: ContactForm(
+            pinActions: true,
+            initial: contact,
+            submitLabel: l10n.contactFormSaveChanges,
+            onSubmit: (values) => _save(context, ref, contact, values),
+          ),
         ),
       ),
     );

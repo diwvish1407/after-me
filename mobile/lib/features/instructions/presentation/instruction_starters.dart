@@ -9,7 +9,7 @@ import '../data/instructions_repository.dart';
 /// (no names, numbers, addresses or passwords: only prompts to fill in), and are not sent
 /// anywhere: choosing one only fills the form on the device.
 ///
-/// [featuredRank] marks the six that onboarding step 7 and the empty Instructions tab
+/// [featuredRank] marks the three that onboarding step 7 and the empty Instructions tab
 /// offer, in that order; the create form offers the ones of the chosen category.
 enum InstructionStarter {
   personalWhoToCallFirst(InstructionCategory.personal, 1),
@@ -24,15 +24,15 @@ enum InstructionStarter {
   homeKeys(InstructionCategory.home, 2),
   homeBills(InstructionCategory.home),
   homeRepairs(InstructionCategory.home),
-  workHandover(InstructionCategory.work, 4),
+  workHandover(InstructionCategory.work),
   workPeople(InstructionCategory.work),
   workFiles(InstructionCategory.work),
   workProjects(InstructionCategory.work),
-  documentsWhere(InstructionCategory.documents, 5),
+  documentsWhere(InstructionCategory.documents),
   documentsId(InstructionCategory.documents),
   documentsProperty(InstructionCategory.documents),
   documentsFinance(InstructionCategory.documents),
-  insuranceOverview(InstructionCategory.insurance, 6),
+  insuranceOverview(InstructionCategory.insurance),
   insuranceHealth(InstructionCategory.insurance),
   insuranceHome(InstructionCategory.insurance),
   insuranceLife(InstructionCategory.insurance),
@@ -54,7 +54,7 @@ enum InstructionStarter {
   /// The category the example belongs to; choosing it selects that category.
   final InstructionCategory category;
 
-  /// Position among the featured examples (1-6), or null.
+  /// Position among the featured examples (1-3), or null.
   final int? featuredRank;
 
   /// The examples onboarding and the empty Instructions tab offer, in order.

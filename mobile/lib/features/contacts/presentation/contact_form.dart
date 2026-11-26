@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 
-import '../../../app/theme/dimens.dart';
 import '../../../core/api/failures/app_failure.dart';
 import '../../../core/api/models/api_problem.dart';
 import '../../../core/design_system/design_system.dart';
@@ -59,10 +58,24 @@ class ContactForm extends ConsumerStatefulWidget {
     required this.submitLabel,
     required this.onSubmit,
     this.initial,
+    this.secondaryAction,
+    this.pinActions = false,
+    this.intro = const <Widget>[],
     super.key,
   });
 
   final String submitLabel;
+
+  /// A second action shown on the left of the submit button (onboarding's "Skip for
+  /// now").
+  final Widget? secondaryAction;
+
+  /// Keep the actions in a footer fixed at the bottom of the screen; the fields scroll
+  /// above it only when they do not fit. The form must then get a bounded height.
+  final bool pinActions;
+
+  /// Shown above the fields (a heading), scrolling with them.
+  final List<Widget> intro;
 
   /// The contact being edited, or null when adding.
   final TrustedContact? initial;
@@ -260,18 +273,11 @@ class _ContactFormState extends ConsumerState<ContactForm> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final editing = widget.initial != null;
-    return Column(
+    final fields = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        ...widget.intro,
         if (_failure != null) ...[FailureNotice.of(context, _failure!), Gap.md],
-        AppButton.secondary(
-          label: l10n.contactPickFromPhone,
-          icon: Icons.contacts_outlined,
-          onPressed: _busy ? null : _pick,
-          expand: true,
-        ),
-        if (_pickerNotice != null) ...[Gap.xs, BodyText(_pickerNotice!)],
-        Gap.md,
         AppTextField(
           label: l10n.fieldContactName,
           controller: _name,
@@ -280,44 +286,37 @@ class _ContactFormState extends ConsumerState<ContactForm> {
           textCapitalization: TextCapitalization.words,
           enabled: !_busy,
           onChanged: (_) => setState(() => _nameIssue = null),
-        ),
-        Gap.md,
-        Semantics(
-          header: true,
-          child: Text(
-            l10n.fieldRelationship,
-            style: Theme.of(context).textTheme.titleSmall,
+          // Pick from the phone's contacts: just the icon, inside the field.
+          suffixIcon: IconButton(
+            icon: const Icon(Icons.contacts_rounded),
+            tooltip: l10n.contactPickIcon,
+            onPressed: _busy ? null : _pick,
           ),
         ),
-        Gap.xs,
-        Wrap(
-          spacing: AppSpacing.xs,
-          runSpacing: AppSpacing.xxs,
-          children: [
-            for (final value in ContactRelationship.values)
-              ChoiceChip(
-                label: Text(relationshipName(l10n, value)),
-                selected: _relationship == value,
-                onSelected: _busy
-                    ? null
-                    : (_) => setState(() {
-                        _relationship = value;
-                        _relationshipMissing = false;
-                      }),
+        if (_pickerNotice != null) ...[Gap.xs, BodyText(_pickerNotice!)],
+        Gap.md,
+        DropdownButtonFormField<ContactRelationship>(
+          initialValue: _relationship,
+          isExpanded: true,
+          decoration: InputDecoration(
+            labelText: l10n.fieldRelationship,
+            errorText: _relationshipMissing ? l10n.relationshipRequired : null,
+          ),
+          hint: Text(l10n.relationshipSelect),
+          items: [
+            for (final value in {...selectableRelationships, ?_relationship})
+              DropdownMenuItem(
+                value: value,
+                child: Text(relationshipName(l10n, value)),
               ),
           ],
+          onChanged: _busy
+              ? null
+              : (value) => setState(() {
+                  _relationship = value;
+                  _relationshipMissing = false;
+                }),
         ),
-        if (_relationshipMissing) ...[
-          Gap.xs,
-          Semantics(
-            liveRegion: true,
-            child: Text(
-              l10n.relationshipRequired,
-              style: Theme.of(context).textTheme.bodySmall
-                  ?.copyWith(color: Theme.of(context).colorScheme.error),
-            ),
-          ),
-        ],
         if (_relationship == ContactRelationship.other) ...[
           Gap.md,
           AppTextField(
@@ -343,8 +342,23 @@ class _ContactFormState extends ConsumerState<ContactForm> {
         Gap.md,
         AppTextField(
           label: l10n.fieldContactPhone,
-          helperText: l10n.fieldContactPhoneHelper,
+          hint: '+91',
           controller: _phone,
+          // The country-code advice sits behind an info icon to save room.
+          suffixIcon: Tooltip(
+            message: l10n.fieldContactPhoneHelper,
+            triggerMode: TooltipTriggerMode.tap,
+            showDuration: const Duration(seconds: 4),
+            child: Semantics(
+              label: l10n.contactPhoneInfo,
+              hint: l10n.fieldContactPhoneHelper,
+              button: true,
+              child: const Padding(
+                padding: EdgeInsets.all(12),
+                child: Icon(Icons.info_outline_rounded),
+              ),
+            ),
+          ),
           errorText: _message(l10n, _phoneIssue),
           keyboardType: TextInputType.phone,
           textInputAction: TextInputAction.done,
@@ -361,14 +375,22 @@ class _ContactFormState extends ConsumerState<ContactForm> {
           )
         else if (!editing)
           BodyText(l10n.contactFormInviteExplain),
-        Gap.lg,
-        AppButton.primary(
-          label: widget.submitLabel,
-          onPressed: _submit,
-          isLoading: _busy,
-          expand: true,
-        ),
       ],
+    );
+    final actions = ActionBar(
+      pinned: widget.pinActions,
+      secondary: widget.secondaryAction,
+      primary: AppButton.primary(
+        label: widget.submitLabel,
+        onPressed: _submit,
+        isLoading: _busy,
+        expand: widget.secondaryAction == null,
+      ),
+    );
+    return pinnedFormLayout(
+      pinned: widget.pinActions,
+      fields: fields,
+      actions: actions,
     );
   }
 }

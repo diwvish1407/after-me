@@ -128,7 +128,7 @@ async def test_new_password_must_differ_from_the_current_one(h: Harness) -> None
     # NFKC-equivalent spellings count as the same password (full-width letters here).
     fullwidth = "ｃｏｒｒｅｃｔ horse battery staple"
     assert (
-        await _change(h, tokens, current="correct horse battery staple", new=fullwidth)
+        await _change(h, tokens, current="Correct horse battery staple 1!", new=fullwidth)
     ).status_code == 422
 
 
@@ -204,7 +204,7 @@ async def test_change_password_invalidates_outstanding_reset_links(h: Harness) -
     await h.forgot("links@example.com")
     link = h.reset_token_for("links@example.com")
     assert (await _change(h, tokens)).status_code == 204
-    assert (await h.web_reset(link, "another long passphrase 99")).status_code == 400
+    assert (await h.web_reset(link, "Another long passphrase 99!")).status_code == 400
 
 
 async def test_a_change_that_lost_a_race_with_another_change_does_not_overwrite_it(
@@ -219,7 +219,7 @@ async def test_a_change_that_lost_a_race_with_another_change_does_not_overwrite_
         ok = await real_verify(stored_hash, password)
         if not ran:
             ran.append(True)
-            assert (await _change(h, tokens, new="the winning passphrase 11")).status_code == 204
+            assert (await _change(h, tokens, new="The winning passphrase 11!")).status_code == 204
         return bool(ok)
 
     monkeypatch.setattr(passwords, "verify", verify_then_change)
@@ -228,7 +228,7 @@ async def test_a_change_that_lost_a_race_with_another_change_does_not_overwrite_
     assert losing.status_code == 401
     assert problem(losing)["code"] == "invalid_credentials"
     assert (
-        await h.login("race-change@example.com", "the winning passphrase 11")
+        await h.login("race-change@example.com", "The winning passphrase 11!")
     ).status_code == 200
     assert (await h.login("race-change@example.com", NEW_PASSWORD)).status_code == 401
 

@@ -70,16 +70,17 @@ class ContactStepScreen extends ConsumerWidget {
         step: OnboardingStep.contact,
         title: l10n.contactStepTitle,
         subtitle: l10n.contactStepBody,
-        secondaryLabel: l10n.actionSkipForNow,
-        onSecondary: () => advanceFrom(context, ref, OnboardingStep.contact),
-        children: [
-          ContactForm(
-            submitLabel: l10n.contactStepSave,
-            onSubmit: (values) => _save(context, ref, values),
+        showArt: false,
+        body: ContactForm(
+          pinActions: true,
+          submitLabel: l10n.contactStepSave,
+          onSubmit: (values) => _save(context, ref, values),
+          // Skip on the left, Continue on the right, in the footer.
+          secondaryAction: AppButton.secondary(
+            label: l10n.actionSkipForNow,
+            onPressed: () => advanceFrom(context, ref, OnboardingStep.contact),
           ),
-          Gap.sm,
-          BodyText(l10n.contactStepInviteNote),
-        ],
+        ),
       ),
     );
   }

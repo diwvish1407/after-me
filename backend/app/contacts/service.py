@@ -48,6 +48,7 @@ from app.core.errors import (
     CannotBeOwnEmail,
     ContactDuplicate,
     InvalidState,
+    NoContactToAlert,
     NotFound,
     PlanLimitReached,
     ReauthRequired,
@@ -62,6 +63,7 @@ from app.plans.repository import PlanRepository
 from app.releases.repository import ReleaseRepository
 from app.security.rate_limit import (
     CONTACT_CREATE_PER_USER,
+    DANGER_ALERT_PER_USER,
     INVITATION_PER_USER,
     INVITATION_RESEND_PER_CONTACT,
     RateLimit,
@@ -429,6 +431,59 @@ class ContactService(AuthServiceBase):
         )
         outbox = await self._invite(current, user.email, contact, now)
         contact.updated_at = now
+        await self.session.commit()
+        return outbox
+
+    # ------------------------------------------------------------------ danger
+
+    async def danger_alert(self, current: CurrentUser) -> list[EmailMessage]:
+        """The Danger button: email every accepted, switched-on contact at once. Suppressed
+        addresses (the contact asked for no more email) are skipped. Raises
+        :class:`NoContactToAlert` when nobody can be told."""
+        now = await self._now()
+        await ensure_owner_active(self.session, current.user_id)
+        user = await self.users.get(current.user_id)
+        if user is None:  # pragma: no cover - the session check already loaded this user
+            raise SessionRevoked
+        contacts = [
+            c
+            for c in await self.contacts.list(owner_id=current.user_id)
+            if c.verification_status == "verified" and c.is_active and c.email_normalized
+        ]
+        if not contacts:
+            raise NoContactToAlert
+        await self._limit_many([(DANGER_ALERT_PER_USER, str(current.user_id))], now)
+        user_name = await self._display_name(current.user_id)
+        outbox: list[EmailMessage] = []
+        for contact in contacts:
+            assert contact.email_normalized is not None  # noqa: S101 - filtered above
+            if await self.suppression.is_suppressed(
+                suppression_hash_candidates(self.services.pepper, contact.email_normalized)
+            ):
+                continue
+            message = self.services.mailer.render(
+                EmailTemplate.DANGER_ALERT,
+                to=contact.email or contact.email_normalized,
+                contact_name=contact.display_name,
+                user_name=user_name,
+                user_email=user.email,
+                optout_link=optout_link(
+                    self.settings.public_base_url,
+                    new_optout_token(self.services.pepper, contact.id, contact.email_normalized),
+                ),
+                support_url=f"{self.settings.public_base_url}/support",
+            )
+            outbox.append(replace(message, contact_id=contact.id, owner_id=current.user_id))
+        await self.services.audit.record(
+            self.session,
+            self._event(
+                audit.DANGER_ALERT_SENT,
+                now,
+                current.user_id,
+                user_visible=False,
+                alerted=len(outbox),
+            ),
+        )
         await self.session.commit()
         return outbox
 

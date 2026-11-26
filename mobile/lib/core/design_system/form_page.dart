@@ -13,7 +13,9 @@ import 'status_banner.dart';
 class FormPage extends StatelessWidget {
   const FormPage({
     required this.title,
-    required this.children,
+    this.children = const <Widget>[],
+    this.body,
+    this.footer,
     this.leading,
     this.actions,
     this.automaticallyImplyLeading = true,
@@ -21,7 +23,16 @@ class FormPage extends StatelessWidget {
   });
 
   final String title;
+
+  /// The page's content, top-aligned, scrolling only when it does not fit.
   final List<Widget> children;
+
+  /// Replaces [children] for content that lays out its own scrolling and footer (a form
+  /// with `pinActions`).
+  final Widget? body;
+
+  /// The actions fixed at the bottom of the screen (an [ActionBar]).
+  final Widget? footer;
   final Widget? leading;
   final List<Widget>? actions;
   final bool automaticallyImplyLeading;
@@ -36,12 +47,24 @@ class FormPage extends StatelessWidget {
         automaticallyImplyLeading: automaticallyImplyLeading,
       ),
       body: SafeArea(
-        child: CenteredScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: children,
-          ),
-        ),
+        child:
+            body ??
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(
+                  child: CenteredScrollView(
+                    alignTop: true,
+                    physics: const ClampingScrollPhysics(),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: children,
+                    ),
+                  ),
+                ),
+                ?footer,
+              ],
+            ),
       ),
     );
   }
@@ -66,7 +89,7 @@ class FailureNotice extends StatelessWidget {
   }
 }
 
-/// Body text under a title: muted, readable.
+/// Body text under a title (a subtitle): small and greyed out.
 class BodyText extends StatelessWidget {
   const BodyText(this.text, {this.textAlign, super.key});
 
@@ -78,7 +101,7 @@ class BodyText extends StatelessWidget {
     return Text(
       text,
       textAlign: textAlign,
-      style: Theme.of(context).textTheme.bodyMedium
+      style: Theme.of(context).textTheme.bodySmall
           ?.copyWith(color: context.tokens.textMuted),
     );
   }

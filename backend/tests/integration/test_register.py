@@ -61,31 +61,27 @@ async def test_start_creates_unverified_user_profile_and_code(h: Harness, owner_
     }
 
 
-async def test_start_responses_are_identical_for_all_three_branches(
+async def test_start_for_new_and_pending_signups_answer_alike_and_a_taken_email_is_said(
     h: Harness, owner_db: Db
 ) -> None:
+    """A new and a pending signup answer the same way; an address that already has a verified
+    account is refused with ``email_taken`` (a product decision) and nothing is emailed."""
     await h.signup("verified@example.com")
     await h.register("pending@example.com")
     h.mail.clear()
 
     new = await h.register("brand-new@example.com", display_name="Someone")
-    pending = await h.register("pending@example.com", password="another long passphrase")
-    verified = await h.register("verified@example.com", password="another long passphrase")
+    pending = await h.register("pending@example.com", password="Another long passphrase 1!")
+    verified = await h.register("verified@example.com", password="Another long passphrase 1!")
 
-    assert new.status_code == pending.status_code == verified.status_code == 202
-    assert new.content == pending.content == verified.content
-    skip = {"x-request-id", "date", "ratelimit-remaining", "ratelimit-reset"}
-    headers = [
-        {k: v for k, v in r.headers.items() if k not in skip} for r in (new, pending, verified)
-    ]
-    assert headers[0] == headers[1] == headers[2]
+    assert new.status_code == pending.status_code == 202
+    assert new.content == pending.content
+    assert verified.status_code == 409
+    assert problem(verified)["code"] == "email_taken"
 
     assert [m.template for m in h.mail.to("brand-new@example.com")] == ["signup_code"]
     assert [m.template for m in h.mail.to("pending@example.com")] == ["signup_code"]
-    assert [m.template for m in h.mail.to("verified@example.com")] == ["account_exists"]
-    exists = h.mail.to("verified@example.com")[0]
-    assert "sign in or reset your password" in exists.text
-    assert not any(ch.isdigit() for ch in exists.text.split("AfterMe")[0])
+    assert h.mail.to("verified@example.com") == []
 
 
 async def test_start_for_pending_signup_replaces_password_and_profile(
@@ -95,7 +91,7 @@ async def test_start_for_pending_signup_replaces_password_and_profile(
     first_code = h.code_for("pending@example.com")
     h.clock.advance(seconds=5)
     await h.register(
-        "Pending@Example.com", password="a different long passphrase", display_name="Second"
+        "Pending@Example.com", password="A different long passphrase 2!", display_name="Second"
     )
     user = _user(owner_db, "pending@example.com")
     assert user is not None
@@ -106,16 +102,18 @@ async def test_start_for_pending_signup_replaces_password_and_profile(
     assert profile == {"display_name": "Second"}
 
     # The first code was superseded by the second.
-    stale = await h.verify("pending@example.com", first_code, "a different long passphrase")
+    stale = await h.verify("pending@example.com", first_code, "A different long passphrase 2!")
     assert stale.status_code == 400
     assert problem(stale)["code"] == "invalid_code"
     fresh = await h.verify(
-        "pending@example.com", h.code_for("pending@example.com"), "a different long passphrase"
+        "pending@example.com", h.code_for("pending@example.com"), "A different long passphrase 2!"
     )
     assert fresh.status_code == 201
     old_password = await h.login("pending@example.com", PASSWORD)
     assert old_password.status_code == 401
-    assert (await h.login("pending@example.com", "a different long passphrase")).status_code == 200
+    assert (
+        await h.login("pending@example.com", "A different long passphrase 2!")
+    ).status_code == 200
 
 
 async def test_start_for_verified_account_changes_nothing(h: Harness, owner_db: Db) -> None:
@@ -136,15 +134,16 @@ async def test_start_for_verified_account_changes_nothing(h: Harness, owner_db: 
     # Every profile field differs, so an overwrite could not go unnoticed.
     response = await h.register(
         "taken@example.com",
-        password="attacker chosen password",
+        password="Attacker chosen password 3!",
         display_name="Attacker",
         timezone="America/New_York",
         locale="fr",
         country_code="US",
     )
-    assert response.status_code == 202
+    assert response.status_code == 409
+    assert problem(response)["code"] == "email_taken"
     assert snapshot() == before
-    assert [m.template for m in h.mail.to("taken@example.com")] == ["account_exists"]
+    assert h.mail.to("taken@example.com") == []
     me = (await h.client.get("/v1/me", headers=bearer(tokens))).json()
     assert me["profile"]["display_name"] == "Test User"
     assert me["profile"]["timezone"] == "Asia/Kolkata"
@@ -315,12 +314,12 @@ async def test_pre_hijack_attempt_cannot_activate_an_account_with_the_attackers_
     """An attacker starts a signup for the victim's address with their own password. The
     victim then types the code from the email they receive. Without the password check that
     would activate an account the attacker can log in to."""
-    victim, attacker_password = "victim@example.com", "attacker chosen password 1"
+    victim, attacker_password = "victim@example.com", "Attacker chosen password 1!"
     assert (await h.register(victim, attacker_password)).status_code == 202
     attacker_code = h.code_for(victim)
 
     # The victim, believing the email is theirs, enters the code with their own password.
-    response = await h.verify(victim, attacker_code, "victims own password 99")
+    response = await h.verify(victim, attacker_code, "Victims own password 99!")
     assert response.status_code == 400
     assert problem(response)["code"] == "invalid_code"
     user = owner_db.execute(
@@ -331,9 +330,9 @@ async def test_pre_hijack_attempt_cannot_activate_an_account_with_the_attackers_
 
     # The victim starts their own signup; it replaces the attacker's password, and only the
     # victim's password now verifies the new code.
-    assert (await h.register(victim, "victims own password 99")).status_code == 202
+    assert (await h.register(victim, "Victims own password 99!")).status_code == 202
     victim_code = h.code_for(victim)
     assert (await h.verify(victim, victim_code, attacker_password)).status_code == 400
-    assert (await h.verify(victim, victim_code, "victims own password 99")).status_code == 201
+    assert (await h.verify(victim, victim_code, "Victims own password 99!")).status_code == 201
     assert (await h.login(victim, attacker_password)).status_code == 401
-    assert (await h.login(victim, "victims own password 99")).status_code == 200
+    assert (await h.login(victim, "Victims own password 99!")).status_code == 200

@@ -12,6 +12,7 @@ import '../../../core/design_system/design_system.dart';
 import '../../../core/freshness/stale_data.dart';
 import '../../../l10n/gen/app_localizations.dart';
 import '../../onboarding/application/setup_controller.dart';
+import '../../shell/presentation/home_back_button.dart';
 import '../application/contacts_controller.dart';
 import '../data/contacts_repository.dart';
 import 'contact_labels.dart';
@@ -101,6 +102,7 @@ class _PeopleScreenState extends ConsumerState<PeopleScreen> {
 
     return Scaffold(
       appBar: AppBar(
+        leading: const HomeBackButton(),
         title: Text(l10n.navPeople),
         actions: [
           if (contacts.value?.isNotEmpty ?? false)

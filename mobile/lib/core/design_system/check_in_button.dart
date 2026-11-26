@@ -8,6 +8,7 @@ import '../../app/theme/app_theme.dart';
 import '../../app/theme/dimens.dart';
 import '../../app/theme/tokens.dart';
 import '../../l10n/gen/app_localizations.dart';
+import 'heart_border.dart';
 import 'progress_spinner.dart';
 
 /// Visual states of the check-in button (USER_FLOWS.md §1.3, §5).
@@ -28,7 +29,7 @@ enum CheckInButtonState {
   disabled,
 }
 
-/// The large circular I'M OK button.
+/// The large heart-shaped I'M OK button.
 ///
 /// * At least 160 dp across; it grows with the text scale so the label never needs
 ///   truncating. It is sized from the widest unbreakable word of the label, so a word
@@ -68,8 +69,9 @@ class CheckInButton extends StatelessWidget {
       color: visuals.textColor,
     );
     final widestWord = _widestWord(context, visuals.label, labelStyle);
-    // The inscribed square of a circle has side d / sqrt(2); the widest word must fit it.
-    final neededForWord = widestWord * math.sqrt2;
+    // The label lives in a square of about half the heart's width (its widest, calmest
+    // area); the widest word must fit it.
+    final neededForWord = widestWord / _labelArea;
     final preferred = math.max(
       AppSizes.checkInButton * (textScale > 1 ? 0.6 + 0.4 * textScale : 1),
       neededForWord,
@@ -85,10 +87,10 @@ class CheckInButton extends StatelessWidget {
                   ? AppSizes.checkInButton
                   : maxWidth)
             : preferred;
-        // Content lives in the inscribed square. If the diameter was capped so a word is
+        // Content lives in a square inside the heart. If the size was capped so a word is
         // wider than the square, lay the column out at the word's width and let FittedBox
         // scale the whole label down evenly rather than break the word.
-        final square = diameter / math.sqrt2;
+        final square = diameter * _labelArea;
         final contentWidth = math.max(square, widestWord);
 
         return Semantics(
@@ -104,7 +106,9 @@ class CheckInButton extends StatelessWidget {
             dimension: diameter,
             child: Material(
               color: visuals.fill,
-              shape: CircleBorder(
+              elevation: _interactive ? 6 : 0,
+              shadowColor: visuals.fill,
+              shape: HeartBorder(
                 side: visuals.border == null
                     ? BorderSide.none
                     : BorderSide(color: visuals.border!, width: 3),
@@ -112,8 +116,9 @@ class CheckInButton extends StatelessWidget {
               clipBehavior: Clip.antiAlias,
               child: InkWell(
                 onTap: _interactive ? _handleTap : null,
-                customBorder: const CircleBorder(),
-                child: Center(
+                customBorder: const HeartBorder(),
+                child: Align(
+                  alignment: const Alignment(0, -0.12),
                   child: SizedBox.square(
                     dimension: square,
                     child: FittedBox(
@@ -171,6 +176,9 @@ class CheckInButton extends StatelessWidget {
     unawaited(HapticFeedback.mediumImpact());
     onPressed?.call();
   }
+
+  /// The side of the label's square as a share of the heart's width.
+  static const double _labelArea = 0.5;
 
   static _Visuals _visualsFor(
     CheckInButtonState state,

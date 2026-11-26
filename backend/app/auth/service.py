@@ -53,6 +53,7 @@ from app.auth.tokens import (
     new_refresh_token,
 )
 from app.core.errors import (
+    EmailTaken,
     EmailUnverified,
     InvalidCode,
     InvalidCredentials,
@@ -185,7 +186,8 @@ class AuthService(AuthServiceBase):
     # ------------------------------------------------------------------ signup
 
     async def register_start(self, body: RegisterStartRequest) -> None:
-        """Always the same outcome for the caller (no account enumeration, T18)."""
+        """Starts a signup. An address that already has a verified account is refused with
+        ``email_taken`` (a product decision: a clear message over hiding registered addresses)."""
         now = await self._now()
         email_norm = body.email_normalized
         await self._limit_email(REGISTER_PER_EMAIL_NETWORK, REGISTER_PER_EMAIL, email_norm, now)
@@ -202,28 +204,28 @@ class AuthService(AuthServiceBase):
 
         outbox: list[EmailMessage] = []
         if user.email_verified_at is not None:
-            outcome = "account_exists"
-            outbox.append(self.services.mailer.render(EmailTemplate.ACCOUNT_EXISTS, to=user.email))
-        else:
-            outcome = "new" if inserted_id is not None else "replaced_pending"
-            if inserted_id is None:
-                # An unverified signup is replaced by the newest attempt.
-                user.email = body.email
-                user.password_hash = password_hash
-                user.password_changed_at = now
-                user.updated_at = now
-            await self.profiles.upsert(
-                owner_id=user.id,
-                display_name=body.display_name,
-                timezone=body.timezone,
-                locale=body.locale,
-                country_code=body.country_code,
-                now=now,
-            )
-            code = await self._issue_signup_code(user.id, now)
-            outbox.append(
-                self._signup_code_email(to=user.email, display_name=body.display_name, code=code)
-            )
+            # Said plainly so the person can sign in instead (nothing was changed).
+            await self.session.rollback()
+            raise EmailTaken
+        outcome = "new" if inserted_id is not None else "replaced_pending"
+        if inserted_id is None:
+            # An unverified signup is replaced by the newest attempt.
+            user.email = body.email
+            user.password_hash = password_hash
+            user.password_changed_at = now
+            user.updated_at = now
+        await self.profiles.upsert(
+            owner_id=user.id,
+            display_name=body.display_name,
+            timezone=body.timezone,
+            locale=body.locale,
+            country_code=body.country_code,
+            now=now,
+        )
+        code = await self._issue_signup_code(user.id, now)
+        outbox.append(
+            self._signup_code_email(to=user.email, display_name=body.display_name, code=code)
+        )
 
         await self.services.audit.record(
             self.session,

@@ -23,7 +23,7 @@ from app.notifications.push import RecordingPushProvider
 from tests.support import Harness, bearer, make_premium
 
 Db = psycopg.Connection[dict[str, Any]]
-PASSWORD = "correct horse battery staple"
+PASSWORD = "Correct horse battery staple 1!"
 
 
 def ist(text: str) -> datetime:

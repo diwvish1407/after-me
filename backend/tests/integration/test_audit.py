@@ -89,7 +89,7 @@ async def test_failed_login_and_lockout_are_not_attributed_to_the_account_owner(
         assert row["actor_id"] is None
         assert row["subject"] == tokens["user"]["id"]  # the affected account stays the subject
     started = await h.register("victim@example.com")  # another person's signup attempt
-    assert started.status_code == 202
+    assert started.status_code == 409  # email_taken: the address already has an account
     attempt = owner_db.execute(
         "SELECT actor_type, actor_id FROM audit_logs WHERE action = 'auth.signup_started' "
         "ORDER BY id DESC LIMIT 1"

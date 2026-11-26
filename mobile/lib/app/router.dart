@@ -21,6 +21,7 @@ import '../features/contacts/presentation/edit_contact_screen.dart';
 import '../features/contacts/presentation/people_screen.dart';
 import '../features/dev/presentation/design_gallery_screen.dart';
 import '../features/home/presentation/home_screen.dart';
+import '../features/home/presentation/notifications_screen.dart';
 import '../features/incidents/presentation/incident_detail_screen.dart';
 import '../features/incidents/presentation/incident_history_screen.dart';
 import '../features/incidents/presentation/incident_timeline_screen.dart';
@@ -75,6 +76,7 @@ abstract final class AppRoutes {
 
   /// The open incident's timeline, opened from Home.
   static const homeIncident = '/home/incident';
+  static const homeNotifications = '/home/notifications';
   static const people = '/people';
   static const peopleAdd = '/people/add';
   static const instructions = '/instructions';
@@ -242,6 +244,7 @@ abstract final class AppRoutes {
   static Set<String> signedInRoutes() => {
     ...shellTabs,
     homeIncident,
+    homeNotifications,
     peopleAdd,
     instructionNew,
     planEdit,
@@ -434,6 +437,10 @@ final routerProvider = Provider<GoRouter>((ref) {
                   simpleRoute(
                     'incident',
                     (_) => const IncidentTimelineScreen(),
+                  ),
+                  simpleRoute(
+                    'notifications',
+                    (_) => const NotificationsScreen(),
                   ),
                 ],
               ),

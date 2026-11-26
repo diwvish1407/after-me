@@ -125,8 +125,25 @@ class InstructionForm extends ConsumerStatefulWidget {
     this.initial,
     this.starter,
     this.suggestedRecipientIds = const <String>{},
+    this.secondaryAction,
+    this.middleAction,
+    this.pinActions = false,
+    this.intro = const <Widget>[],
     super.key,
   });
+
+  /// Shown left of the submit button (onboarding's "Skip for now").
+  final Widget? secondaryAction;
+
+  /// Shown between the other two (onboarding's "Choose a different example").
+  final Widget? middleAction;
+
+  /// Keep the actions in a footer fixed at the bottom of the screen; the fields scroll
+  /// above it only when they do not fit. The form must then get a bounded height.
+  final bool pinActions;
+
+  /// Shown above the fields (a heading), scrolling with them.
+  final List<Widget> intro;
 
   final String submitLabel;
   final Future<bool> Function(InstructionFormValues values) onSubmit;
@@ -546,10 +563,10 @@ class _InstructionFormState extends ConsumerState<InstructionForm> {
     final count = _body.text.replaceAll('\r\n', '\n').runes.length;
     final creating = widget.initial == null;
     final blank = _title.text.trim().isEmpty && _body.text.trim().isEmpty;
-    final digital = _category == InstructionCategory.digitalAccounts;
-    return Column(
+    final fields = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        ...widget.intro,
         if (_stageKept) ...[
           StatusBanner(
             kind: StatusBannerKind.attention,
@@ -580,7 +597,8 @@ class _InstructionFormState extends ConsumerState<InstructionForm> {
           ),
           Gap.sm,
         ],
-        if (creating && blank) ...[
+        // Onboarding offers the examples in its footer instead.
+        if (creating && blank && widget.middleAction == null) ...[
           AppButton.secondary(
             label: l10n.instructionStartFromExample,
             icon: Icons.lightbulb_outline_rounded,
@@ -589,57 +607,35 @@ class _InstructionFormState extends ConsumerState<InstructionForm> {
           ),
           Gap.md,
         ],
-        Semantics(
-          header: true,
-          child: Text(
-            l10n.instructionCategoryHeading,
-            style: textTheme.titleSmall,
+        DropdownButtonFormField<InstructionCategory>(
+          key: ValueKey(_category),
+          initialValue: _category,
+          isExpanded: true,
+          decoration: InputDecoration(
+            labelText: l10n.instructionCategoryHeading,
+            errorText: _categoryMissing || _categoryServerText != null
+                ? (_categoryServerText ?? l10n.instructionCategoryRequired)
+                : null,
           ),
-        ),
-        Gap.xs,
-        Wrap(
-          spacing: AppSpacing.xs,
-          runSpacing: AppSpacing.xxs,
-          children: [
-            for (final category in categories)
-              ChoiceChip(
-                label: Text(categoryName(l10n, category)),
-                selected: _category == category,
-                onSelected: _busy
-                    ? null
-                    : (_) {
-                        setState(() {
-                          _category = category;
-                          _categoryMissing = false;
-                          _categoryServerText = null;
-                        });
-                        _persist();
-                      },
+          hint: Text(l10n.actionSelect),
+          items: [
+            for (final category in {...categories, ?_category})
+              DropdownMenuItem(
+                value: category,
+                child: Text(categoryName(l10n, category)),
               ),
           ],
+          onChanged: _busy
+              ? null
+              : (category) {
+                  setState(() {
+                    _category = category;
+                    _categoryMissing = false;
+                    _categoryServerText = null;
+                  });
+                  _persist();
+                },
         ),
-        if (_categoryMissing || _categoryServerText != null) ...[
-          Gap.xs,
-          Semantics(
-            liveRegion: true,
-            child: Text(
-              _categoryServerText ?? l10n.instructionCategoryRequired,
-              style: textTheme.bodySmall?.copyWith(
-                color: Theme.of(context).colorScheme.error,
-              ),
-            ),
-          ),
-        ],
-        if (digital) ...[
-          Gap.md,
-          Semantics(
-            container: true,
-            child: StatusBanner(
-              kind: StatusBannerKind.info,
-              message: l10n.instructionDigitalGuidance,
-            ),
-          ),
-        ],
         Gap.md,
         AppTextField(
           label: l10n.fieldInstructionTitle,
@@ -658,8 +654,8 @@ class _InstructionFormState extends ConsumerState<InstructionForm> {
         TextField(
           controller: _body,
           enabled: !_busy,
-          minLines: 6,
-          maxLines: 14,
+          minLines: 4,
+          maxLines: 10,
           keyboardType: TextInputType.multiline,
           textInputAction: TextInputAction.newline,
           textCapitalization: TextCapitalization.sentences,
@@ -689,18 +685,25 @@ class _InstructionFormState extends ConsumerState<InstructionForm> {
             ),
           ),
         ),
-        // The Digital Accounts guidance above says it in full; elsewhere a short note.
-        if (!digital) ...[Gap.sm, BodyText(l10n.instructionPasswordNote)],
         Gap.lg,
         ..._recipientsSection(context, l10n),
-        Gap.lg,
-        AppButton.primary(
-          label: widget.submitLabel,
-          onPressed: _submit,
-          isLoading: _busy,
-          expand: true,
-        ),
       ],
+    );
+    final actions = ActionBar(
+      pinned: widget.pinActions,
+      secondary: widget.secondaryAction,
+      middle: widget.middleAction,
+      primary: AppButton.primary(
+        label: widget.submitLabel,
+        onPressed: _submit,
+        isLoading: _busy,
+        expand: widget.secondaryAction == null && widget.middleAction == null,
+      ),
+    );
+    return pinnedFormLayout(
+      pinned: widget.pinActions,
+      fields: fields,
+      actions: actions,
     );
   }
 
@@ -796,12 +799,7 @@ class _InstructionFormState extends ConsumerState<InstructionForm> {
           ),
         ),
       ],
-      Gap.lg,
-      Semantics(
-        header: true,
-        child: Text(l10n.instructionWhen, style: textTheme.titleSmall),
-      ),
-      Gap.xs,
+      Gap.md,
       if (_perPerson && selected.isNotEmpty) ...[
         for (final contact in selected) ...[
           Text(
@@ -923,27 +921,32 @@ class _StageChoices extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    return RadioGroup<String>(
-      groupValue: value,
-      onChanged: (key) {
-        if (key != null && enabled) {
-          onChanged(key);
-        }
-      },
-      child: Column(
-        children: [
-          for (final option in options)
-            RadioListTile<String>(
-              contentPadding: EdgeInsets.zero,
-              value: option.key,
-              title: Text(
-                l10n.instructionReleaseAfter(
-                  formatDurationMinutes(l10n, option.offsetMinutes),
-                ),
+    final known = options.any((o) => o.key == value);
+    return DropdownButtonFormField<String>(
+      key: ValueKey(value),
+      initialValue: known ? value : null,
+      isExpanded: true,
+      decoration: InputDecoration(labelText: l10n.instructionWhen),
+      hint: Text(l10n.actionSelect),
+      items: [
+        for (final option in options)
+          DropdownMenuItem(
+            value: option.key,
+            child: Text(
+              l10n.instructionReleaseAfter(
+                formatDurationMinutes(l10n, option.offsetMinutes),
               ),
+              overflow: TextOverflow.ellipsis,
             ),
-        ],
-      ),
+          ),
+      ],
+      onChanged: enabled
+          ? (key) {
+              if (key != null) {
+                onChanged(key);
+              }
+            }
+          : null,
     );
   }
 }

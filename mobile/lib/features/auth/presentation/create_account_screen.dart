@@ -30,6 +30,7 @@ class _CreateAccountScreenState extends ConsumerState<CreateAccountScreen> {
   final _name = TextEditingController();
   final _email = TextEditingController();
   final _password = TextEditingController();
+  final _confirm = TextEditingController();
   late final SignupController _signup;
 
   String _timezone = 'UTC';
@@ -41,6 +42,7 @@ class _CreateAccountScreenState extends ConsumerState<CreateAccountScreen> {
   FieldIssue? _nameIssue;
   FieldIssue? _emailIssue;
   FieldIssue? _passwordIssue;
+  FieldIssue? _confirmIssue;
 
   @override
   void initState() {
@@ -74,6 +76,7 @@ class _CreateAccountScreenState extends ConsumerState<CreateAccountScreen> {
     _name.dispose();
     _email.dispose();
     _password.dispose();
+    _confirm.dispose();
     super.dispose();
   }
 
@@ -86,10 +89,16 @@ class _CreateAccountScreenState extends ConsumerState<CreateAccountScreen> {
         _password.text,
         email: _email.text,
       );
+      _confirmIssue = _confirm.text.isEmpty
+          ? FieldIssue.required
+          : (_confirm.text != _password.text
+                ? FieldIssue.passwordsDiffer
+                : null);
     });
     return _nameIssue == null &&
         _emailIssue == null &&
         _passwordIssue == null &&
+        _confirmIssue == null &&
         _adult &&
         _agreed;
   }
@@ -135,6 +144,12 @@ class _CreateAccountScreenState extends ConsumerState<CreateAccountScreen> {
     if (failure is ValidationFailure) {
       return issueForField(failure.fieldErrors, field);
     }
+    // 409 email_taken: the address already has an account (shown on the email field).
+    if (field == 'email' &&
+        failure is ConflictFailure &&
+        failure.code == 'email_taken') {
+      return FieldIssue.emailTaken;
+    }
     return null;
   }
 
@@ -149,7 +164,7 @@ class _CreateAccountScreenState extends ConsumerState<CreateAccountScreen> {
     final serverPassword = _serverIssue(failure, 'password');
     final handledByField =
         serverName != null || serverEmail != null || serverPassword != null;
-    final strength = passwordStrength(_password.text, email: _email.text);
+    final rules = PasswordRules.of(_password.text);
 
     String? errorOf(FieldIssue? local, FieldIssue? server) {
       final issue = local ?? server;
@@ -159,11 +174,19 @@ class _CreateAccountScreenState extends ConsumerState<CreateAccountScreen> {
     return SecureScreen(
       child: FormPage(
         title: l10n.createAccountTitle,
+        // Sign in on the left, the main action on the right, always at the bottom.
+        footer: ActionBar(
+          secondary: AppButton.text(
+            label: l10n.signInTitle,
+            onPressed: state.busy ? null : () => context.push(AppRoutes.signIn),
+          ),
+          primary: AppButton.primary(
+            label: l10n.createAccountSubmit,
+            isLoading: state.busy,
+            onPressed: _submit,
+          ),
+        ),
         children: [
-          PageHeading(l10n.createAccountHeading),
-          Gap.xs,
-          BodyText(l10n.createAccountIntro),
-          Gap.lg,
           if (failure != null && !handledByField) ...[
             FailureNotice.of(context, failure),
             Gap.md,
@@ -195,21 +218,34 @@ class _CreateAccountScreenState extends ConsumerState<CreateAccountScreen> {
             controller: _password,
             obscureText: true,
             errorText: errorOf(_passwordIssue, serverPassword),
-            helperText: passwordStrengthHint(l10n, strength),
-            textInputAction: TextInputAction.done,
+            textInputAction: TextInputAction.next,
             autofillHints: const [AutofillHints.newPassword],
             enabled: !state.busy,
             onChanged: (_) => setState(() => _passwordIssue = null),
+          ),
+          Gap.xs,
+          PasswordChecklist(rules: rules),
+          Gap.sm,
+          AppTextField(
+            label: l10n.fieldConfirmPasswordSignup,
+            controller: _confirm,
+            obscureText: true,
+            errorText: errorOf(_confirmIssue, null),
+            textInputAction: TextInputAction.done,
+            autofillHints: const [AutofillHints.newPassword],
+            enabled: !state.busy,
+            onChanged: (_) => setState(() => _confirmIssue = null),
             onSubmitted: (_) => _submit(),
           ),
-          Gap.md,
+          Gap.sm,
           _TimezoneRow(
             timezone: _timezone,
             onChange: state.busy ? null : _changeTimezone,
           ),
-          Gap.sm,
           CheckboxListTile(
             contentPadding: EdgeInsets.zero,
+            dense: true,
+            visualDensity: VisualDensity.compact,
             controlAffinity: ListTileControlAffinity.leading,
             value: _adult,
             onChanged: state.busy
@@ -219,6 +255,8 @@ class _CreateAccountScreenState extends ConsumerState<CreateAccountScreen> {
           ),
           CheckboxListTile(
             contentPadding: EdgeInsets.zero,
+            dense: true,
+            visualDensity: VisualDensity.compact,
             controlAffinity: ListTileControlAffinity.leading,
             value: _agreed,
             onChanged: state.busy
@@ -238,20 +276,7 @@ class _CreateAccountScreenState extends ConsumerState<CreateAccountScreen> {
               ),
             ),
           ],
-          Gap.lg,
-          AppButton.primary(
-            label: l10n.createAccountSubmit,
-            isLoading: state.busy,
-            onPressed: _submit,
-            expand: true,
-          ),
-          Gap.xs,
-          AppButton.text(
-            label: l10n.createAccountHaveAccount,
-            onPressed: () => context.push(AppRoutes.signIn),
-            expand: true,
-          ),
-          Gap.md,
+          Gap.sm,
           _PrivacyNote(text: l10n.createAccountPasswordNote),
         ],
       ),
@@ -269,32 +294,22 @@ class _TimezoneRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final t = context.tokens;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    // The region and its Change button on one line.
+    return Row(
       children: [
-        Row(
-          children: [
-            Icon(Icons.public_rounded, color: t.textMuted),
-            const SizedBox(width: AppSpacing.xs),
-            Expanded(
-              child: Semantics(
-                label: '${l10n.timezoneYours}: $timezone',
-                excludeSemantics: true,
-                child: FitText(
-                  timezone,
-                  style: Theme.of(context).textTheme.bodyMedium,
-                ),
-              ),
+        Icon(Icons.public_rounded, color: t.textMuted, size: 20),
+        const SizedBox(width: AppSpacing.xs),
+        Expanded(
+          child: Semantics(
+            label: '${l10n.timezoneYours}: $timezone',
+            excludeSemantics: true,
+            child: FitText(
+              timezone,
+              style: Theme.of(context).textTheme.bodyMedium,
             ),
-          ],
-        ),
-        Align(
-          alignment: AlignmentDirectional.centerEnd,
-          child: AppButton.text(
-            label: l10n.timezoneChange,
-            onPressed: onChange,
           ),
         ),
+        AppButton.text(label: l10n.timezoneChange, onPressed: onChange),
       ],
     );
   }

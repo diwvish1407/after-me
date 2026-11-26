@@ -192,10 +192,14 @@ class ReviewerAccount:
 
 
 def generate_password() -> str:
-    groups = (
+    """Groups joined by ``-`` (the special character), starting with a capital letter and
+    ending with a digit, so it always meets the password policy."""
+    groups = [
         "".join(secrets.choice(_PASSWORD_ALPHABET) for _ in range(_PASSWORD_GROUP_LENGTH))
         for _ in range(_PASSWORD_GROUPS)
-    )
+    ]
+    groups[0] = secrets.choice("ABCDEFGHJKMNPQRSTUVWXYZ") + groups[0][1:]
+    groups[-1] = groups[-1][:-1] + secrets.choice("23456789")
     return "-".join(groups)
 
 

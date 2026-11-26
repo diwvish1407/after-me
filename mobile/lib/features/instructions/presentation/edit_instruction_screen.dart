@@ -73,15 +73,14 @@ class EditInstructionScreen extends ConsumerWidget {
         title: l10n.instructionEditTitle,
         builder: (context, instruction, holder) => FormPage(
           title: l10n.instructionEditTitle,
-          children: [
-            InstructionForm(
-              initial: instruction,
-              submitLabel: l10n.instructionSaveChanges,
-              onSubmit: (values) => _save(context, ref, instruction, values),
-              onAddContact: () => context.go(AppRoutes.peopleAdd),
-              onReviewPlan: () => context.push(OnboardingStep.plan.path),
-            ),
-          ],
+          body: InstructionForm(
+            pinActions: true,
+            initial: instruction,
+            submitLabel: l10n.instructionSaveChanges,
+            onSubmit: (values) => _save(context, ref, instruction, values),
+            onAddContact: () => context.go(AppRoutes.peopleAdd),
+            onReviewPlan: () => context.push(OnboardingStep.plan.path),
+          ),
         ),
       ),
     );

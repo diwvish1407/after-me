@@ -39,19 +39,30 @@ Future<void> advanceFrom(
   }
 }
 
-/// The frame of an onboarding step: progress, title, body, and the actions at the end
-/// of the page (so nothing is pinned or clipped at large text sizes).
+/// The step before [step] in the normal flow, or null for the first.
+OnboardingStep? previousStep(OnboardingStep step) =>
+    step.index == 0 ? null : OnboardingStep.values[step.index - 1];
+
+/// The frame of an onboarding step: the stepper, title, body, and the actions pinned at
+/// the bottom on one line (secondary on the left, primary on the right), so they are
+/// always on screen without scrolling. The body scrolls only when it cannot fit (a small
+/// phone or very large text).
+///
+/// Back (the arrow and the phone's Back button) returns to the previous step instead of
+/// leaving the app; a step opened from Home simply goes back to Home.
 class OnboardingScaffold extends StatelessWidget {
   const OnboardingScaffold({
     required this.step,
     required this.title,
-    required this.children,
+    this.children = const <Widget>[],
+    this.body,
     this.subtitle,
     this.primaryLabel,
     this.onPrimary,
     this.primaryBusy = false,
     this.secondaryLabel,
     this.onSecondary,
+    this.showArt = true,
     super.key,
   });
 
@@ -59,70 +70,139 @@ class OnboardingScaffold extends StatelessWidget {
   final String title;
   final String? subtitle;
   final List<Widget> children;
+
+  /// Replaces [children] for content that lays out its own scrolling and footer (a form
+  /// with `pinActions`).
+  final Widget? body;
   final String? primaryLabel;
   final VoidCallback? onPrimary;
   final bool primaryBusy;
   final String? secondaryLabel;
   final VoidCallback? onSecondary;
 
+  /// The small illustration above the title (left out on short screens anyway).
+  final bool showArt;
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final number = stepNumber(step);
-    final progress = l10n.onboardingStepOf(number, onboardingTotalSteps);
-    return Scaffold(
-      appBar: AppBar(
-        // A back arrow only when the step was opened from Home (there is a page to go
-        // back to); during onboarding itself the steps replace each other.
-        automaticallyImplyLeading: true,
-        title: Text(l10n.onboardingTitle),
-      ),
-      body: SafeArea(
-        child: CenteredScrollView(
+    final t = context.tokens;
+    final canPop = Navigator.of(context).canPop();
+    final previous = previousStep(step);
+    void goBack() {
+      if (canPop) {
+        Navigator.of(context).maybePop();
+      } else if (previous != null) {
+        context.go(previous.path);
+      }
+    }
+
+    final tall = MediaQuery.sizeOf(context).height >= 760;
+    final hasActions = primaryLabel != null || secondaryLabel != null;
+    return PopScope(
+      canPop: canPop,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && previous != null) {
+          context.go(previous.path);
+        }
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          automaticallyImplyLeading: false,
+          leading: canPop || previous != null
+              ? IconButton(
+                  icon: const Icon(Icons.arrow_back_rounded),
+                  tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+                  onPressed: goBack,
+                )
+              : null,
+          title: Text(l10n.onboardingTitle),
+        ),
+        body: SafeArea(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Semantics(
-                container: true,
-                label: progress,
-                child: ExcludeSemantics(
-                  child: Column(
-                    children: [
-                      _Stepper(step: step),
-                      const SizedBox(height: AppSpacing.xs),
-                      Text(
-                        progress,
-                        style: Theme.of(context).textTheme.bodySmall
-                            ?.copyWith(color: context.tokens.textMuted),
+              // The header stays at the top on every phone.
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.page,
+                  AppSpacing.sm,
+                  AppSpacing.page,
+                  AppSpacing.xs,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Semantics(
+                      container: true,
+                      label: l10n.onboardingStepOf(
+                        stepNumber(step),
+                        onboardingTotalSteps,
+                      ),
+                      child: ExcludeSemantics(child: _Stepper(step: step)),
+                    ),
+                    if (title.isNotEmpty) ...[
+                      Gap.md,
+                      Semantics(
+                        header: true,
+                        child: Text(
+                          title,
+                          style: Theme.of(context).textTheme.titleLarge,
+                        ),
                       ),
                     ],
-                  ),
+                    if (subtitle != null) ...[
+                      const SizedBox(height: AppSpacing.xxs),
+                      Text(
+                        subtitle!,
+                        style: Theme.of(context).textTheme.bodySmall
+                            ?.copyWith(color: t.textMuted),
+                      ),
+                    ],
+                  ],
                 ),
               ),
-              Gap.md,
-              Center(child: BrandImage(_art(step), height: 120)),
-              Gap.lg,
-              PageHeading(title),
-              if (subtitle != null) ...[Gap.xs, BodyText(subtitle!)],
-              Gap.lg,
-              ...children,
-              if (primaryLabel != null) ...[
-                Gap.lg,
-                AppButton.primary(
-                  label: primaryLabel!,
-                  onPressed: onPrimary,
-                  isLoading: primaryBusy,
-                  expand: true,
+              Expanded(
+                child:
+                    body ??
+                    CenteredScrollView(
+                      alignTop: true,
+                      physics: const ClampingScrollPhysics(),
+                      padding: const EdgeInsets.fromLTRB(
+                        AppSpacing.page,
+                        AppSpacing.xs,
+                        AppSpacing.page,
+                        AppSpacing.md,
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (showArt && tall) ...[
+                            Center(child: BrandImage(_art(step), height: 72)),
+                            Gap.md,
+                          ],
+                          ...children,
+                        ],
+                      ),
+                    ),
+              ),
+              if (hasActions)
+                ActionBar(
+                  secondary: secondaryLabel == null
+                      ? null
+                      : AppButton.secondary(
+                          label: secondaryLabel!,
+                          onPressed: primaryBusy ? null : onSecondary,
+                        ),
+                  primary: primaryLabel == null
+                      ? null
+                      : AppButton.primary(
+                          label: primaryLabel!,
+                          onPressed: onPrimary,
+                          isLoading: primaryBusy,
+                        ),
                 ),
-              ],
-              if (secondaryLabel != null) ...[
-                Gap.xs,
-                AppButton.secondary(
-                  label: secondaryLabel!,
-                  onPressed: primaryBusy ? null : onSecondary,
-                  expand: true,
-                ),
-              ],
             ],
           ),
         ),

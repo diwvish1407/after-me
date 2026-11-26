@@ -65,7 +65,7 @@ async def test_a_whole_escalation_leaks_nothing_to_logs_or_audit(
         "fcm-secret-token-0123456789",
         "oo_",
         "Bearer ",
-        "correct horse battery staple",
+        "Correct horse battery staple 1!",
     ):
         assert secret not in output, f"leaked into logs: {secret[:12]}"
 

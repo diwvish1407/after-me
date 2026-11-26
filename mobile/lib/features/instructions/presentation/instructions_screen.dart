@@ -15,6 +15,7 @@ import '../../../l10n/gen/app_localizations.dart';
 import '../../auth/presentation/reauth_sheet.dart';
 import '../../contacts/application/contacts_controller.dart';
 import '../../plan/application/plan_controller.dart';
+import '../../shell/presentation/home_back_button.dart';
 import '../application/instructions_controller.dart';
 import '../data/instructions_repository.dart';
 import 'instruction_labels.dart';
@@ -98,6 +99,7 @@ class InstructionsScreen extends ConsumerWidget {
     return SecureScreen(
       child: Scaffold(
         appBar: AppBar(
+          leading: const HomeBackButton(),
           title: Text(l10n.navInstructions),
           actions: [
             if (items.value?.isNotEmpty ?? false)

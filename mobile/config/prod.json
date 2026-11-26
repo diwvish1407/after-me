@@ -3,7 +3,7 @@
   "API_BASE_URL": "https://reapprove-salon-silicon.ngrok-free.dev",
   "PUBLIC_BASE_URL": "https://reapprove-salon-silicon.ngrok-free.dev",
   "SENTRY_DSN": "",
-  "PLAY_STORE_URL": "https://play.google.com/store/apps/details?id=app.afterme",
+  "PLAY_STORE_URL": "https://reapprove-salon-silicon.ngrok-free.dev/download/afterme.apk",
   "FIREBASE_API_KEY": "",
   "FIREBASE_APP_ID": "",
   "FIREBASE_MESSAGING_SENDER_ID": "",

@@ -245,6 +245,12 @@ SAMPLE_CONTEXT: dict[EmailTemplate, dict[str, Any]] = {
     },
     EmailTemplate.ACCOUNT_DELETION_REQUESTED: {"purge_date": "10 November 2026", "all_clear": True},
     EmailTemplate.WEB_LOGIN_NOTICE: {"site": "https://afterme.test"},
+    EmailTemplate.DANGER_ALERT: {
+        "contact_name": "Asha",
+        "user_name": "Diwakar",
+        "user_email": "diwakar@example.com",
+        "optout_link": "https://afterme.test/c/optout#oo_example",
+    },
 }
 
 

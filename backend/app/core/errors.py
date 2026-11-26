@@ -165,6 +165,23 @@ class PlanLimitReached(AppError):
         super().__init__(limit=limit, current=current, resource=resource)
 
 
+class EmailTaken(AppError):
+    """Signup with an address that already has a verified account. The product chose a clear
+    message over hiding which addresses are registered."""
+
+    status_code = 409
+    code = "email_taken"
+    title = "Email already registered"
+    default_detail = "An account with this email already exists. Sign in instead."
+
+
+class NoContactToAlert(AppError):
+    status_code = 409
+    code = "no_contact_to_alert"
+    title = "Nobody to alert yet"
+    default_detail = "None of your trusted contacts has accepted yet, so there is nobody to alert."
+
+
 class InvalidState(AppError):
     status_code = 409
     code = "invalid_state"

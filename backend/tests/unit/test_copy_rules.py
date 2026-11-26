@@ -50,6 +50,7 @@ ALLOWED_SENTENCES = (
 )
 
 CONTACT_FACING = (
+    "danger_alert",
     "contact_alert",
     "contact_alert_with_release",
     "contact_alert_withdrawn",
@@ -60,6 +61,7 @@ CONTACT_FACING = (
 )
 # The ones that can reach a stranger who has not asked for them: they must say how to stop.
 MUST_OFFER_OPT_OUT = (
+    "danger_alert",
     "contact_alert",
     "contact_alert_with_release",
     "contact_alert_withdrawn",

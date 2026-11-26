@@ -179,7 +179,7 @@ def jwt_private_key_pem() -> str:
 # --- API harness ------------------------------------------------------------------------------
 
 T0 = datetime(2026, 10, 8, 9, 0, 0, tzinfo=UTC)
-PASSWORD = "correct horse battery staple"
+PASSWORD = "Correct horse battery staple 1!"
 DEVICE: dict[str, str] = {
     "platform": "android",
     "app_version": "1.0.0+12",
@@ -189,7 +189,7 @@ DEVICE: dict[str, str] = {
 CLIENT_IP = "203.0.113.10"
 _CODE_RE = re.compile(r"\b(\d{6})\b")
 _RESET_LINK_RE = re.compile(r"https://afterme\.test/a/reset#(pr_[A-Za-z0-9_-]+)")
-NEW_PASSWORD = "a brand new passphrase 77"
+NEW_PASSWORD = "A brand new passphrase 77!"
 _INVITE_LINK_RE = re.compile(r"https://afterme\.test/c/open#(ci_[A-Za-z0-9_-]+)")
 _OPTOUT_LINK_RE = re.compile(r"https://afterme\.test/c/optout#(oo_[A-Za-z0-9_.-]+)")
 _CSRF_FIELD_RE = re.compile(r'name="csrf" value="([^"]+)"')

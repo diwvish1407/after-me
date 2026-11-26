@@ -430,7 +430,7 @@
   "@actionSave": {
     "description": "Saves changes in a form."
   },
-  "actionSkipForNow": "Skip for now",
+  "actionSkipForNow": "Skip",
   "@actionSkipForNow": {
     "description": "Skips an optional onboarding step."
   },
@@ -536,11 +536,11 @@
   "@fieldLanguage": {
     "description": "Label of the language row in the profile."
   },
-  "fieldContactName": "Their name",
+  "fieldContactName": "Name",
   "@fieldContactName": {
     "description": "Label of the contact-name field."
   },
-  "fieldContactEmail": "Their email",
+  "fieldContactEmail": "Email",
   "@fieldContactEmail": {
     "description": "Label of the contact-email field."
   },
@@ -564,7 +564,7 @@
   "@fieldInvalidEmail": {
     "description": "Validation: malformed email."
   },
-  "fieldPasswordTooShort": "Use at least 10 characters.",
+  "fieldPasswordTooShort": "Use at least 8 characters.",
   "@fieldPasswordTooShort": {
     "description": "Validation: password too short."
   },
@@ -624,11 +624,11 @@
   "@fieldInvalidCountry": {
     "description": "Validation: country rejected."
   },
-  "passwordHintEmpty": "At least 10 characters. A few unrelated words work well.",
+  "passwordHintEmpty": "At least 8 characters with a capital letter, a number and a special character.",
   "@passwordHintEmpty": {
     "description": "Hint under an empty new-password field."
   },
-  "passwordHintTooShort": "Keep going. You need at least 10 characters.",
+  "passwordHintTooShort": "Keep going. You need at least 8 characters.",
   "@passwordHintTooShort": {
     "description": "Hint while the new password is too short."
   },
@@ -680,7 +680,7 @@
   "@createAccountIntro": {
     "description": "Intro text of account creation."
   },
-  "createAccountSubmit": "Send my code",
+  "createAccountSubmit": "Continue",
   "@createAccountSubmit": {
     "description": "Primary action of account creation."
   },
@@ -1334,7 +1334,7 @@
   "@contactStepTitle": {
     "description": "Contact step heading."
   },
-  "contactStepBody": "Choose someone you trust. They'll get an invitation to accept first, and nothing is sent to them until they do.",
+  "contactStepBody": "Choose someone you trust.",
   "@contactStepBody": {
     "description": "Contact step body."
   },
@@ -1342,7 +1342,7 @@
   "@contactStepInviteNote": {
     "description": "Contact step note."
   },
-  "contactStepSave": "Save and continue",
+  "contactStepSave": "Continue",
   "@contactStepSave": {
     "description": "Contact step primary action."
   },
@@ -1372,11 +1372,11 @@
   "@relationshipPartner": {
     "description": "Relationship chip."
   },
-  "relationshipSibling": "Sibling",
+  "relationshipSibling": "Brother/Sister",
   "@relationshipSibling": {
     "description": "Relationship chip."
   },
-  "relationshipChild": "Child",
+  "relationshipChild": "Son/Daughter",
   "@relationshipChild": {
     "description": "Relationship chip."
   },
@@ -1408,7 +1408,7 @@
   "@scheduleBy": {
     "description": "Heading above the time button."
   },
-  "scheduleStepSave": "Save schedule",
+  "scheduleStepSave": "Continue",
   "@scheduleStepSave": {
     "description": "Schedule step primary action."
   },
@@ -1466,7 +1466,7 @@
   "@planStepBody": {
     "description": "Plan step body."
   },
-  "planStepUse": "Use this plan",
+  "planStepUse": "Continue",
   "@planStepUse": {
     "description": "Plan step primary action."
   },
@@ -1632,7 +1632,7 @@
   "@instructionWhen": {
     "description": "Heading above release choices."
   },
-  "instructionSave": "Save instruction",
+  "instructionSave": "Save",
   "@instructionSave": {
     "description": "Primary action."
   },
@@ -2016,23 +2016,23 @@
   "@fieldContactRelationshipLabel": {
     "description": "Label of the free-text description when 'Other' is chosen."
   },
-  "fieldContactPhone": "Their phone (optional)",
+  "fieldContactPhone": "Phone (optional)",
   "@fieldContactPhone": {
     "description": "Label of the contact phone field."
   },
-  "fieldContactPhoneHelper": "Include the country code, like +14155550123",
+  "fieldContactPhoneHelper": "Include the country code, like +919876543210",
   "@fieldContactPhoneHelper": {
     "description": "Helper under the contact phone field."
   },
-  "contactFormInviteExplain": "We will email them an invitation they must accept. They can say no, and nothing is sent to them about you until they accept.",
+  "contactFormInviteExplain": "We'll email them an invite to accept.",
   "@contactFormInviteExplain": {
     "description": "Explanation under the add form."
   },
-  "contactFormSendInvite": "Save and send invitation",
+  "contactFormSendInvite": "Invite",
   "@contactFormSendInvite": {
     "description": "Primary action of the add form."
   },
-  "contactFormSaveChanges": "Save changes",
+  "contactFormSaveChanges": "Save",
   "@contactFormSaveChanges": {
     "description": "Primary action of the edit form."
   },
@@ -3100,7 +3100,7 @@
   "@instructionExamplesTitle": {
     "description": "Title of the examples sheet."
   },
-  "instructionExamplesBody": "These are only examples to get you started. Change anything you like, and never add passwords.",
+  "instructionExamplesBody": "These are only examples to get you started. Change anything you like.",
   "@instructionExamplesBody": {
     "description": "Body of the examples sheet."
   },
@@ -3211,7 +3211,7 @@
       }
     }
   },
-  "instructionSaveChanges": "Save changes",
+  "instructionSaveChanges": "Save",
   "@instructionSaveChanges": {
     "description": "Primary action when editing."
   },
@@ -6330,5 +6330,73 @@
   "onboardingStepper": "Step {current} of {total}",
   "@onboardingStepper": {"description": "Accessible label of the stepper.", "placeholders": {"current": {"type": "int"}, "total": {"type": "int"}}},
   "twoStepNotSetUp": "Not set up",
-  "@twoStepNotSetUp": {"description": "Security row value while two-step verification is off."}
+  "@twoStepNotSetUp": {"description": "Security row value while two-step verification is off."},
+  "fieldPasswordWeak": "Use a capital letter, a number and a special character.",
+  "@fieldPasswordWeak": {"description": "Password error: the password misses a capital letter, digit or special character."},
+  "passwordRuleLength": "8+ characters",
+  "@passwordRuleLength": {"description": "Password checklist item."},
+  "passwordRuleUpper": "Capital letter",
+  "@passwordRuleUpper": {"description": "Password checklist item."},
+  "passwordRuleNumber": "Number",
+  "@passwordRuleNumber": {"description": "Password checklist item."},
+  "passwordRuleSpecial": "Special character",
+  "@passwordRuleSpecial": {"description": "Password checklist item."},
+  "fieldConfirmPasswordSignup": "Confirm password",
+  "@fieldConfirmPasswordSignup": {"description": "Sign-up: the second password field."},
+  "fieldEmailTaken": "An account with this email already exists. Sign in instead.",
+  "@fieldEmailTaken": {"description": "Sign-up: the email is already registered."},
+  "contactPickIcon": "Choose from my contacts",
+  "@contactPickIcon": {"description": "Tooltip of the contacts icon in the name field."},
+  "contactPhoneInfo": "About the phone number",
+  "@contactPhoneInfo": {"description": "Tooltip of the info icon in the phone field."},
+  "relationshipSelect": "Select",
+  "@relationshipSelect": {"description": "Placeholder of the relationship dropdown."},
+  "planGraceCustom": "Custom",
+  "@planGraceCustom": {"description": "Plan step: the chip that opens a custom wait time."},
+  "planGraceCustomTitle": "Custom wait time",
+  "@planGraceCustomTitle": {"description": "Plan step: title of the custom wait picker."},
+  "planGraceCustomHelp": "Hours : minutes, up to 72 hours.",
+  "@planGraceCustomHelp": {"description": "Plan step: help under the custom wait picker."},
+  "planGraceCustomInvalid": "Choose between 1 minute and 72 hours.",
+  "@planGraceCustomInvalid": {"description": "Plan step: the custom wait is out of range."},
+  "actionSubmit": "Submit",
+  "@actionSubmit": {"description": "A submit button."},
+  "actionSelect": "Select",
+  "@actionSelect": {"description": "Placeholder of a dropdown."},
+  "homeDangerLabel": "DANGER",
+  "@homeDangerLabel": {"description": "The red Danger button on Home."},
+  "homeDangerHint": "Alerts your trusted contacts right away",
+  "@homeDangerHint": {"description": "Screen-reader hint of the Danger button."},
+  "homeDangerConfirmTitle": "Alert your trusted contacts now?",
+  "@homeDangerConfirmTitle": {"description": "Danger confirmation title."},
+  "homeDangerConfirmBody": "We'll email every trusted contact who has accepted, asking them to reach you right away. If you're in immediate danger, call your local emergency number.",
+  "@homeDangerConfirmBody": {"description": "Danger confirmation body."},
+  "homeDangerConfirm": "Alert now",
+  "@homeDangerConfirm": {"description": "Danger confirmation button."},
+  "homeDangerNoContact": "None of your trusted contacts has accepted yet, so there is nobody to alert.",
+  "@homeDangerNoContact": {"description": "Danger: nobody can be alerted."},
+  "notificationsTitle": "Notifications",
+  "@notificationsTitle": {"description": "Title of the notifications screen."},
+  "notificationsEmpty": "You're all caught up.",
+  "@notificationsEmpty": {"description": "Notifications screen with nothing to show."},
+  "notificationsPendingContact": "{name} hasn't accepted your invitation yet.",
+  "@notificationsPendingContact": {"description": "Notification: a contact has not accepted.", "placeholders": {"name": {"type": "String"}}},
+  "notificationsSeeActivity": "See all activity",
+  "@notificationsSeeActivity": {"description": "Link to the activity screen."},
+  "notificationsOpen": "Open",
+  "@notificationsOpen": {"description": "Action of a notification row."},
+  "pendingReminderChannel": "Contact reminders",
+  "@pendingReminderChannel": {"description": "Android channel name of the pending-contact reminder."},
+  "pendingReminderTitle": "Your trusted contact hasn't accepted yet",
+  "@pendingReminderTitle": {"description": "Pending-contact reminder title."},
+  "pendingReminderBody": "Ask them to check their email and accept your invitation.",
+  "@pendingReminderBody": {"description": "Pending-contact reminder body."},
+  "backAgainToExit": "Press back again to exit",
+  "@backAgainToExit": {"description": "Shown after the first Back on Home."},
+  "doneDialogMessage": "You are set",
+  "@doneDialogMessage": {"description": "The pop-up after the last onboarding step."},
+  "instructionChooseAnotherShort": "Examples",
+  "@instructionChooseAnotherShort": {"description": "Short button: go back to the examples."},
+  "homeDangerSent": "{count, plural, =1{1 trusted contact was alerted.} other{{count} trusted contacts were alerted.}}",
+  "@homeDangerSent": {"description": "Snack bar after the Danger button.", "placeholders": {"count": {"type": "int"}}}
 }

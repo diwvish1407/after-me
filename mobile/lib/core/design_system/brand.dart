@@ -351,6 +351,7 @@ class BrandPage extends StatelessWidget {
     this.actions,
     this.floatingActionButton,
     this.onRefresh,
+    this.leading,
     super.key,
   });
 
@@ -359,6 +360,9 @@ class BrandPage extends StatelessWidget {
   final List<Widget>? actions;
   final Widget? floatingActionButton;
   final Future<void> Function()? onRefresh;
+
+  /// The top-left button (a tab's first page passes the way back to Home).
+  final Widget? leading;
 
   @override
   Widget build(BuildContext context) {
@@ -385,7 +389,7 @@ class BrandPage extends StatelessWidget {
       ],
     );
     return Scaffold(
-      appBar: BrandAppBar(title: title, actions: actions),
+      appBar: BrandAppBar(title: title, actions: actions, leading: leading),
       floatingActionButton: floatingActionButton,
       body: SafeArea(
         top: false,

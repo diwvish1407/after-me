@@ -21,18 +21,28 @@ def _code(password: str, email: str | None = "diwakar@example.com") -> str:
 
 
 def test_accepts_long_unique_passwords() -> None:
-    assert check_password_policy("correct horse battery staple") == "correct horse battery staple"
-    assert check_password_policy("ünïcödé pässwörd ✓") == "ünïcödé pässwörd ✓"
+    assert (
+        check_password_policy("Correct horse battery staple 1!")
+        == "Correct horse battery staple 1!"
+    )
+    assert check_password_policy("Ünïcödé pässwörd 7✓") == "Ünïcödé pässwörd 7✓"
+
+
+def test_requires_capital_digit_and_special() -> None:
+    assert _code("lowercase only 1!") == "password_too_weak"
+    assert _code("No digits here!") == "password_too_weak"
+    assert _code("No special 123") == "password_too_weak"
+    assert check_password_policy("Aa1!aaaa", email=None) == "Aa1!aaaa"
 
 
 def test_length_limits_apply_after_nfkc() -> None:
     assert _code("short") == "too_short"
-    assert _code("123456789") == "too_short"
+    assert _code("1234567") == "too_short"
     assert _code("a" * 129) == "too_long"
     assert _code("x" * 2000) == "too_long"
     # U+FB01 (fi ligature) normalises to two characters.
     assert len(normalize_password("ﬁ" * 5)) == 10
-    assert check_password_policy("ﬁ" * 5, email=None) == "fi" * 5
+    assert check_password_policy("ﬁ" * 4 + "A1!", email=None) == "fi" * 4 + "A1!"
     # A full-width password is the same password as its ASCII form.
     assert normalize_password("ｃｏｒｒｅｃｔ") == "correct"
 
@@ -55,11 +65,11 @@ def test_rejects_common_passwords_case_insensitively() -> None:
 
 async def test_hash_and_verify() -> None:
     hasher = PasswordHasher(time_cost=1, memory_cost_kib=1024, parallelism=1)
-    hashed = await hasher.hash("correct horse battery staple")
+    hashed = await hasher.hash("Correct horse battery staple 1!")
     assert hashed.startswith("$argon2id$")
-    assert await hasher.verify(hashed, "correct horse battery staple")
+    assert await hasher.verify(hashed, "Correct horse battery staple 1!")
     assert not await hasher.verify(hashed, "wrong horse battery staple")
-    assert not await hasher.verify("not-a-hash", "correct horse battery staple")
+    assert not await hasher.verify("not-a-hash", "Correct horse battery staple 1!")
     assert not hasher.needs_rehash(hashed)
     await hasher.dummy_verify("anything at all")
 

@@ -7,6 +7,7 @@ import 'package:material_ui/material_ui.dart';
 import '../../../app/router.dart';
 import '../../../app/theme/dimens.dart';
 import '../../../app/theme/tokens.dart';
+import '../../../core/alarm/pending_contact_reminder.dart';
 import '../../../core/api/failures/app_failure.dart';
 import '../../../core/design_system/design_system.dart';
 import '../../../core/security/secure_screen.dart';
@@ -14,7 +15,6 @@ import '../../../core/time/clock.dart';
 import '../../../core/time/time_format.dart';
 import '../../../core/time/zoned_time.dart';
 import '../../../l10n/gen/app_localizations.dart';
-import '../../activity/presentation/recent_activity_card.dart';
 import '../../auth/application/me_controller.dart';
 import '../../checkin/application/checkin_controller.dart';
 import '../../checkin/data/models/checkin_models.dart';
@@ -32,7 +32,9 @@ import '../application/home_controller.dart';
 import '../application/home_status.dart';
 import '../data/models/home_models.dart';
 
+import 'danger_button.dart';
 import 'home_design.dart';
+import 'notifications_screen.dart';
 import 'service_interruption_banner.dart';
 
 /// Home (USER_FLOWS.md §4, §5): the status, I'M OK, the next and last check-in, the plan,
@@ -80,6 +82,34 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     WidgetsBinding.instance.addObserver(this);
     _syncTicker();
     unawaited(Future.microtask(_readClientChecks));
+    // Twice-daily reminders on the phone while a trusted contact hasn't accepted.
+    ref.listenManual(homeControllerProvider, (_, next) {
+      final data = next.value;
+      if (data == null) {
+        return;
+      }
+      final pending = data.snapshot.readiness.issues.any(
+        (issue) => issue.code == ReadinessCode.contactPending,
+      );
+      unawaited(
+        Future.microtask(() async {
+          if (!mounted) {
+            return;
+          }
+          final l10n = AppLocalizations.of(context);
+          await ref
+              .read(pendingContactReminderProvider)
+              .sync(
+                pending: pending,
+                text: PendingReminderText(
+                  channelName: l10n.pendingReminderChannel,
+                  title: l10n.pendingReminderTitle,
+                  body: l10n.pendingReminderBody,
+                ),
+              );
+        }),
+      );
+    }, fireImmediately: true);
   }
 
   @override
@@ -259,6 +289,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     } else {
       content = const LoadingView();
     }
+    final alerts = data == null
+        ? 0
+        : homeAlertCount(
+            context,
+            data,
+            deviceNow: ref.read(clockProvider)(),
+            checks: ref.watch(clientChecksProvider),
+          );
     return Scaffold(
       appBar: AppBar(
         title: Semantics(label: l10n.navHome, child: const BrandBar()),
@@ -281,9 +319,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
               ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.notifications_none_rounded),
-            tooltip: l10n.drawerActivity,
-            onPressed: () => context.push(AppRoutes.settingsActivity),
+            icon: Badge(
+              isLabelVisible: alerts > 0,
+              // White on the dark blue bar, with dark text: readable either way.
+              backgroundColor: Colors.white,
+              textColor: BrandColors.skyTop,
+              label: Text('$alerts'),
+              child: const Icon(Icons.notifications_none_rounded),
+            ),
+            tooltip: l10n.notificationsTitle,
+            onPressed: () => context.push(AppRoutes.homeNotifications),
           ),
         ],
       ),
@@ -373,29 +418,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     // The aggregate carries the name; a profile change reads it again (HomeInputChanges),
     // so Home never starts `GET /v1/me` just to greet the person.
     final name = snapshot.user.displayName;
-    final checks = ref.watch(clientChecksProvider);
-    final banner = status == HomeStatus.notActive
-        ? null
-        : pickReadinessBanner(
-            snapshot.readiness,
-            client: ClientReadiness(
-              notificationsOff: checks.notificationsOff,
-              timezoneMismatch:
-                  checks.deviceTimezone != null &&
-                      checks.deviceTimezone != snapshot.user.timezone
-                  ? checks.deviceTimezone
-                  : null,
-            ),
-          );
-    // Check-ins are on but nobody would be told: not dismissible, and it never replaces
-    // the status, I'M OK or the other banners below it. An account that is not active has
-    // the checklist, and during an incident the plan is read-only.
-    final gap = switch (status) {
-      HomeStatus.active ||
-      HomeStatus.dueSoon ||
-      HomeStatus.overdue => pickSafetyNetGap(snapshot.readiness),
-      _ => null,
-    };
     // The typed incident drives the real incident experience; one this app version
     // cannot read keeps the neutral placeholder (and I'M OK within reach).
     final incident = status == HomeStatus.incident
@@ -430,19 +452,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             name: name,
             status: incident != null ? HomeStatus.incident : status,
             localNow: inTimezone(now, timezone),
-            // Only the "finish setup" card goes above: there I'M OK is off anyway.
-            showCard: status == HomeStatus.notActive,
+            // Alerts (status, contacts, gaps) live in the notifications section.
+            showCard: false,
           ),
           Gap.md,
-          if (gap != null) ...[
-            // The banner is only judged while check-ins are on (see `gap` above).
-            _SafetyNetGapBanner(
-              gap: gap,
-              checkInsOn: status != HomeStatus.notActive,
-            ),
-            Gap.md,
-          ],
-          if (banner != null) ...[_ReadinessBannerView(banner: banner), Gap.md],
           if (incident != null)
             ..._incidentSection(
               context,
@@ -453,7 +466,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
               interruption: interruption,
             )
           else ...[
-            _statusHeader(context, data, checkIn, status, now, timezone),
+            ?_statusHeader(context, data, checkIn, status, now, timezone),
             if (status == HomeStatus.notActive)
               ..._notActive(context, snapshot, checkIn, timezone, now)
             else
@@ -560,8 +573,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     timezone: timezone,
   );
 
-  /// The header: what a pending check-in says takes precedence over the schedule.
-  Widget _statusHeader(
+  /// What the last I'M OK tap came to (not received yet, refused, too old, or "confirm
+  /// you're safe"). The schedule status itself is in the notifications section, so this
+  /// is null when the tap has nothing to say.
+  Widget? _statusHeader(
     BuildContext context,
     HomeData data,
     CheckInState checkIn,
@@ -575,7 +590,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     if (checkIn.phase == CheckInPhase.expired) {
       return _expiredNotice(context, checkIn, timezone, now);
     }
-    final due = data.snapshot.checkin.nextDueAt;
     final (
       StatusBannerKind kind,
       String title,
@@ -604,46 +618,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         l10n.homeFailedTitle,
         failureMessage(l10n, checkIn.failure!),
       ),
-      _ => switch (status) {
-        HomeStatus.notActive => (
-          StatusBannerKind.info,
-          _checklistReady(data) ? l10n.homeReadyTitle : l10n.homeFinishTitle,
-          _checklistReady(data) ? l10n.homeReadyBody : l10n.homeFinishBody,
-        ),
-        HomeStatus.active => (
-          StatusBannerKind.ok,
-          l10n.homeStatusActiveTitle,
-          null,
-        ),
-        HomeStatus.dueSoon => (
-          StatusBannerKind.attention,
-          l10n.homeStatusDueSoonTitle(
-            formatClockTime(context, due!, timezone: timezone),
-            formatUntil(l10n, due.difference(now)),
-          ),
-          null,
-        ),
-        HomeStatus.overdue => (
-          StatusBannerKind.attention,
-          l10n.homeStatusOverdueTitle(
-            due == null
-                ? ''
-                : formatClockTime(context, due, timezone: timezone),
-          ),
-          l10n.homeStatusOverdueBody,
-        ),
-        HomeStatus.incident => (
-          StatusBannerKind.attention,
-          l10n.homeStatusIncidentTitle,
-          l10n.homeStatusIncidentBody,
-        ),
-        HomeStatus.unknown => (
-          StatusBannerKind.info,
-          l10n.homeStatusUnknownTitle,
-          l10n.homeStatusUnknownBody,
-        ),
-      },
+      _ => (StatusBannerKind.info, '', null),
     };
+    if (title.isEmpty) {
+      return null;
+    }
     return StatusBanner(
       kind: kind,
       title: title,
@@ -674,14 +653,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       expiredCheckInNotice(context, ref, checkIn, now: now, timezone: timezone);
 
   // --- Not active -------------------------------------------------------------------
-
-  bool _contactDone(HomeData data) => !data.snapshot.readiness.issues.any(
-    (issue) => issue.code == ReadinessCode.noContacts,
-  );
-
-  bool _checklistReady(HomeData data) =>
-      _contactDone(data) &&
-      (ref.read(setupControllerProvider).value?.hasPlan ?? false);
 
   List<Widget> _notActive(
     BuildContext context,
@@ -758,14 +729,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         now: now,
         caption: l10n.homeCheckInUnavailable,
       ),
-      if (snapshot.recentActivity.isNotEmpty) ...[
-        const SizedBox(height: AppSpacing.xl),
-        RecentActivityCard(
-          items: snapshot.recentActivity,
-          now: now,
-          timezone: timezone,
-        ),
-      ],
+      const SizedBox(height: AppSpacing.lg),
+      const Center(child: DangerButton()),
     ];
   }
 
@@ -804,15 +769,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         Gap.md,
         SafeActionButton(incidentId: safeIncidentId),
       ],
+      const SizedBox(height: AppSpacing.lg),
+      const Center(child: DangerButton()),
       const SizedBox(height: AppSpacing.xl),
-      if (status == HomeStatus.active ||
-          status == HomeStatus.dueSoon ||
-          status == HomeStatus.overdue) ...[
-        HomeStatusCard(status: status),
-        Gap.md,
-      ],
-      HomeStats(snapshot: snapshot, now: now, timezone: timezone),
-      Gap.md,
       GlassCard(
         padding: const EdgeInsets.all(AppSpacing.md),
         child: Row(
@@ -860,20 +819,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           ],
         ),
       ),
-      Gap.lg,
-      HomeSetupCard(snapshot: snapshot),
-      Gap.md,
-      const HomeQuickActions(),
-      Gap.md,
-      _PlanCard(summary: snapshot.planSummary),
-      if (snapshot.recentActivity.isNotEmpty) ...[
-        Gap.md,
-        RecentActivityCard(
-          items: snapshot.recentActivity,
-          now: now,
-          timezone: timezone,
-        ),
-      ],
     ];
   }
 
@@ -1011,75 +956,6 @@ class _InfoRow extends StatelessWidget {
   }
 }
 
-/// The plan at a glance: only what the server counts; nothing is claimed beyond it.
-class _PlanCard extends StatelessWidget {
-  const _PlanCard({required this.summary});
-
-  final PlanSummary summary;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    return SectionCard(
-      title: l10n.homePlanTitle,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            summary.contactsTotal == 0
-                ? l10n.homePlanContactsNone
-                : l10n.homePlanContacts(
-                    summary.contactsVerified,
-                    summary.contactsTotal,
-                  ),
-          ),
-          const SizedBox(height: AppSpacing.xxs),
-          Text(l10n.homePlanStages(summary.stages)),
-          const SizedBox(height: AppSpacing.xxs),
-          Text(l10n.homePlanInstructions(summary.instructionsActive)),
-        ],
-      ),
-    );
-  }
-}
-
-/// The banner for a hole in the safety net (USER_FLOWS.md §4): what is wrong and what it
-/// means in one sentence, and the one thing to do as its action, which opens the step
-/// that fixes it, contact first (a stage needs someone to tell), like the checklist and
-/// the last onboarding step. Kept short on purpose: it sits above I'M OK, which must stay
-/// within reach on a small phone.
-class _SafetyNetGapBanner extends StatelessWidget {
-  const _SafetyNetGapBanner({required this.gap, required this.checkInsOn});
-
-  final SafetyNetGap gap;
-
-  /// Check-ins are already on: the plan is fixed in the plan editor, not in the
-  /// onboarding step (which would walk the person through setting the plan up again).
-  final bool checkInsOn;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    final (String message, String action) = switch (gap) {
-      SafetyNetGap.noContacts => (
-        l10n.homeGapNoContacts,
-        l10n.checklistContact,
-      ),
-      SafetyNetGap.noStages => (l10n.homeGapNoStages, l10n.checklistPlan),
-      SafetyNetGap.stageEmpty => (l10n.homeGapStageEmpty, l10n.checklistPlan),
-    };
-    return StatusBanner(
-      kind: StatusBannerKind.attention,
-      message: message,
-      action: AppButton.text(
-        label: action,
-        onPressed: () =>
-            context.push(safetyNetGapPath(gap, checkInsOn: checkInsOn)),
-      ),
-    );
-  }
-}
-
 /// Where the action of the safety-net banner leads (USER_FLOWS.md §4): a missing contact
 /// is fixed in the contact step; a plan with no stage, or a stage that tells nobody, is
 /// fixed in the **plan editor** when check-ins are already on, and in the onboarding plan
@@ -1090,63 +966,6 @@ String safetyNetGapPath(SafetyNetGap gap, {required bool checkInsOn}) =>
       SafetyNetGap.noStages || SafetyNetGap.stageEmpty =>
         checkInsOn ? AppRoutes.planEdit : OnboardingStep.plan.path,
     };
-
-/// One readiness banner with the action that leads to the fix.
-class _ReadinessBannerView extends StatelessWidget {
-  const _ReadinessBannerView({required this.banner});
-
-  final ReadinessBanner banner;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    final contactId = banner.contactId;
-    final (
-      StatusBannerKind kind,
-      String message,
-      String action,
-      String path,
-    ) = switch (banner.kind) {
-      ReadinessBannerKind.contactProblem => (
-        StatusBannerKind.attention,
-        l10n.readinessContactProblem(banner.count),
-        contactId == null
-            ? l10n.readinessOpenPeople
-            : l10n.readinessOpenContact,
-        contactId == null
-            ? AppRoutes.people
-            : AppRoutes.contactDetail(contactId),
-      ),
-      ReadinessBannerKind.contactPending => (
-        StatusBannerKind.info,
-        l10n.readinessContactPending(banner.count),
-        contactId == null
-            ? l10n.readinessOpenPeople
-            : l10n.readinessOpenContact,
-        contactId == null
-            ? AppRoutes.people
-            : AppRoutes.contactDetail(contactId),
-      ),
-      ReadinessBannerKind.notificationsOff => (
-        StatusBannerKind.attention,
-        l10n.readinessNotificationsOff,
-        l10n.readinessOpenNotifications,
-        AppRoutes.settingsNotifications,
-      ),
-      ReadinessBannerKind.timezoneMismatch => (
-        StatusBannerKind.info,
-        l10n.readinessTimezone,
-        l10n.readinessOpenProfile,
-        AppRoutes.settingsProfile,
-      ),
-    };
-    return StatusBanner(
-      kind: kind,
-      message: message,
-      action: AppButton.text(label: action, onPressed: () => context.go(path)),
-    );
-  }
-}
 
 class _ChecklistItem extends StatelessWidget {
   const _ChecklistItem({

@@ -3,7 +3,20 @@ import 'package:material_ui/material_ui.dart';
 import '../../../l10n/gen/app_localizations.dart';
 import '../data/contacts_repository.dart';
 
-/// The localised name of a relationship chip.
+/// The relationships offered when adding or editing a contact, in this order. Others
+/// (partner, parent, relative, neighbour, employer, colleague) are no longer offered but
+/// still shown for a contact that already has one.
+const List<ContactRelationship> selectableRelationships = [
+  ContactRelationship.mother,
+  ContactRelationship.father,
+  ContactRelationship.spouse,
+  ContactRelationship.sibling,
+  ContactRelationship.child,
+  ContactRelationship.friend,
+  ContactRelationship.other,
+];
+
+/// The localised name of a relationship.
 String relationshipName(AppLocalizations l10n, ContactRelationship value) =>
     switch (value) {
       ContactRelationship.mother => l10n.relationshipMother,

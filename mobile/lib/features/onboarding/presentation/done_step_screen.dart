@@ -54,6 +54,9 @@ class _DoneStepScreenState extends ConsumerState<DoneStepScreen> {
           _activating = false;
           _outcome = outcome;
         });
+        if (outcome.activated) {
+          await _showYouAreSet();
+        }
       }
     } on AppFailure catch (failure) {
       if (mounted) {
@@ -62,6 +65,61 @@ class _DoneStepScreenState extends ConsumerState<DoneStepScreen> {
           _failure = failure;
         });
       }
+    }
+  }
+
+  /// The pop-up after a successful setup: an icon, "You are set" and Go to Home.
+  Future<void> _showYouAreSet() async {
+    final l10n = AppLocalizations.of(context);
+    final setup = ref.read(setupControllerProvider).value;
+    final first = (setup?.contacts.isEmpty ?? true)
+        ? null
+        : setup!.contacts.first;
+    final go = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        final t = context.tokens;
+        final text = Theme.of(context).textTheme;
+        return PopScope(
+          canPop: false,
+          child: AlertDialog(
+            semanticLabel: l10n.doneDialogMessage,
+            icon: Container(
+              width: 72,
+              height: 72,
+              decoration: BoxDecoration(
+                color: t.ok.withValues(alpha: 0.12),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(Icons.verified_rounded, size: 44, color: t.ok),
+            ),
+            title: Text(
+              l10n.doneDialogMessage,
+              textAlign: TextAlign.center,
+              style: text.headlineSmall,
+            ),
+            content: Text(
+              first == null
+                  ? l10n.doneActive
+                  : l10n.doneActiveInvited(first.displayName),
+              textAlign: TextAlign.center,
+              style: text.bodySmall?.copyWith(color: t.textMuted),
+            ),
+            actionsAlignment: MainAxisAlignment.center,
+            actions: [
+              FilledButton.icon(
+                onPressed: () => Navigator.of(context).pop(true),
+                icon: const Icon(Icons.home_rounded),
+                label: Text(l10n.doneGoHome),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+    if ((go ?? false) && mounted) {
+      await _finish();
     }
   }
 
@@ -81,6 +139,21 @@ class _DoneStepScreenState extends ConsumerState<DoneStepScreen> {
     // Read here, where the summary shows it: Home never starts this read.
     final instructions =
         ref.watch(instructionsControllerProvider).value ?? setup.instructions;
+    // While setting up and behind the "You are set" pop-up, only the header shows: a
+    // plain page, nothing to read twice.
+    if (_failure == null && (_activating || _activated)) {
+      return OnboardingScaffold(
+        step: OnboardingStep.done,
+        title: '',
+        showArt: false,
+        children: [
+          if (_activating) ...[
+            const SizedBox(height: AppSpacing.xl),
+            const Center(child: LoadingView()),
+          ],
+        ],
+      );
+    }
     final schedule = setup.schedule;
     final first = setup.contacts.isEmpty ? null : setup.contacts.first;
     final String message;

@@ -1,7 +1,8 @@
 """Password policy and Argon2id hashing (SECURITY §6.3, §7; PRD FR-AUTH-01).
 
-Policy: 10-128 characters after NFKC normalisation, any Unicode, no composition rules; rejected
-when equal to the email address or its local part, or when on the common-password blocklist.
+Policy: 8-128 characters after NFKC normalisation, with at least one capital letter, one digit and
+one special character; rejected when equal to the email address or its local part, or when on the
+common-password blocklist.
 
 Hashing runs in a worker thread so the event loop keeps serving other requests.
 """
@@ -20,7 +21,7 @@ from argon2 import PasswordHasher as _Argon2Hasher
 from argon2 import Type
 from argon2.exceptions import InvalidHashError, VerificationError, VerifyMismatchError
 
-MIN_LENGTH: Final = 10
+MIN_LENGTH: Final = 8
 MAX_LENGTH: Final = 128
 MAX_RAW_LENGTH: Final = 1024  # reject absurd input before normalising it
 
@@ -68,6 +69,15 @@ def check_password_policy(password: str, *, email: str | None = None) -> str:
     if folded in blocklist or normalized.lower() in blocklist:
         raise PasswordPolicyError(
             "password_too_common", "This password is too common. Choose a less predictable one."
+        )
+    if not (
+        any(ch.isupper() for ch in normalized)
+        and any(ch.isdigit() for ch in normalized)
+        and any(not ch.isalnum() and not ch.isspace() for ch in normalized)
+    ):
+        raise PasswordPolicyError(
+            "password_too_weak",
+            "Use at least one capital letter, one number and one special character.",
         )
     return normalized
 

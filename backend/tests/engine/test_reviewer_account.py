@@ -39,7 +39,7 @@ pytestmark = pytest.mark.settings()
 
 LOGIN = "play-review@afterme.app"
 INBOX = "review-inbox@afterme.app"
-PASSWORD = "tqx7m-k2hpa-9vwzr-b4dne"  # the shape generate_password() makes
+PASSWORD = "Tqx7m-k2hpa-9vwzr-b4dn5"  # the shape generate_password() makes
 REASON = "Play submission 1.0.0"
 
 

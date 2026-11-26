@@ -85,6 +85,12 @@ class InvitationQueued(ResponseModel):
     status: Literal["queued"] = "queued"
 
 
+class DangerAlertSent(ResponseModel):
+    """How many trusted contacts were emailed by the Danger button."""
+
+    alerted: int
+
+
 class ContactCreateRequest(RequestModel):
     display_name: DisplayName
     relationship: Relationship

@@ -580,10 +580,10 @@ async def test_concurrent_resets_with_one_link_succeed_exactly_once(h: Harness) 
     token = h.reset_token_for("race-reset@example.com")
     csrf = await h.web_form()
     results = await asyncio.gather(
-        h.web_reset(token, NEW_PASSWORD, csrf), h.web_reset(token, "a rival passphrase 91", csrf)
+        h.web_reset(token, NEW_PASSWORD, csrf), h.web_reset(token, "A rival passphrase 91!", csrf)
     )
     assert sorted(r.status_code for r in results) == [200, 400]
-    winner = NEW_PASSWORD if results[0].status_code == 200 else "a rival passphrase 91"
+    winner = NEW_PASSWORD if results[0].status_code == 200 else "A rival passphrase 91!"
     assert (await h.login("race-reset@example.com", winner)).status_code == 200
 
 

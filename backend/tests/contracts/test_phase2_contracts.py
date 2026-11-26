@@ -26,8 +26,8 @@ UPDATE = os.environ.get("AFTERME_UPDATE_CONTRACTS") == "1"
 EMAIL = "asha@example.com"
 NEW_EMAIL = "asha.rao@example.net"
 UNVERIFIED_EMAIL = "newcomer@example.net"
-PASSWORD = "correct horse battery staple"
-NEW_PASSWORD = "a brand new passphrase 77"
+PASSWORD = "Correct horse battery staple 1!"
+NEW_PASSWORD = "A brand new passphrase 77!"
 
 PHASE2_NOTES = (
     "Values are fictional placeholders; tokens, codes and IDs are not real.",

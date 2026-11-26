@@ -30,6 +30,7 @@ from app.ops.router import router as ops_router
 from app.testsupport.router import router as test_support_router
 from app.web.account_router import router as account_web_router
 from app.web.contact_router import router as contact_web_router
+from app.web.download_router import router as download_web_router
 from app.web.legal_router import router as legal_web_router
 from app.web.release_router import router as release_web_router
 from app.web.router import router as web_router
@@ -97,6 +98,7 @@ def create_app(
     app.include_router(webhooks_router)
     app.include_router(web_router)
     app.include_router(legal_web_router)
+    app.include_router(download_web_router)
     app.include_router(account_web_router)
     app.include_router(release_web_router)  # before /c: its paths are more specific
     app.include_router(contact_web_router)

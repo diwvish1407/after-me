@@ -14,6 +14,7 @@ import '../../../core/design_system/loading_view.dart';
 import '../../../core/time/clock.dart';
 import '../../../core/time/time_format.dart';
 import '../../../l10n/gen/app_localizations.dart';
+import '../../shell/presentation/home_back_button.dart';
 import '../application/events_controller.dart';
 import '../application/schedule_controller.dart';
 import '../data/events_repository.dart';
@@ -32,6 +33,7 @@ class CheckInHubScreen extends ConsumerWidget {
     final events = ref.watch(eventsControllerProvider);
     return BrandPage(
       title: l10n.checkInHubTitle,
+      leading: const HomeBackButton(),
       onRefresh: () async {
         await Future.wait([
           ref.read(scheduleControllerProvider.notifier).reload(),

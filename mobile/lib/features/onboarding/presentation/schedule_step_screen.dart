@@ -176,7 +176,7 @@ class _ScheduleStepScreenState extends ConsumerState<ScheduleStepScreen> {
             ),
           ],
         ),
-        Gap.lg,
+        Gap.md,
         if (custom == null) ...[
           Semantics(
             header: true,
@@ -209,8 +209,11 @@ class _ScheduleStepScreenState extends ConsumerState<ScheduleStepScreen> {
           ),
         ),
         Gap.sm,
-        BodyText(reminderSentence(l10n, base.reminderLeadMinutes)),
-        BodyText(l10n.scheduleTimezoneNote(timezone)),
+        // One short grey line: when we remind you, and in which timezone.
+        BodyText(
+          '${reminderSentence(l10n, base.reminderLeadMinutes)} '
+          '${l10n.scheduleTimezoneNote(timezone)}',
+        ),
       ],
     );
   }

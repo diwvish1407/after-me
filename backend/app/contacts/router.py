@@ -13,6 +13,7 @@ from app.contacts.schemas import (
     ContactList,
     ContactOut,
     ContactPatchRequest,
+    DangerAlertSent,
     InvitationQueued,
 )
 from app.contacts.service import ContactService
@@ -46,6 +47,19 @@ async def create_contact(
     # Sent after the response in every branch, so delivery time cannot reveal suppression.
     background.add_task(services.mailer.deliver, outbox)
     return contact
+
+
+@router.post("/alert", status_code=status.HTTP_202_ACCEPTED)
+async def danger_alert(
+    current: CurrentUserDep,
+    service: ContactServiceDep,
+    services: ServicesDep,
+    background: BackgroundTasks,
+) -> DangerAlertSent:
+    """The Danger button: tell every accepted trusted contact right away."""
+    outbox = await service.danger_alert(current)
+    background.add_task(services.mailer.deliver, outbox)
+    return DangerAlertSent(alerted=len(outbox))
 
 
 @router.get("/{contact_id}")
